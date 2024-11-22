@@ -63,6 +63,7 @@ def create_points_chart(df):
     """Create an interactive line chart of points over time"""
     fig = px.line(
         df, 
+        template='plotly_dark',
         x='game_date', 
         y='points', 
         title=f'Points per Game',
@@ -80,6 +81,7 @@ def create_rest_days_chart(df):
     """Create a chart showing rest days and their impact"""
     fig = px.scatter(
         df, 
+        template='plotly_dark',
         x='days_rest', 
         y='points', 
         title='Points by Rest Days',
