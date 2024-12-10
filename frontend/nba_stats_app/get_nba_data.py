@@ -19,6 +19,8 @@ def get_player_data(player_name, season='2023-24'):
     
     # Basic game info
     df['game_date'] = pd.to_datetime(game_logs['GAME_DATE'])
+    # turn 'game_date' into 'days_into_season'
+    df['days_into_season'] = (df['game_date'] - df['game_date'].min()).dt.days
     df['points'] = game_logs['PTS']
     df['minutes'] = game_logs['MIN']
     df['is_home'] = game_logs['MATCHUP'].str.contains('vs.')
@@ -34,10 +36,13 @@ def get_player_data(player_name, season='2023-24'):
     # Season averages
     df['season_avg_points'] = df['points'].expanding().mean()
     
-    # Last 5 games points (as a list)
+    # Last 5 games points (as a list) the last row is the first game, and the first row is the last game
     df['last_5_games_points'] = [
-        df['points'].iloc[max(0, i - 4):i + 1].tolist() for i in range(len(df))
+        df['points'].iloc[i:min(i + 5, len(df))].tolist()[::-1] for i in range(len(df))
     ]
+
+    # drop first 4 games
+    df = df.iloc[:-4]
 
     return df
 
