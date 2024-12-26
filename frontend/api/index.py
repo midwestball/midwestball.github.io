@@ -1,12 +1,18 @@
 from flask import Flask, render_template, request, jsonify
-import get_nba_data as get_nba_data
-import player_cache as player_cache
+import os
+import difflib
 import plotly.express as px
 import plotly.io as pio
 import pandas as pd
-import difflib
+import get_nba_data
+import player_cache
 
-app = Flask(__name__)
+# Initialize Flask app
+app = Flask(
+    __name__, 
+    template_folder=os.path.join(os.path.dirname(__file__), "../templates"),
+    static_folder=os.path.join(os.path.dirname(__file__), "../static")
+)
 
 # Load players at startup
 PLAYERS = player_cache.load_players()
@@ -18,7 +24,7 @@ def index():
 @app.route('/player_suggestions', methods=['GET'])
 def player_suggestions():
     """
-    Provide player name suggestions based on partial input
+    Provide player name suggestions based on partial input.
     """
     query = request.args.get('q', '').lower()
     
@@ -38,6 +44,9 @@ def player_suggestions():
 
 @app.route('/player_stats', methods=['POST'])
 def player_stats():
+    """
+    Fetch and display player statistics and visualizations.
+    """
     player_name = request.form['player_name']
     season = request.form.get('season', '2023-24')
     
@@ -49,18 +58,20 @@ def player_stats():
         points_chart = create_points_chart(player_data)
         rest_days_chart = create_rest_days_chart(player_data)
         
-        return render_template('player_stats.html', 
-                               player_name=player_name, 
-                               points_chart=points_chart,
-                               rest_days_chart=rest_days_chart,
-                               season=season,
-                               player_data=player_data)
+        return render_template(
+            'player_stats.html', 
+            player_name=player_name, 
+            points_chart=points_chart,
+            rest_days_chart=rest_days_chart,
+            season=season,
+            player_data=player_data
+        )
     
     except Exception as e:
         return render_template('index.html', error=f"Error fetching data: {str(e)}")
 
 def create_points_chart(df):
-    """Create an interactive line chart of points over time"""
+    """Create an interactive line chart of points over time."""
     fig = px.line(
         df, 
         template='plotly_dark',
@@ -78,7 +89,7 @@ def create_points_chart(df):
     return pio.to_html(fig, full_html=False)
 
 def create_rest_days_chart(df):
-    """Create a chart showing rest days and their impact"""
+    """Create a chart showing rest days and their impact."""
     fig = px.scatter(
         df, 
         template='plotly_dark',

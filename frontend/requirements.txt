@@ -3,4 +3,3 @@ nba_api
 pandas
 plotly
 numpy
-choices.js
