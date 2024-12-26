@@ -1,6 +1,6 @@
 from flask import Flask, render_template, request, jsonify
-import get_nba_data
-import player_cache
+import get_nba_data as get_nba_data
+import player_cache as player_cache
 import plotly.express as px
 import plotly.io as pio
 import pandas as pd
