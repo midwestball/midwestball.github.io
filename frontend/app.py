@@ -10,8 +10,8 @@ import player_cache
 # Initialize Flask app
 app = Flask(
     __name__, 
-    template_folder=os.path.join(os.path.dirname(__file__), "../templates"),
-    static_folder=os.path.join(os.path.dirname(__file__), "../static")
+    template_folder=os.path.join(os.path.dirname(__file__), "./templates"),
+    static_folder=os.path.join(os.path.dirname(__file__), "./static")
 )
 
 # Load players at startup

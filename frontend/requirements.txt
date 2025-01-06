@@ -2,4 +2,3 @@ flask
 nba_api
 pandas
 plotly
-numpy
