@@ -6,6 +6,7 @@ import plotly.io as pio
 import pandas as pd
 import get_nba_data
 import player_cache
+import requests
 
 # Initialize Flask app
 app = Flask(
@@ -20,6 +21,16 @@ PLAYERS = player_cache.load_players()
 @app.route('/', methods=['GET'])
 def index():
     return render_template('index.html')
+
+@app.route('/test_connection', methods=['GET'])
+def test_connection():
+    try:
+        # Test if the app can connect to the NBA API
+        response = requests.get('https://stats.nba.com')
+        return jsonify({'status': 'success', 'response': response.text[:200]})  # Return first 200 chars of response
+    except requests.exceptions.RequestException as e:
+        # Handle errors if connection fails
+        return jsonify({'status': 'error', 'error': str(e)})
 
 @app.route('/player_suggestions', methods=['GET'])
 def player_suggestions():
