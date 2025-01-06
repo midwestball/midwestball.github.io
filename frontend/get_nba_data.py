@@ -10,9 +10,9 @@ def get_player_data(player_name, season='2023-24'):
     player_dict = players.find_players_by_full_name(player_name)[0]
     player_id = player_dict['id']
     print(f"Player ID: {player_id}")
-    
+
     # Get game logs
-    game_logs = PlayerGameLogs(player_id_nullable=player_id, season_nullable=season).get_data_frames()[0]
+    game_logs = PlayerGameLogs(player_id_nullable=player_id, season_nullable=season).get_data_frames(timeout=60)[0]
     
     # Process into required features
     df = pd.DataFrame()
