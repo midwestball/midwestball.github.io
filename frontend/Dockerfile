@@ -28,5 +28,5 @@ RUN mkdir -p cache
 # Expose the port
 EXPOSE 8080
 
-# Run the application
-CMD ["flask", "run", "--host=0.0.0.0", "--port=8080"]
+# Run the application with gunicorn
+CMD ["gunicorn", "-b", "0.0.0.0:8080", "app:app"]

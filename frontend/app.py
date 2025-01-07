@@ -13,24 +13,14 @@ app = Flask(
     __name__, 
     template_folder=os.path.join(os.path.dirname(__file__), "./templates"),
     static_folder=os.path.join(os.path.dirname(__file__), "./static")
-)
+)    
 
-# Load players at startup
+# Load player data, either from cache or scrape if necessary
 PLAYERS = player_cache.load_players()
 
 @app.route('/', methods=['GET'])
 def index():
     return render_template('index.html')
-
-@app.route('/test_connection', methods=['GET'])
-def test_connection():
-    try:
-        # Test if the app can connect to the NBA API
-        response = requests.get('https://stats.nba.com')
-        return jsonify({'status': 'success', 'response': response.text[:200]})  # Return first 200 chars of response
-    except requests.exceptions.RequestException as e:
-        # Handle errors if connection fails
-        return jsonify({'status': 'error', 'error': str(e)})
 
 @app.route('/player_suggestions', methods=['GET'])
 def player_suggestions():
@@ -112,6 +102,6 @@ def create_rest_days_chart(df):
     return pio.to_html(fig, full_html=False)
 
 if __name__ == '__main__':
-    # Update player cache on startup
-    player_cache.cache_players()
+    # Ensure the player cache is updated only if necessary
+    player_cache.load_players()  # Will load or scrape if cache is outdated
     app.run(debug=True)
