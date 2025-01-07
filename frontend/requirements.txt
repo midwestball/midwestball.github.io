@@ -1,4 +1,6 @@
 flask
-nba_api
 pandas
 plotly
+requests
+beautifulsoup4
+numpy
