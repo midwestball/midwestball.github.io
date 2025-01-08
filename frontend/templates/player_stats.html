@@ -5,22 +5,98 @@
     <title>{{ player_name }} Stats - {{ season }}</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
     <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+    <style>
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 2rem;
+            margin-bottom: 2rem;
+        }
+        
+        .full-width {
+            grid-column: 1 / -1;
+        }
+        
+        .chart-container {
+            background: rgba(0, 0, 0, 0.1);
+            border-radius: 8px;
+            padding: 1rem;
+            margin-bottom: 1rem;
+        }
+        
+        .chart {
+            width: 100%;
+            min-height: 400px;
+        }
+        
+        .summary {
+            background: rgba(0, 0, 0, 0.1);
+            padding: 1.5rem;
+            border-radius: 8px;
+            margin-bottom: 2rem;
+        }
+        
+        .summary h2 {
+            margin-top: 0;
+        }
+        
+        .back-link {
+            display: inline-block;
+            padding: 0.75rem 1.5rem;
+            background: #333;
+            color: white;
+            text-decoration: none;
+            border-radius: 4px;
+            margin-bottom: 2rem;
+            transition: background-color 0.2s;
+        }
+        
+        .back-link:hover {
+            background: #444;
+        }
+    </style>
 </head>
 <body>
     <div class="container">
         <h1>{{ player_name }} - {{ season }} Season Stats</h1>
         
-        <div class="chart-container">
-            <h2>Points per Game</h2>
+        <!-- Primary Scoring Trends Section -->
+        <div class="chart-container full-width">
+            <h2>Scoring Trends and Averages</h2>
             <div class="chart">
-                {{ points_chart | safe }}
+                {{ rolling_stats | safe }}
             </div>
         </div>
         
-        <div class="chart-container">
-            <h2>Points by Rest Days</h2>
-            <div class="chart">
-                {{ rest_days_chart | safe }}
+        <div class="stats-grid">
+            <!-- Original Charts -->
+            <div class="chart-container">
+                <h2>Points per Game</h2>
+                <div class="chart">
+                    {{ points_chart | safe }}
+                </div>
+            </div>
+            
+            <div class="chart-container">
+                <h2>Points by Rest Days</h2>
+                <div class="chart">
+                    {{ rest_days_chart | safe }}
+                </div>
+            </div>
+            
+            <!-- New Charts -->
+            <div class="chart-container">
+                <h2>Scoring Efficiency</h2>
+                <div class="chart">
+                    {{ efficiency_chart | safe }}
+                </div>
+            </div>
+            
+            <div class="chart-container">
+                <h2>Back-to-Back Game Performance</h2>
+                <div class="chart">
+                    {{ back_to_back_chart | safe }}
+                </div>
             </div>
         </div>
         
@@ -29,6 +105,8 @@
             <p>Average Points: {{ (player_data['points'].mean() | round(2)) }}</p>
             <p>Total Games Played: {{ player_data.shape[0] }}</p>
             <p>Highest Scoring Game: {{ player_data['points'].max() }}</p>
+            <p>Average Minutes: {{ (player_data['minutes'].mean() | round(2)) }}</p>
+            <p>Games with Above Average Scoring: {{ (player_data['points'] > player_data['points'].mean()).sum() }}</p>
         </div>
         
         <a href="/" class="back-link">Search Another Player</a>

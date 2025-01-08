@@ -58,14 +58,20 @@ def player_stats():
         # Create visualizations
         points_chart = create_points_chart(player_data)
         rest_days_chart = create_rest_days_chart(player_data)
+        efficiency_chart = create_scoring_efficiency_chart(player_data)
+        rolling_stats = create_rolling_stats_chart(player_data)
+        back_to_back_chart = create_back_to_back_comparison(player_data)
         
         return render_template(
             'player_stats.html', 
-            player_name=player_name, 
+            player_name=player_name,
+            season=season,
+            player_data=player_data,
             points_chart=points_chart,
             rest_days_chart=rest_days_chart,
-            season=season,
-            player_data=player_data
+            efficiency_chart=efficiency_chart,
+            rolling_stats=rolling_stats,
+            back_to_back_chart=back_to_back_chart
         )
     
     except Exception as e:
@@ -99,6 +105,97 @@ def create_rest_days_chart(df):
         title='Points by Rest Days',
         labels={'days_rest': 'Days Since Last Game', 'points': 'Points Scored'}
     )
+    return pio.to_html(fig, full_html=False)
+
+def create_scoring_efficiency_chart(df):
+    """Create a scatter plot showing points vs minutes with efficiency metrics."""
+    # Calculate points per minute
+    df['points_per_minute'] = df['points'] / df['minutes']
+    
+    fig = px.scatter(
+        df,
+        template='plotly_dark',
+        x='minutes',
+        y='points',
+        color='points_per_minute',
+        title='Scoring Efficiency by Minutes Played',
+        labels={
+            'minutes': 'Minutes Played',
+            'points': 'Points Scored',
+            'points_per_minute': 'Points per Minute'
+        }
+    )
+    
+    # Add average lines
+    fig.add_hline(
+        y=df['points'].mean(),
+        line_dash="dash",
+        line_color="white",
+        annotation_text="Avg Points"
+    )
+    fig.add_vline(
+        x=df['minutes'].mean(),
+        line_dash="dash",
+        line_color="white",
+        annotation_text="Avg Minutes"
+    )
+    
+    return pio.to_html(fig, full_html=False)
+
+def create_rolling_stats_chart(df):
+    """Create a comprehensive rolling statistics chart."""
+    fig = px.line(
+        df,
+        template='plotly_dark',
+        x='game_date',
+        y=['points', 'points_ma', 'season_avg_points'],
+        title='Scoring Trends and Averages',
+        labels={
+            'game_date': 'Game Date',
+            'value': 'Points',
+            'variable': 'Metric'
+        }
+    )
+    
+    # Customize line properties
+    fig.update_traces(
+        line=dict(width=1),
+        selector=dict(name='points')
+    )
+    fig.update_traces(
+        line=dict(width=2),
+        selector=dict(name='points_ma')
+    )
+    fig.update_traces(
+        line=dict(width=2, dash='dot'),
+        selector=dict(name='season_avg_points')
+    )
+    
+    return pio.to_html(fig, full_html=False)
+
+def create_back_to_back_comparison(df):
+    """Create a box plot comparing performance in back-to-back games."""
+    fig = px.box(
+        df,
+        template='plotly_dark',
+        x='back_to_back',
+        y='points',
+        title='Points Distribution in Back-to-Back Games',
+        labels={
+            'back_to_back': 'Back-to-Back Game',
+            'points': 'Points Scored'
+        },
+        color='back_to_back'
+    )
+    
+    # Update layout for better readability
+    fig.update_layout(
+        xaxis=dict(
+            ticktext=['Regular Rest', 'Back-to-Back'],
+            tickvals=[False, True]
+        )
+    )
+    
     return pio.to_html(fig, full_html=False)
 
 if __name__ == '__main__':
