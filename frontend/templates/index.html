@@ -12,6 +12,7 @@
             {% if error %}
             <p class="error">{{ error }}</p>
             {% endif %}
+            <h3>Enter a player name and season to get started</h3>
             <form action="/player_stats" method="post" id="search-form">
                 <div class="search-container">
                     <input type="text" 
@@ -22,14 +23,29 @@
                            required>
                     <div id="suggestions-box" class="suggestions-box"></div>
                 </div>
+                <br>
                 <select name="season">
                     <option value="2024-25" selected>2024-25 Season</option>
                     <option value="2023-24">2023-24 Season</option>
                     <option value="2022-23">2022-23 Season</option>
                     <option value="2021-22">2021-22 Season</option>
+                    <option value="2020-21">2020-21 Season</option>
+                    <option value="2019-20">2019-20 Season</option>
+                    <option value="2018-19">2018-19 Season</option>
+                    <option value="2017-18">2017-18 Season</option>
+                    <option value="2016-17">2016-17 Season</option>
+                    <option value="2015-16">2015-16 Season</option>
+                    <option value="2014-15">2014-15 Season</option>
+                    <option value="2013-14">2013-14 Season</option>
+                    <option value="2012-13">2012-13 Season</option>
+                    <option value="2011-12">2011-12 Season</option>
+                    <option value="2010-11">2010-11 Season</option>
+                    <option value="2009-10">2009-10 Season</option>
                 </select>
                 <button type="submit">Get Stats</button>
             </form>
+            <br>
+            <p style="color: grey; font-size: small;">Note, if the player did not play in the selected season, an error will be created</p>
         </div>
     </div>
     <style>
