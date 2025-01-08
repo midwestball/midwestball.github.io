@@ -35,6 +35,10 @@
             border-radius: 8px;
             margin-bottom: 2rem;
         }
+
+        .summary:hover {
+            box-shadow: 0 0px 20px rgba(131, 131, 131, 0.3);
+        }
         
         .summary h2 {
             margin-top: 0;
@@ -59,47 +63,6 @@
 <body>
     <div class="container">
         <h1>{{ player_name }} - {{ season }} Season Stats</h1>
-        
-        <!-- Primary Scoring Trends Section -->
-        <div class="chart-container full-width">
-            <h2>Scoring Trends and Averages</h2>
-            <div class="chart">
-                {{ rolling_stats | safe }}
-            </div>
-        </div>
-        
-        <div class="stats-grid">
-            <!-- Original Charts -->
-            <div class="chart-container">
-                <h2>Points per Game</h2>
-                <div class="chart">
-                    {{ points_chart | safe }}
-                </div>
-            </div>
-            
-            <div class="chart-container">
-                <h2>Points by Rest Days</h2>
-                <div class="chart">
-                    {{ rest_days_chart | safe }}
-                </div>
-            </div>
-            
-            <!-- New Charts -->
-            <div class="chart-container">
-                <h2>Scoring Efficiency</h2>
-                <div class="chart">
-                    {{ efficiency_chart | safe }}
-                </div>
-            </div>
-            
-            <div class="chart-container">
-                <h2>Back-to-Back Game Performance</h2>
-                <div class="chart">
-                    {{ back_to_back_chart | safe }}
-                </div>
-            </div>
-        </div>
-        
         <div class="summary">
             <h2>Season Summary</h2>
             <p>Average Points: {{ (player_data['points'].mean() | round(2)) }}</p>
@@ -108,8 +71,33 @@
             <p>Average Minutes: {{ (player_data['minutes'].mean() | round(2)) }}</p>
             <p>Games with Above Average Scoring: {{ (player_data['points'] > player_data['points'].mean()).sum() }}</p>
         </div>
-        
         <a href="/" class="back-link">Search Another Player</a>
+        <div class="chart-container full-width">
+            <h2>Scoring Trends and Averages</h2>
+            <div class="chart">
+                {{ rolling_stats | safe }}
+            </div>
+        </div>
+        <div class="chart-container full-width">
+            <h2>Scoring Efficiency</h2>
+            <div class="chart">
+                {{ efficiency_chart | safe }}
+            </div>
+        </div>
+        <div class="stats-grid">
+            <div class="chart-container">
+                <h2>Points by Rest Days</h2>
+                <div class="chart">
+                    {{ rest_days_chart | safe }}
+                </div>
+            </div>
+            <div class="chart-container">
+                <h2>Back-to-Back Game Performance</h2>
+                <div class="chart">
+                    {{ back_to_back_chart | safe }}
+                </div>
+            </div>
+        </div>
     </div>
 </body>
 </html>

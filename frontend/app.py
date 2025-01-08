@@ -93,6 +93,15 @@ def create_points_chart(df):
         mode='lines', 
         name='5-Game Moving Average'
     )
+    fig.update_layout(
+        legend=dict(
+            orientation="h",
+            yanchor="bottom",
+            y=-0.3,
+            xanchor="center",
+            x=0.5
+        )
+    )
     return pio.to_html(fig, full_html=False)
 
 def create_rest_days_chart(df):
@@ -104,6 +113,15 @@ def create_rest_days_chart(df):
         y='points', 
         title='Points by Rest Days',
         labels={'days_rest': 'Days Since Last Game', 'points': 'Points Scored'}
+    )
+    fig.update_layout(
+        legend=dict(
+            orientation="h",
+            yanchor="bottom",
+            y=-0.3,
+            xanchor="center",
+            x=0.5
+        )
     )
     return pio.to_html(fig, full_html=False)
 
@@ -170,7 +188,15 @@ def create_rolling_stats_chart(df):
         line=dict(width=2, dash='dot'),
         selector=dict(name='season_avg_points')
     )
-    
+    fig.update_layout(
+        legend=dict(
+            orientation="h",
+            yanchor="bottom",
+            y=-0.3,
+            xanchor="center",
+            x=0.5
+        )
+    )
     return pio.to_html(fig, full_html=False)
 
 def create_back_to_back_comparison(df):
@@ -193,6 +219,19 @@ def create_back_to_back_comparison(df):
         xaxis=dict(
             ticktext=['Regular Rest', 'Back-to-Back'],
             tickvals=[False, True]
+        )
+    )
+    fig.update_layout(
+        xaxis=dict(
+            ticktext=['Regular Rest', 'Back-to-Back'],
+            tickvals=[False, True]
+        ),
+        legend=dict(
+            orientation="h",
+            yanchor="bottom",
+            y=-0.3,
+            xanchor="center",
+            x=0.5
         )
     )
     

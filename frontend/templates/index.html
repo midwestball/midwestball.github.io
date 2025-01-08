@@ -7,29 +7,48 @@
 </head>
 <body>
     <div class="container">
-        <h1>NBA Player Stats Visualizer</h1>
-        {% if error %}
-        <p class="error">{{ error }}</p>
-        {% endif %}
-        <form action="/player_stats" method="post" id="search-form">
-            <div class="search-container">
-                <input type="text" 
-                       id="player-search" 
-                       name="player_name" 
-                       placeholder="Enter Player Name" 
-                       autocomplete="off"
-                       required>
-                <div id="suggestions-box" class="suggestions-box"></div>
-            </div>
-            <select name="season">
-                <option value="2024-25" selected>2024-25 Season</option>
-                <option value="2023-24">2023-24 Season</option>
-                <option value="2022-23">2022-23 Season</option>
-                <option value="2021-22">2021-22 Season</option>
-            </select>
-            <button type="submit">Get Stats</button>
-        </form>
+        <div class="content">
+            <h1>NBA Player Stats Visualizer</h1>
+            {% if error %}
+            <p class="error">{{ error }}</p>
+            {% endif %}
+            <form action="/player_stats" method="post" id="search-form">
+                <div class="search-container">
+                    <input type="text" 
+                           id="player-search" 
+                           name="player_name" 
+                           placeholder="Enter Player Name" 
+                           autocomplete="off"
+                           required>
+                    <div id="suggestions-box" class="suggestions-box"></div>
+                </div>
+                <select name="season">
+                    <option value="2024-25" selected>2024-25 Season</option>
+                    <option value="2023-24">2023-24 Season</option>
+                    <option value="2022-23">2022-23 Season</option>
+                    <option value="2021-22">2021-22 Season</option>
+                </select>
+                <button type="submit">Get Stats</button>
+            </form>
+        </div>
     </div>
+    <style>
+        body, html {
+            height: 100%;
+            margin: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        .container {
+            text-align: center;
+        }
+        .content {
+            width: 100%;
+            max-width: 600px;
+        }
+    </style>
+</body>
 
     <script>
         document.addEventListener('DOMContentLoaded', function() {
