@@ -5,8 +5,13 @@ import time
 from datetime import datetime
 from bs4 import BeautifulSoup
 
-CACHE_PATH = 'cache/players.json'
-CACHE_TIMESTAMP_PATH = 'cache/last_cached.txt'
+# Use environment variable for cache directory
+CACHE_DIR = os.getenv('CACHE_DIR', 'cache')
+CACHE_PATH = os.path.join(CACHE_DIR, 'players.json')
+CACHE_TIMESTAMP_PATH = os.path.join(CACHE_DIR, 'last_cached.txt')
+
+# Ensure cache directory exists
+os.makedirs(CACHE_DIR, exist_ok=True)
 
 def get_current_players():
     """Retrieve and process list of current NBA players."""

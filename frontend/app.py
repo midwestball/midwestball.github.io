@@ -16,7 +16,11 @@ app = Flask(
 )    
 
 # Load player data, either from cache or scrape if necessary
-PLAYERS = player_cache.load_players()
+try:
+    PLAYERS = player_cache.load_players()
+except Exception as e:
+    print(f"Warning: Failed to load player cache: {e}")
+    PLAYERS = []
 
 @app.route('/', methods=['GET'])
 def index():
