@@ -2,29 +2,24 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>NBA Player Stats</title>
+    <title>know ball</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
 </head>
 <body>
-    <div class="container">
-        <div class="content">
-            <h1>NBA Player Stats Visualizer</h1>
-            {% if error %}
-            <p class="error">{{ error }}</p>
-            {% endif %}
-            <h3>Enter a player name and season to get started</h3>
-            <form action="/player_stats" method="post" id="search-form">
-                <div class="search-container">
-                    <input type="text" 
-                           id="player-search" 
-                           name="player_name" 
-                           placeholder="Enter Player Name" 
-                           autocomplete="off"
-                           required>
-                    <div id="suggestions-box" class="suggestions-box"></div>
-                </div>
-                <br>
-                <select name="season">
+    <div class="header">
+        <h2>Do You Know Ball?</h2>
+        <form action="/player_stats" method="post" id="search-form" style="display: flex; gap: 1rem; align-items: center; margin: 0;">
+            <div class="search-container" style="margin: 0;">
+                <input type="text" 
+                       id="player-search" 
+                       name="player_name" 
+                       placeholder="Enter Player Name" 
+                       autocomplete="off"
+                       required>
+                <div id="suggestions-box" class="suggestions-box"></div>
+            </div>
+            <div class="select-container" style="margin: 0; width: 200px;">
+                <select name="season" class="modern-select">
                     <option value="2024-25" selected>2024-25 Season</option>
                     <option value="2023-24">2023-24 Season</option>
                     <option value="2022-23">2022-23 Season</option>
@@ -42,236 +37,16 @@
                     <option value="2010-11">2010-11 Season</option>
                     <option value="2009-10">2009-10 Season</option>
                 </select>
-                <button type="submit">Get Stats</button>
-            </form>
-            <br>
-            <p style="color: grey; font-size: small;">Note, if the player did not play in the selected season, an error will be created</p>
-        </div>
+            </div>
+            <button type="submit">Get Stats</button>
+        </form>
     </div>
-    <style>
-        body, html {
-            height: 100%;
-            margin: 0;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-        }
-        .container {
-            text-align: center;
-        }
-        .content {
-            width: 100%;
-            max-width: 600px;
-        }
-    </style>
-</body>
+    
+    {% if error %}
+    <p class="error">{{ error }}</p>
+    {% endif %}
+    <h1>Player News Coming Soon</h1>
 
-    <script>
-        document.addEventListener('DOMContentLoaded', function() {
-            const searchInput = document.getElementById('player-search');
-            const suggestionsBox = document.getElementById('suggestions-box');
-            const form = document.getElementById('search-form');
-            
-            let selectedIndex = -1;
-            let suggestions = [];
-            
-            // Debounce function to limit API calls
-            function debounce(func, wait) {
-                let timeout;
-                return function executedFunction(...args) {
-                    const later = () => {
-                        clearTimeout(timeout);
-                        func(...args);
-                    };
-                    clearTimeout(timeout);
-                    timeout = setTimeout(later, wait);
-                };
-            }
-            
-            // Fetch suggestions from server
-            const fetchSuggestions = debounce(async (query) => {
-                if (query.length < 2) {
-                    suggestionsBox.style.display = 'none';
-                    return;
-                }
-                
-                try {
-                    const response = await fetch(`/player_suggestions?q=${encodeURIComponent(query)}`);
-                    suggestions = await response.json();
-                    
-                    if (suggestions.length > 0) {
-                        displaySuggestions(suggestions);
-                    } else {
-                        suggestionsBox.style.display = 'none';
-                    }
-                } catch (error) {
-                    console.error('Error fetching suggestions:', error);
-                }
-            }, 300); // 300ms debounce
-            
-            // Display suggestions in dropdown
-            function displaySuggestions(suggestions) {
-                suggestionsBox.innerHTML = '';
-                
-                suggestions.forEach((suggestion, index) => {
-                    const div = document.createElement('div');
-                    div.className = 'suggestion-item';
-                    div.textContent = suggestion;
-                    
-                    // Highlight matching text
-                    const searchText = searchInput.value.toLowerCase();
-                    const highlightedText = suggestion.replace(
-                        new RegExp(searchText, 'gi'),
-                        match => `<span class="highlight">${match}</span>`
-                    );
-                    div.innerHTML = highlightedText;
-                    
-                    div.addEventListener('click', () => {
-                        searchInput.value = suggestion;
-                        suggestionsBox.style.display = 'none';
-                        form.submit();
-                    });
-                    
-                    div.addEventListener('mouseover', () => {
-                        selectedIndex = index;
-                        highlightSuggestion();
-                    });
-                    
-                    suggestionsBox.appendChild(div);
-                });
-                
-                suggestionsBox.style.display = 'block';
-            }
-            
-            // Highlight selected suggestion
-            function highlightSuggestion() {
-                const items = suggestionsBox.getElementsByClassName('suggestion-item');
-                for (let i = 0; i < items.length; i++) {
-                    items[i].classList.remove('selected');
-                }
-                if (selectedIndex >= 0 && selectedIndex < items.length) {
-                    items[selectedIndex].classList.add('selected');
-                }
-            }
-            
-            // Input event listeners
-            searchInput.addEventListener('input', (e) => {
-                fetchSuggestions(e.target.value);
-            });
-            
-            // Keyboard navigation
-            searchInput.addEventListener('keydown', (e) => {
-                const items = suggestionsBox.getElementsByClassName('suggestion-item');
-                
-                switch(e.key) {
-                    case 'ArrowDown':
-                        e.preventDefault();
-                        selectedIndex = Math.min(selectedIndex + 1, items.length - 1);
-                        highlightSuggestion();
-                        if (items[selectedIndex]) {
-                            searchInput.value = items[selectedIndex].textContent;
-                        }
-                        break;
-                        
-                    case 'ArrowUp':
-                        e.preventDefault();
-                        selectedIndex = Math.max(selectedIndex - 1, -1);
-                        highlightSuggestion();
-                        if (selectedIndex === -1) {
-                            searchInput.value = searchInput.dataset.originalValue || '';
-                        } else if (items[selectedIndex]) {
-                            searchInput.value = items[selectedIndex].textContent;
-                        }
-                        break;
-                        
-                    case 'Enter':
-                        if (selectedIndex >= 0 && items[selectedIndex]) {
-                            e.preventDefault();
-                            searchInput.value = items[selectedIndex].textContent;
-                            suggestionsBox.style.display = 'none';
-                            form.submit();
-                        }
-                        break;
-                        
-                    case 'Escape':
-                        suggestionsBox.style.display = 'none';
-                        selectedIndex = -1;
-                        break;
-                }
-            });
-            
-            // Close suggestions when clicking outside
-            document.addEventListener('click', (e) => {
-                if (!searchInput.contains(e.target) && !suggestionsBox.contains(e.target)) {
-                    suggestionsBox.style.display = 'none';
-                }
-            });
-            
-            // Save original input value
-            searchInput.addEventListener('focus', () => {
-                searchInput.dataset.originalValue = searchInput.value;
-            });
-        });
-    </script>
-
-    <style>
-        .search-container {
-            position: relative;
-            width: 300px;
-            margin: 0 auto;
-        }
-        
-        .suggestions-box {
-            display: none;
-            position: absolute;
-            top: 100%;
-            left: 0;
-            right: 0;
-            max-height: 300px;
-            overflow-y: auto;
-            background: white;
-            color: black;
-            border: 1px solid #ddd;
-            border-top: none;
-            border-radius: 0 0 4px 4px;
-            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-            z-index: 1000;
-        }
-        
-        .suggestion-item {
-            padding: 10px 15px;
-            cursor: pointer;
-            text-align: left;
-            border-bottom: 1px solid #eee;
-        }
-        
-        .suggestion-item:last-child {
-            border-bottom: none;
-        }
-        
-        .suggestion-item:hover,
-        .suggestion-item.selected {
-            background-color: #f0f0f0;
-        }
-        
-        .highlight {
-            font-weight: bold;
-            color: #007bff;
-        }
-        
-        #player-search {
-            width: 100%;
-            padding: 10px;
-            border: 1px solid #ddd;
-            border-radius: 4px;
-            font-size: 16px;
-        }
-        
-        #player-search:focus {
-            outline: none;
-            border-color: #007bff;
-            box-shadow: 0 0 0 2px rgba(0,123,255,0.25);
-        }
-    </style>
+    <script src="{{ url_for('static', filename='js/player_search.js') }}"></script>
 </body>
 </html>
