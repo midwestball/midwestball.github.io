@@ -1,17 +1,21 @@
 import requests
 import json
 import os
+from bs4 import BeautifulSoup
 import time
 from datetime import datetime
-from bs4 import BeautifulSoup
 
-# Use environment variable for cache directory
-CACHE_DIR = os.getenv('CACHE_DIR', 'cache')
-CACHE_PATH = os.path.join(CACHE_DIR, 'players.json')
-CACHE_TIMESTAMP_PATH = os.path.join(CACHE_DIR, 'last_cached.txt')
+# For Vercel, we'll use a static JSON file that gets updated during build time
+STATIC_PLAYERS_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'static', 'data', 'players.json')
 
-# Ensure cache directory exists
-os.makedirs(CACHE_DIR, exist_ok=True)
+# Check if running in Vercel environment
+if not os.environ.get('VERCEL'):
+    # Use environment variable for cache directory
+    CACHE_DIR = os.getenv('CACHE_DIR', 'cache')
+    CACHE_PATH = os.path.join(CACHE_DIR, 'players.json')
+    CACHE_TIMESTAMP_PATH = os.path.join(CACHE_DIR, 'last_cached.txt')
+    # Ensure cache directory exists
+    os.makedirs(CACHE_DIR, exist_ok=True)
 
 def get_current_players():
     """Retrieve and process list of current NBA players."""
@@ -78,6 +82,12 @@ def cache_players():
 def load_players():
     """Load players from cache or regenerate if needed."""
     try:
+        # In production (Vercel), use the static file
+        if os.environ.get('VERCEL'):
+            with open(STATIC_PLAYERS_PATH, 'r') as f:
+                return json.load(f)
+
+        # In local development, check if the cache exists
         # Check if the cache exists and if the timestamp is valid
         with open(CACHE_PATH, 'r') as f:
             players_data = json.load(f)
@@ -98,5 +108,13 @@ def load_players():
         return players_data
 
     except (FileNotFoundError, json.JSONDecodeError, ValueError):
-        # If cache doesn't exist or is invalid, regenerate
-        return cache_players()
+        # Generate the player data
+        players_data = get_current_players()
+        
+        # If we're in a build step on Vercel, save to static file
+        if os.environ.get('VERCEL_BUILD'):
+            os.makedirs(os.path.dirname(STATIC_PLAYERS_PATH), exist_ok = True)
+            with open(STATIC_PLAYERS_PATH, 'w') as f:
+                json.dump(players_data, f)
+                
+        return players_data

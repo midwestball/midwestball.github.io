@@ -11,11 +11,12 @@ import requests
 # Initialize Flask app
 app = Flask(
     __name__, 
-    template_folder=os.path.join(os.path.dirname(__file__), "./templates"),
-    static_folder=os.path.join(os.path.dirname(__file__), "./static")
+    template_folder = os.path.join(os.path.dirname(os.path.abspath(__file__)), "templates"),
+    static_folder = os.path.join(os.path.dirname(os.path.abspath(__file__)), "static")
 )    
 
-# Load player data, either from cache or scrape if necessary
+# Load player data
+# For Vercel, we'll need to handle this differently since we can't write to the filesystem
 try:
     PLAYERS = player_cache.load_players()
 except Exception as e:
@@ -240,8 +241,3 @@ def create_back_to_back_comparison(df):
     )
     
     return pio.to_html(fig, full_html=False)
-
-if __name__ == '__main__':
-    # Ensure the player cache is updated only if necessary
-    player_cache.load_players()  # Will load or scrape if cache is outdated
-    app.run(debug=True)
