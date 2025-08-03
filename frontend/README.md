@@ -1,3 +1,3 @@
-# NBA Player Stats Visualization
-This is a flask web app that sllows you to look up any NBA player and see some data visualizations on their performance in a season
+# Statistics & Data Science for NFL and NBA Players
+This project allows users to gain data driven insights into NFL and NBA player performance.
 [Visit the website](https://knowball.net)
