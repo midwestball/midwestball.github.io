@@ -1,52 +1,202 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <title>know ball</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
-</head>
-<body>
-    <div class="header">
-        <h2>Do You Know Ball?</h2>
-        <form action="/player_stats" method="post" id="search-form" style="display: flex; gap: 1rem; align-items: center; margin: 0;">
-            <div class="search-container" style="margin: 0;">
-                <input type="text" 
-                       id="player-search" 
-                       name="player_name" 
-                       placeholder="Enter Player Name" 
-                       autocomplete="off"
-                       required>
-                <div id="suggestions-box" class="suggestions-box"></div>
-            </div>
-            <div class="select-container" style="margin: 0; width: 200px;">
-                <select name="season" class="modern-select">
-                    <option value="2024-25" selected>2024-25 Season</option>
-                    <option value="2023-24">2023-24 Season</option>
-                    <option value="2022-23">2022-23 Season</option>
-                    <option value="2021-22">2021-22 Season</option>
-                    <option value="2020-21">2020-21 Season</option>
-                    <option value="2019-20">2019-20 Season</option>
-                    <option value="2018-19">2018-19 Season</option>
-                    <option value="2017-18">2017-18 Season</option>
-                    <option value="2016-17">2016-17 Season</option>
-                    <option value="2015-16">2015-16 Season</option>
-                    <option value="2014-15">2014-15 Season</option>
-                    <option value="2013-14">2013-14 Season</option>
-                    <option value="2012-13">2012-13 Season</option>
-                    <option value="2011-12">2011-12 Season</option>
-                    <option value="2010-11">2010-11 Season</option>
-                    <option value="2009-10">2009-10 Season</option>
-                </select>
-            </div>
-            <button type="submit">Get Stats</button>
-        </form>
-    </div>
-    
-    {% if error %}
-    <p class="error">{{ error }}</p>
-    {% endif %}
-    <h1>Player News Coming Soon</h1>
+{% extends "base.html" %}
 
-    <script src="{{ url_for('static', filename='js/player_search.js') }}"></script>
-</body>
-</html>
+{% block title %}KnowBall - NBA Stats and Analytics{% endblock %}
+
+{% block content %}
+    <section class="hero-section">
+        <div class="hero-content">
+            <h1>Discover NBA Player Performance</h1>
+            <p>Track, analyze, and visualize NBA player statistics with advanced analytics.</p>
+        </div>
+    </section>
+    
+    <section class="recent-performances">
+        <h2>Recent Impressive Performances</h2>
+        <div class="performance-tabs">
+            <div class="tab-buttons">
+                <button class="tab-button active" data-tab="points">Points</button>
+                <button class="tab-button" data-tab="rebounds">Rebounds</button>
+                <button class="tab-button" data-tab="assists">Assists</button>
+                <button class="tab-button" data-tab="other">Other Stats</button>
+            </div>
+            
+            <div class="tab-content active" id="points-tab">
+                {% if performances_by_stat.points %}
+                    <div class="performances-grid">
+                        {% for perf in performances_by_stat.points %}
+                            <div class="performance-card">
+                                <div class="z-score {% if perf.z_score > 3 %}exceptional{% elif perf.z_score > 2.5 %}excellent{% elif perf.z_score > 2 %}very-good{% else %}good{% endif %}">
+                                    {{ "%.1f"|format(perf.z_score) }}
+                                </div>
+                                <div class="performance-details">
+                                    <h3><a href="/player/{{ perf.player_name }}">{{ perf.player_name }}</a></h3>
+                                    <p class="stat-value">{{ perf.value }} points</p>
+                                    <p class="game-info">
+                                        {{ perf.game_date.strftime('%b %d, %Y') }} 
+                                        {% if perf.home_team %} | {{ perf.home_team }} vs {{ perf.away_team }}{% endif %}
+                                    </p>
+                                </div>
+                            </div>
+                        {% endfor %}
+                    </div>
+                {% else %}
+                    <p class="no-data">No impressive scoring performances found.</p>
+                {% endif %}
+            </div>
+            
+            <div class="tab-content" id="rebounds-tab">
+                {% if performances_by_stat.rebounds %}
+                    <div class="performances-grid">
+                        {% for perf in performances_by_stat.rebounds %}
+                            <div class="performance-card">
+                                <div class="z-score {% if perf.z_score > 3 %}exceptional{% elif perf.z_score > 2.5 %}excellent{% elif perf.z_score > 2 %}very-good{% else %}good{% endif %}">
+                                    {{ "%.1f"|format(perf.z_score) }}
+                                </div>
+                                <div class="performance-details">
+                                    <h3><a href="/player/{{ perf.player_name }}">{{ perf.player_name }}</a></h3>
+                                    <p class="stat-value">{{ perf.value }} rebounds</p>
+                                    <p class="game-info">
+                                        {{ perf.game_date.strftime('%b %d, %Y') }} 
+                                        {% if perf.home_team %} | {{ perf.home_team }} vs {{ perf.away_team }}{% endif %}
+                                    </p>
+                                </div>
+                            </div>
+                        {% endfor %}
+                    </div>
+                {% else %}
+                    <p class="no-data">No impressive rebounding performances found.</p>
+                {% endif %}
+            </div>
+            
+            <div class="tab-content" id="assists-tab">
+                {% if performances_by_stat.assists %}
+                    <div class="performances-grid">
+                        {% for perf in performances_by_stat.assists %}
+                            <div class="performance-card">
+                                <div class="z-score {% if perf.z_score > 3 %}exceptional{% elif perf.z_score > 2.5 %}excellent{% elif perf.z_score > 2 %}very-good{% else %}good{% endif %}">
+                                    {{ "%.1f"|format(perf.z_score) }}
+                                </div>
+                                <div class="performance-details">
+                                    <h3><a href="/player/{{ perf.player_name }}">{{ perf.player_name }}</a></h3>
+                                    <p class="stat-value">{{ perf.value }} assists</p>
+                                    <p class="game-info">
+                                        {{ perf.game_date.strftime('%b %d, %Y') }} 
+                                        {% if perf.home_team %} | {{ perf.home_team }} vs {{ perf.away_team }}{% endif %}
+                                    </p>
+                                </div>
+                            </div>
+                        {% endfor %}
+                    </div>
+                {% else %}
+                    <p class="no-data">No impressive assist performances found.</p>
+                {% endif %}
+            </div>
+            
+            <div class="tab-content" id="other-tab">
+                <div class="stat-selector">
+                    <label for="other-stat-select">Select Stat:</label>
+                    <select id="other-stat-select">
+                        <option value="steals">Steals</option>
+                        <option value="blocks">Blocks</option>
+                        <option value="field_goal_percentage">FG%</option>
+                        <option value="three_point_percentage">3PT%</option>
+                    </select>
+                </div>
+                
+                <div class="other-stats-container">
+                    <!-- Content will be loaded dynamically -->
+                    <div id="steals-content" class="other-stat-content active">
+                        {% if performances_by_stat.steals %}
+                            <div class="performances-grid">
+                                {% for perf in performances_by_stat.steals %}
+                                    <div class="performance-card">
+                                        <div class="z-score {% if perf.z_score > 3 %}exceptional{% elif perf.z_score > 2.5 %}excellent{% elif perf.z_score > 2 %}very-good{% else %}good{% endif %}">
+                                            {{ "%.1f"|format(perf.z_score) }}
+                                        </div>
+                                        <div class="performance-details">
+                                            <h3><a href="/player/{{ perf.player_name }}">{{ perf.player_name }}</a></h3>
+                                            <p class="stat-value">{{ perf.value }} steals</p>
+                                            <p class="game-info">
+                                                {{ perf.game_date.strftime('%b %d, %Y') }} 
+                                                {% if perf.home_team %} | {{ perf.home_team }} vs {{ perf.away_team }}{% endif %}
+                                            </p>
+                                        </div>
+                                    </div>
+                                {% endfor %}
+                            </div>
+                        {% else %}
+                            <p class="no-data">No impressive steal performances found.</p>
+                        {% endif %}
+                    </div>
+                    
+                    <!-- Similar blocks for blocks, fg%, 3pt% will be hidden initially -->
+                </div>
+            </div>
+        </div>
+    </section>
+    
+    <section class="features-section">
+        <h2>Explore NBA Statistics</h2>
+        <div class="features-grid">
+            <div class="feature-card">
+                <h3>Player Profiles</h3>
+                <p>Comprehensive player statistics with interactive visualizations, performance trends, and analysis.</p>
+                <a href="#" class="feature-link">Search for a player</a>
+            </div>
+            <div class="feature-card">
+                <h3>League Statistics</h3>
+                <p>League-wide statistical distributions, trends, and comparisons across different seasons.</p>
+                <a href="/league_stats" class="feature-link">View League Stats</a>
+            </div>
+            <div class="feature-card">
+                <h3>Impressive Performances</h3>
+                <p>Discover the most statistically impressive performances based on z-scores.</p>
+                <a href="/impressive_performances" class="feature-link">See Top Performances</a>
+            </div>
+        </div>
+    </section>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Tab functionality
+        const tabButtons = document.querySelectorAll('.tab-button');
+        const tabContents = document.querySelectorAll('.tab-content');
+        
+        tabButtons.forEach(button => {
+            button.addEventListener('click', () => {
+                // Remove active class from all buttons and contents
+                tabButtons.forEach(btn => btn.classList.remove('active'));
+                tabContents.forEach(content => content.classList.remove('active'));
+                
+                // Add active class to current button
+                button.classList.add('active');
+                
+                // Show corresponding content
+                const tabId = button.dataset.tab + '-tab';
+                document.getElementById(tabId).classList.add('active');
+            });
+        });
+        
+        // Other stats selector functionality
+        const otherStatSelect = document.getElementById('other-stat-select');
+        const otherStatContents = document.querySelectorAll('.other-stat-content');
+        
+        if (otherStatSelect) {
+            otherStatSelect.addEventListener('change', () => {
+                const selectedStat = otherStatSelect.value;
+                
+                // Hide all contents
+                otherStatContents.forEach(content => content.classList.remove('active'));
+                
+                // Show selected content
+                const selectedContent = document.getElementById(selectedStat + '-content');
+                if (selectedContent) {
+                    selectedContent.classList.add('active');
+                }
+            });
+        }
+    });
+</script>
+{% endblock %}
