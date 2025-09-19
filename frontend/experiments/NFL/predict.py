@@ -517,6 +517,126 @@ class NFLFantasyPredictor:
         
         return X_imputed, y, available_features
     
+    def rolling_time_series_validation(self, position='ALL', start_year=2019):
+        """
+        Perform rolling time series validation to get robust performance estimates
+        """
+        print(f"\n{'='*60}")
+        print(f"ROLLING TIME SERIES VALIDATION - {position}")
+        print(f"{'='*60}")
+        
+        # Prepare data
+        data = self.prepare_data_for_prediction()
+        
+        if position != 'ALL':
+            data_filtered = data[data['position'] == position].copy()
+            X, y, features = self.create_features(data_filtered)
+        else:
+            X, y, features = self.create_features(data)
+            data_filtered = data
+        
+        print(f"Dataset shape: {X.shape}")
+        print(f"Available seasons: {sorted(data_filtered['season'].unique())}")
+        
+        # Get available test seasons (must have enough training data)
+        available_seasons = sorted(data_filtered['season'].unique())
+        test_seasons = [s for s in available_seasons if s >= start_year]
+        
+        print(f"Test seasons for validation: {test_seasons}")
+        
+        # Rolling validation results
+        cv_results = {
+            'Linear': [],
+            'Ridge': [],
+            'Random Forest': []
+        }
+        
+        for test_season in test_seasons:
+            print(f"\n--- Validating on {test_season} ---")
+            
+            # Create time-based split
+            train_mask = data_filtered['season'] < test_season
+            test_mask = data_filtered['season'] == test_season
+            
+            X_train, X_test = X[train_mask], X[test_mask]
+            y_train, y_test = y[train_mask], y[test_mask]
+            
+            if len(X_test) == 0:
+                print(f"No test data for {test_season}, skipping...")
+                continue
+            
+            print(f"Train: {len(X_train)} samples, Test: {len(X_test)} samples")
+            
+            # Scale features
+            scaler = RobustScaler()
+            X_train_scaled = scaler.fit_transform(X_train)
+            X_test_scaled = scaler.transform(X_test)
+            
+            # Test multiple models
+            models_to_test = {
+                'Linear': LinearRegression(),
+                'Ridge': Ridge(alpha=1.0),
+                'Random Forest': RandomForestRegressor(n_estimators=100, max_depth=10, 
+                                                     min_samples_split=5, random_state=42)
+            }
+            
+            for model_name, model in models_to_test.items():
+                if model_name == 'Random Forest':
+                    # Random Forest doesn't need scaling
+                    model.fit(X_train, y_train)
+                    y_pred = model.predict(X_test)
+                else:
+                    # Linear models use scaled data
+                    model.fit(X_train_scaled, y_train)
+                    y_pred = model.predict(X_test_scaled)
+                
+                # Calculate metrics
+                r2 = r2_score(y_test, y_pred)
+                mae = mean_absolute_error(y_test, y_pred)
+                
+                cv_results[model_name].append({
+                    'test_season': test_season,
+                    'r2': r2,
+                    'mae': mae,
+                    'n_train': len(X_train),
+                    'n_test': len(X_test)
+                })
+                
+                print(f"  {model_name:13}: R² = {r2:.3f}, MAE = {mae:.3f}")
+        
+        # Summarize cross-validation results
+        print(f"\n{'='*60}")
+        print(f"ROLLING VALIDATION SUMMARY - {position}")
+        print(f"{'='*60}")
+        
+        summary = {}
+        for model_name, results in cv_results.items():
+            if results:  # Only if we have results
+                r2_scores = [r['r2'] for r in results]
+                mae_scores = [r['mae'] for r in results]
+                
+                summary[model_name] = {
+                    'mean_r2': np.mean(r2_scores),
+                    'std_r2': np.std(r2_scores),
+                    'mean_mae': np.mean(mae_scores),
+                    'std_mae': np.std(mae_scores),
+                    'n_folds': len(results)
+                }
+                
+                print(f"{model_name}:")
+                print(f"  Mean R²: {np.mean(r2_scores):.3f} ± {np.std(r2_scores):.3f}")
+                print(f"  Mean MAE: {np.mean(mae_scores):.3f} ± {np.std(mae_scores):.3f}")
+                print(f"  Validation folds: {len(results)}")
+        
+        # Determine best model
+        if summary:
+            best_model = max(summary.keys(), key=lambda x: summary[x]['mean_r2'])
+            print(f"\nBEST MODEL: {best_model}")
+            print(f"Cross-validated R²: {summary[best_model]['mean_r2']:.3f} ± {summary[best_model]['std_r2']:.3f}")
+            print(f"Cross-validated MAE: {summary[best_model]['mean_mae']:.3f} ± {summary[best_model]['std_mae']:.3f}")
+        
+        return cv_results, summary
+
     def train_baseline_model(self, position='ALL', test_size=0.2, random_state=42):
         """
         Train baseline multiple linear regression model
@@ -1105,12 +1225,281 @@ class NFLFantasyPredictor:
             'bootstrap_maes': bootstrap_maes,
             'bootstrap_rmses': bootstrap_rmses
         }
+    
+    def train_final_model_for_predictions(self, position='ALL', model_type='best'):
+        """
+        Train final model on all available data for making 2025 predictions
+        """
+        print(f"\n{'='*60}")
+        print(f"TRAINING FINAL MODEL FOR 2025 PREDICTIONS - {position}")
+        print(f"{'='*60}")
+        
+        # Prepare all available data
+        data = self.prepare_data_for_prediction()
+        
+        if position != 'ALL':
+            data_filtered = data[data['position'] == position].copy()
+            X, y, features = self.create_features(data_filtered)
+        else:
+            X, y, features = self.create_features(data)
+            data_filtered = data
+        
+        print(f"Training on all available data: {X.shape}")
+        print(f"Seasons: {sorted(data_filtered['season'].unique())}")
+        print(f"Players: {data_filtered['player_name'].nunique()}")
+        
+        # Determine best model type if not specified
+        if model_type == 'best':
+            # Run quick validation to determine best model
+            print("Determining best model type...")
+            cv_results, summary = self.rolling_time_series_validation(position=position, start_year=2022)
+            if summary:
+                model_type = max(summary.keys(), key=lambda x: summary[x]['mean_r2'])
+                print(f"Selected model type: {model_type}")
+            else:
+                model_type = 'Random Forest'  # Default fallback
+                print(f"Using default model type: {model_type}")
+        
+        # Train final model
+        if model_type == 'Random Forest':
+            final_model = RandomForestRegressor(
+                n_estimators=200,  # More trees for final model
+                max_depth=12,
+                min_samples_split=5,
+                min_samples_leaf=3,
+                random_state=42,
+                n_jobs=-1
+            )
+            final_model.fit(X, y)
+            scaler = None  # Random Forest doesn't need scaling
+            
+        elif model_type in ['Linear', 'Ridge']:
+            scaler = RobustScaler()
+            X_scaled = scaler.fit_transform(X)
+            
+            if model_type == 'Ridge':
+                final_model = Ridge(alpha=1.0)
+            else:
+                final_model = LinearRegression()
+            
+            final_model.fit(X_scaled, y)
+        
+        # Feature importance
+        if hasattr(final_model, 'feature_importances_'):
+            feature_importance = pd.DataFrame({
+                'feature': features,
+                'importance': final_model.feature_importances_
+            }).sort_values('importance', ascending=False)
+            
+            print(f"\nTop 10 Most Important Features ({model_type}):")
+            print(feature_importance.head(10).to_string(index=False))
+        
+        # Store final model
+        self.final_models = getattr(self, 'final_models', {})
+        self.final_models[position] = {
+            'model': final_model,
+            'scaler': scaler,
+            'features': features,
+            'model_type': model_type,
+            'training_seasons': sorted(data_filtered['season'].unique()),
+            'n_training_samples': len(X)
+        }
+        
+        print(f"\nFinal {model_type} model trained for {position}")
+        print(f"Ready to predict 2025 fantasy performance!")
+        
+        return final_model, scaler, features
+    
+    def prepare_2024_data_for_predictions(self, position='ALL'):
+        """
+        Prepare 2024 season data for making 2025 predictions
+        """
+        print(f"Preparing 2024 data for {position} predictions...")
+        
+        # Get 2024 season data directly without requiring next season targets
+        df_2024 = self.df[self.df['season'] == 2024].copy()
+        
+        if position != 'ALL':
+            df_2024 = df_2024[df_2024['position'] == position].copy()
+        
+        if len(df_2024) == 0:
+            print(f"No 2024 data found for {position}")
+            return None
+        
+        # Calculate games played per player
+        games_played = df_2024.groupby(['player_id']).size().reset_index()
+        games_played.columns = ['player_id', 'games_played']
+        
+        # Filter to players with at least 5 games
+        df_2024_with_games = df_2024.merge(games_played, on=['player_id'])
+        df_2024_filtered = df_2024_with_games[df_2024_with_games['games_played'] >= 5].copy()
+        
+        print(f"Found {len(df_2024_filtered)} records for {df_2024_filtered['player_name'].nunique()} players in 2024")
+        
+        # Create season aggregates for 2024
+        agg_stats_2024 = self.create_season_aggregates(df_2024_filtered)
+        
+        # Add previous season data (2023) for feature creation
+        df_2023 = self.df[self.df['season'] == 2023].copy()
+        if position != 'ALL':
+            df_2023 = df_2023[df_2023['position'] == position].copy()
+        
+        # Get 2023 aggregates
+        games_2023 = df_2023.groupby(['player_id']).size().reset_index()
+        games_2023.columns = ['player_id', 'games_played']
+        df_2023_with_games = df_2023.merge(games_2023, on=['player_id'])
+        df_2023_filtered = df_2023_with_games[df_2023_with_games['games_played'] >= 5].copy()
+        agg_stats_2023 = self.create_season_aggregates(df_2023_filtered)
+        
+        # Merge 2024 with 2023 data to create features
+        agg_stats_2024 = agg_stats_2024.merge(
+            agg_stats_2023[['player_id', 'fantasy_points_per_game']].rename(
+                columns={'fantasy_points_per_game': 'prev_season_fantasy_ppg'}
+            ),
+            on='player_id',
+            how='left'
+        )
+        
+        # Calculate career averages (simplified - just use available data)
+        career_data = self.df[(self.df['season'] < 2024)].copy()
+        if position != 'ALL':
+            career_data = career_data[career_data['position'] == position].copy()
+        
+        # Create simplified career averages
+        career_aggs = career_data.groupby(['player_id']).agg({
+            'fantasy_points_ppr': 'sum'
+        }).reset_index()
+        
+        career_games = career_data.groupby(['player_id']).size().reset_index()
+        career_games.columns = ['player_id', 'total_career_games']
+        
+        career_stats = career_aggs.merge(career_games, on='player_id')
+        career_stats['career_avg_fantasy'] = career_stats['fantasy_points_ppr'] / career_stats['total_career_games']
+        career_stats['career_games'] = career_stats['total_career_games']
+        
+        # Merge career stats
+        agg_stats_2024 = agg_stats_2024.merge(
+            career_stats[['player_id', 'career_avg_fantasy', 'career_games']],
+            on='player_id',
+            how='left'
+        )
+        
+        # Fill missing values
+        agg_stats_2024['prev_season_fantasy_ppg'].fillna(agg_stats_2024['fantasy_points_per_game'], inplace=True)
+        agg_stats_2024['career_avg_fantasy'].fillna(agg_stats_2024['fantasy_points_per_game'], inplace=True)
+        agg_stats_2024['career_games'].fillna(agg_stats_2024['games_played'], inplace=True)
+        
+        return agg_stats_2024
+
+    def predict_2025_season(self, position='ALL'):
+        """
+        Generate 2025 fantasy predictions for all eligible players
+        """
+        print(f"\n{'='*60}")
+        print(f"GENERATING 2025 PREDICTIONS - {position}")
+        print(f"{'='*60}")
+        
+        # Make sure we have a trained model
+        if not hasattr(self, 'final_models') or position not in self.final_models:
+            print("Training final model first...")
+            self.train_final_model_for_predictions(position=position)
+        
+        model_info = self.final_models[position]
+        final_model = model_info['model']
+        scaler = model_info['scaler']
+        features = model_info['features']
+        model_type = model_info['model_type']
+        
+        print(f"Using {model_type} model trained on {model_info['training_seasons']}")
+        
+        # Prepare 2024 data for prediction
+        current_data = self.prepare_2024_data_for_predictions(position=position)
+        
+        if current_data is None or len(current_data) == 0:
+            print(f"No 2024 data found for {position}. Cannot make 2025 predictions.")
+            return None
+        
+        print(f"Found {len(current_data)} players from 2024 season")
+        
+        # Create feature matrix for 2024 players using the same method as training
+        performance_features = [
+            'fantasy_points_per_game', 'prev_season_fantasy_ppg', 'career_avg_fantasy',
+            'targets', 'receptions', 'receiving_yards', 'receiving_tds',
+            'carries', 'rushing_yards', 'rushing_tds',
+            'passing_yards', 'passing_tds', 'interceptions'
+        ]
+        
+        efficiency_features = [
+            'catch_rate', 'completion_rate', 'yards_per_carry', 'target_share'
+        ]
+        
+        biographical_features = [
+            'age', 'years_exp', 'height', 'weight', 'draft_number', 'games_played', 'career_games'
+        ]
+        
+        # Combine all features
+        all_features = performance_features + efficiency_features + biographical_features
+        
+        # Select features that exist in the data
+        available_features = [f for f in all_features if f in current_data.columns]
+        
+        # Make sure we have the same features as training
+        feature_matrix = current_data[available_features].copy()
+        
+        # Add missing features as zeros if needed
+        missing_features = set(features) - set(available_features)
+        if missing_features:
+            print(f"Warning: Missing features, filling with zeros: {missing_features}")
+            for feat in missing_features:
+                feature_matrix[feat] = 0
+        
+        # Reorder columns to match training
+        feature_matrix = feature_matrix[features]
+        
+        # Handle missing values
+        imputer = SimpleImputer(strategy='median')
+        X_2024_imputed = pd.DataFrame(imputer.fit_transform(feature_matrix), 
+                                     columns=feature_matrix.columns, 
+                                     index=feature_matrix.index)
+        
+        # Make predictions
+        if scaler is not None:
+            X_2024_scaled = scaler.transform(X_2024_imputed)
+            predictions_2025 = final_model.predict(X_2024_scaled)
+        else:
+            predictions_2025 = final_model.predict(X_2024_imputed)
+        
+        # Create predictions dataframe
+        predictions_df = pd.DataFrame({
+            'player_id': current_data['player_id'].values,
+            'player_name': current_data['player_name'].values,
+            'position': current_data['position'].values,
+            'predicted_2025_fantasy_ppg': predictions_2025,
+            'predicted_2025_total_17games': predictions_2025 * 17,  # Assuming 17 game season
+            '2024_actual_fantasy_ppg': current_data['fantasy_points_per_game'].values,
+            'games_played_2024': current_data['games_played'].values,
+            'age_in_2025': current_data['age'].values + 1 if 'age' in current_data.columns else None
+        })
+        
+        # Add some context columns
+        if 'years_exp' in current_data.columns:
+            predictions_df['years_exp_2025'] = current_data['years_exp'].values + 1
+        
+        # Sort by predicted performance
+        predictions_df = predictions_df.sort_values('predicted_2025_fantasy_ppg', ascending=False)
+        
+        print(f"\nGenerated 2025 predictions for {len(predictions_df)} players")
+        print(f"Top 10 predicted performers ({position}):")
+        print(predictions_df[['player_name', 'position', 'predicted_2025_fantasy_ppg', 
+                            '2024_actual_fantasy_ppg']].head(10).to_string(index=False))
+        
+        return predictions_df
 
 def main_data_collection():
     """Collect NFL fantasy data"""
     
     # Initialize data collector
-    collector = NFLFantasyDataCollector(years=[2020, 2021, 2022, 2023, 2024])
+    collector = NFLFantasyDataCollector(years=[2015, 2016, 2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024])
     
     print("=" * 50)
     print("NFL FANTASY DATA COLLECTION")
@@ -1506,9 +1895,134 @@ def main_complete_analysis():
     return predictor, bootstrap_results, sample_sizes
 
 
+def main_rolling_validation_and_2025_predictions():
+    """
+    Complete workflow: Rolling validation + 2025 predictions
+    """
+    print("=" * 80)
+    print("NFL FANTASY ROLLING VALIDATION + 2025 PREDICTIONS")
+    print("=" * 80)
+    
+    # Load or create dataset
+    dataset_file = f"nfl_fantasy_dataset_{datetime.now().strftime('%Y%m%d')}.csv"
+    
+    try:
+        fantasy_dataset = pd.read_csv(dataset_file)
+        print(f"Dataset loaded: {fantasy_dataset.shape}")
+    except FileNotFoundError:
+        print("Dataset not found. Collecting data first...")
+        fantasy_dataset = main_data_collection()
+    
+    # Initialize predictor
+    predictor = NFLFantasyPredictor(dataset=fantasy_dataset)
+    
+    # Step 1: Rolling validation for key positions
+    positions = ['QB', 'RB', 'WR', 'TE']
+    validation_results = {}
+    
+    for position in positions:
+        print(f"\n{'='*80}")
+        print(f"STEP 1: ROLLING VALIDATION FOR {position}")
+        print(f"{'='*80}")
+        
+        try:
+            cv_results, summary = predictor.rolling_time_series_validation(
+                position=position, 
+                start_year=2020  # Start from 2020 for more validation folds
+            )
+            validation_results[position] = summary
+        except Exception as e:
+            print(f"Error in validation for {position}: {e}")
+            continue
+    
+    # Step 2: Train final models and generate 2025 predictions
+    all_predictions = []
+    
+    for position in positions:
+        print(f"\n{'='*80}")
+        print(f"STEP 2: TRAINING FINAL MODEL & PREDICTING 2025 FOR {position}")
+        print(f"{'='*80}")
+        
+        try:
+            # Train final model
+            predictor.train_final_model_for_predictions(position=position)
+            
+            # Generate 2025 predictions
+            predictions_2025 = predictor.predict_2025_season(position=position)
+            
+            if predictions_2025 is not None:
+                all_predictions.append(predictions_2025)
+            
+        except Exception as e:
+            print(f"Error generating predictions for {position}: {e}")
+            continue
+    
+    # Step 3: Combine all predictions and export
+    if all_predictions:
+        print(f"\n{'='*80}")
+        print("STEP 3: COMBINING ALL 2025 PREDICTIONS")
+        print(f"{'='*80}")
+        
+        # Combine all position predictions
+        combined_predictions = pd.concat(all_predictions, ignore_index=True)
+
+        # Initialize validation columns with default values
+        combined_predictions['cv_r2_mean'] = 0.0
+        combined_predictions['cv_mae_mean'] = 0.0
+        combined_predictions['model_used'] = 'unknown'
+        
+        # Add model validation info
+        for pos in positions:
+            if pos in validation_results and validation_results[pos]:
+                best_model = max(validation_results[pos].keys(), 
+                               key=lambda x: validation_results[pos][x]['mean_r2'])
+                
+                # Add validation metrics to predictions
+                mask = combined_predictions['position'] == pos
+                combined_predictions.loc[mask, 'cv_r2_mean'] = validation_results[pos][best_model]['mean_r2']
+                combined_predictions.loc[mask, 'cv_mae_mean'] = validation_results[pos][best_model]['mean_mae']
+                combined_predictions.loc[mask, 'model_used'] = best_model
+        
+        # Sort by predicted performance
+        combined_predictions = combined_predictions.sort_values([
+            'predicted_2025_fantasy_ppg'
+        ], ascending=[False])
+        
+        # Export to CSV
+        output_file = f"nfl_2025_fantasy_predictions.csv"
+        combined_predictions.to_csv(output_file, index=False)
+        
+        print(f"\n2025 Fantasy Predictions exported to: {output_file}")
+        print(f"Total players predicted: {len(combined_predictions)}")
+        print(f"Positions covered: {combined_predictions['position'].unique()}")
+        
+        # Show summary stats
+        print(f"\nSUMMARY BY POSITION:")
+        print("-" * 60)
+        position_summary = combined_predictions.groupby('position').agg({
+            'predicted_2025_fantasy_ppg': ['count', 'mean', 'std'],
+            'cv_r2_mean': 'mean',
+            'cv_mae_mean': 'mean'
+        }).round(3)
+        print(position_summary)
+        
+        # Top performers across all positions
+        print(f"\nTOP 20 PREDICTED PERFORMERS (ALL POSITIONS):")
+        print("-" * 80)
+        top_20 = combined_predictions.nlargest(20, 'predicted_2025_fantasy_ppg')
+        display_cols = ['player_name', 'position', 'predicted_2025_fantasy_ppg', 
+                       '2024_actual_fantasy_ppg', 'age_in_2025']
+        print(top_20[display_cols].to_string(index=False))
+        
+        return combined_predictions, validation_results
+    
+    else:
+        print("No predictions generated. Check for errors above.")
+        return None, validation_results
+
 def main():
-    """Main function - run complete analysis"""
-    return main_complete_analysis()
+    """Main function - run rolling validation and 2025 predictions"""
+    return main_rolling_validation_and_2025_predictions()
 
 if __name__ == "__main__":
     dataset = main()
