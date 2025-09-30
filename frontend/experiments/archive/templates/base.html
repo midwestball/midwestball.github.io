@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}KnowBall - NBA Stats{% endblock %}</title>
+    
+    <!-- Plotly.js for charts -->
+    <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+    
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    
+    <!-- CSS -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
+    
+    {% block extra_head %}{% endblock %}
+</head>
+<body>
+    <header class="header">
+        <div class="header-content">
+            <h1 class="site-title"><a href="/">KnowBall</a></h1>
+            <nav class="main-nav">
+                <ul>
+                    <li><a href="/">Home</a></li>
+                    <li><a href="/league_stats">League Stats</a></li>
+                    <li><a href="/impressive_performances">Impressive Performances</a></li>
+                </ul>
+            </nav>
+            <div class="search-container">
+                <form action="/player_stats" method="post" id="search-form">
+                    <input type="text" 
+                           id="player-search" 
+                           name="player_name" 
+                           placeholder="Search for a player" 
+                           autocomplete="off"
+                           required>
+                    <div id="suggestions-box" class="suggestions-box"></div>
+                    <button type="submit">Search</button>
+                </form>
+            </div>
+        </div>
+    </header>
+    
+    <main class="container">
+        {% block content %}{% endblock %}
+    </main>
+    
+    <footer class="footer">
+        <div class="container">
+            <p>&copy; 2025 KnowBall - NBA Statistics and Analysis</p>
+        </div>
+    </footer>
+    
+    <!-- JavaScript -->
+    <script src="{{ url_for('static', filename='js/player_search.js') }}"></script>
+    {% block extra_scripts %}{% endblock %}
+</body>
+</html>
