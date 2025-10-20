@@ -1,0 +1,89 @@
+name: Weekly NFL Data Collection
+
+on:
+  schedule:
+    # Run every Tuesday at 10 AM UTC (after Monday Night Football)
+    - cron: '0 10 * * 2'
+  
+  # Allow manual trigger
+  workflow_dispatch:
+    inputs:
+      season:
+        description: 'NFL Season Year'
+        required: false
+        default: '2024'
+      week:
+        description: 'NFL Week Number (leave empty for auto-detect)'
+        required: false
+      mode:
+        description: 'Collection Mode'
+        required: true
+        default: 'full'
+        type: choice
+        options:
+          - full
+          - collect
+          - percentiles
+          - scores
+
+jobs:
+  collect-nfl-data:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+      
+      - name: Install Dependencies
+        run: |
+          pip install --upgrade pip
+          pip install -r requirements.txt
+      
+      - name: Run Data Collection
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: |
+          cd data_collection
+          if [ -z "${{ github.event.inputs.week }}" ]; then
+            python main.py --mode ${{ github.event.inputs.mode || 'full' }}
+          else
+            python main.py --mode ${{ github.event.inputs.mode || 'full' }} --season ${{ github.event.inputs.season || '2024' }} --week ${{ github.event.inputs.week }}
+          fi
+      
+      - name: Upload Logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: collection-logs
+          path: data_collection/*.log
+          retention-days: 30
+      
+      - name: Notify on Failure
+        if: failure()
+        run: |
+          echo "Data collection failed! Check the logs for details."
+          # Add your notification logic here (Slack, Discord, email, etc.)
+
+  # Optional: Backup job that runs after collection
+  backup-database:
+    needs: collect-nfl-data
+    runs-on: ubuntu-latest
+    if: success()
+    
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+      
+      - name: Backup Database
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: |
+          # Optional: Add database backup logic
+          echo "Database backup would run here"
+          # Example: pg_dump $DATABASE_URL > backup_$(date +%Y%m%d).sql
