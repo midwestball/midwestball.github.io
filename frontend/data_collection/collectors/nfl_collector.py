@@ -130,11 +130,9 @@ class NFLCollector:
         
         if not db_game_id:
             logger.info(f"Game {game_id} already exists, updating stats")
-            async with self.db.acquire() as conn:
-                db_game_id = await conn.fetchval("""
-                    SELECT game_id FROM games 
-                    WHERE season_id = $1 AND game_external_id = $2
-                """, season_id, game_id)
+            result = self.db.client.table("games").select("game_id").eq("season_id", season_id).eq("game_external_id", game_id).execute()
+            if result.data:
+                db_game_id = result.data[0]["game_id"]
         
         summary = self._fetch_game_summary(game_id)
         
@@ -144,12 +142,14 @@ class NFLCollector:
         all_stats = []
         for team_stats in players_data:
             team_external_id = str(team_stats["team"]["id"])
-            
-            async with self.db.acquire() as conn:
-                team_id = await conn.fetchval("""
-                    SELECT team_id FROM teams 
-                    WHERE sport_id = $1 AND team_external_id = $2
-                """, sport_id, team_external_id)
+
+            # Get team_id using Supabase
+            team_result = self.db.client.table("teams").select("team_id").eq("sport_id", sport_id).eq("team_external_id", team_external_id).execute()
+            team_id = team_result.data[0]["team_id"] if team_result.data else None
+
+            if not team_id:
+                logger.warning(f"Team not found: {team_external_id}")
+                continue
             
             for stat_group in team_stats.get("statistics", []):
                 for athlete_stats in stat_group.get("athletes", []):

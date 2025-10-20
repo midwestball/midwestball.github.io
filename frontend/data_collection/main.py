@@ -55,174 +55,152 @@ async def collect_weekly_nfl(
 
 async def calculate_percentiles(db: Database):
     logger.info("Calculating weekly percentiles...")
-    
-    async with db.acquire() as conn:
-        season_id = await conn.fetchval("""
-            SELECT season_id FROM seasons WHERE is_active = TRUE
-        """)
-        
-        current_week = await conn.fetchval("""
-            SELECT MAX(game_week) FROM games WHERE season_id = $1
-        """, season_id)
-        
-        positions = ["QB", "RB", "WR", "TE"]
-        
-        key_stats = {
-            "QB": ["passing_yards", "passing_touchdowns", "passer_rating"],
-            "RB": ["rushing_yards", "rushing_touchdowns", "rushing_yards_per_attempt"],
-            "WR": ["receptions", "receiving_yards", "receiving_touchdowns"],
-            "TE": ["receptions", "receiving_yards", "receiving_touchdowns"]
-        }
-        
-        for position in positions:
-            stats_to_calc = key_stats.get(position, [])
-            
-            for stat_category in stats_to_calc:
-                percentiles = await conn.fetchrow("""
-                    WITH position_stats AS (
-                        SELECT 
-                            pgs.stat_value
-                        FROM player_game_stats pgs
-                        JOIN games g ON pgs.game_id = g.game_id
-                        WHERE g.season_id = $1
-                            AND g.game_week <= $2
-                            AND pgs.position = $3
-                            AND pgs.stat_category = $4
-                            AND pgs.stat_value > 0
-                    )
-                    SELECT 
-                        percentile_cont(0.10) WITHIN GROUP (ORDER BY stat_value) as p10,
-                        percentile_cont(0.25) WITHIN GROUP (ORDER BY stat_value) as p25,
-                        percentile_cont(0.50) WITHIN GROUP (ORDER BY stat_value) as p50,
-                        percentile_cont(0.75) WITHIN GROUP (ORDER BY stat_value) as p75,
-                        percentile_cont(0.90) WITHIN GROUP (ORDER BY stat_value) as p90,
-                        percentile_cont(0.95) WITHIN GROUP (ORDER BY stat_value) as p95,
-                        percentile_cont(0.99) WITHIN GROUP (ORDER BY stat_value) as p99,
-                        AVG(stat_value) as mean,
-                        STDDEV(stat_value) as std_dev,
-                        MIN(stat_value) as min_val,
-                        MAX(stat_value) as max_val,
-                        COUNT(*) as sample_size
-                    FROM position_stats
-                """, season_id, current_week, position, stat_category)
-                
-                if percentiles and percentiles["sample_size"] > 0:
-                    percentile_data = {
-                        "p10": float(percentiles["p10"]) if percentiles["p10"] else 0,
-                        "p25": float(percentiles["p25"]) if percentiles["p25"] else 0,
-                        "p50": float(percentiles["p50"]) if percentiles["p50"] else 0,
-                        "p75": float(percentiles["p75"]) if percentiles["p75"] else 0,
-                        "p90": float(percentiles["p90"]) if percentiles["p90"] else 0,
-                        "p95": float(percentiles["p95"]) if percentiles["p95"] else 0,
-                        "p99": float(percentiles["p99"]) if percentiles["p99"] else 0,
-                        "mean": float(percentiles["mean"]) if percentiles["mean"] else 0,
-                        "std_dev": float(percentiles["std_dev"]) if percentiles["std_dev"] else 0,
-                        "min": float(percentiles["min_val"]) if percentiles["min_val"] else 0,
-                        "max": float(percentiles["max_val"]) if percentiles["max_val"] else 0
+
+    # Get active season
+    season_result = db.client.table("seasons").select("season_id").eq("is_active", True).execute()
+    if not season_result.data:
+        logger.error("No active season found")
+        return
+    season_id = season_result.data[0]["season_id"]
+
+    # Get current week
+    week_result = db.client.table("games").select("game_week").eq("season_id", season_id).order("game_week", desc=True).limit(1).execute()
+    if not week_result.data:
+        logger.error("No games found for season")
+        return
+    current_week = week_result.data[0]["game_week"]
+
+    positions = ["QB", "RB", "WR", "TE"]
+
+    key_stats = {
+        "QB": ["passing_yards", "passing_touchdowns", "passer_rating"],
+        "RB": ["rushing_yards", "rushing_touchdowns", "rushing_yards_per_attempt"],
+        "WR": ["receptions", "receiving_yards", "receiving_touchdowns"],
+        "TE": ["receptions", "receiving_yards", "receiving_touchdowns"]
+    }
+
+    logger.warning("NOTE: Percentile calculation requires creating RPC functions in Supabase")
+    logger.info("You need to create a Supabase RPC function called 'calculate_percentiles' that accepts:")
+    logger.info("  - p_season_id, p_week_number, p_position, p_stat_category")
+    logger.info("And returns percentile data (p10, p25, p50, p75, p90, p95, p99, mean, std_dev, min, max, sample_size)")
+
+    # For now, use RPC function approach
+    for position in positions:
+        stats_to_calc = key_stats.get(position, [])
+
+        for stat_category in stats_to_calc:
+            try:
+                # Call Supabase RPC function for percentile calculation
+                # You'll need to create this function in your Supabase database
+                result = db.client.rpc(
+                    "calculate_stat_percentiles",
+                    {
+                        "p_season_id": season_id,
+                        "p_week_number": current_week,
+                        "p_position": position,
+                        "p_stat_category": stat_category
                     }
-                    
-                    await conn.execute("""
-                        INSERT INTO weekly_percentiles (
-                            season_id,
-                            week_number,
-                            position,
-                            stat_category,
-                            calculation_date,
-                            percentile_data,
-                            sample_size
-                        ) VALUES ($1, $2, $3, $4, NOW(), $5, $6)
-                        ON CONFLICT (season_id, week_number, position, stat_category, calculation_date) 
-                        DO UPDATE SET
-                            percentile_data = EXCLUDED.percentile_data,
-                            sample_size = EXCLUDED.sample_size
-                    """, season_id, current_week, position, stat_category, percentile_data, percentiles["sample_size"])
-                    
-                    logger.info(f"Calculated percentiles for {position} {stat_category}: {percentiles['sample_size']} samples")
-    
+                ).execute()
+
+                if result.data:
+                    percentiles = result.data[0] if isinstance(result.data, list) else result.data
+
+                    if percentiles and percentiles.get("sample_size", 0) > 0:
+                        percentile_data = {
+                            "p10": float(percentiles.get("p10", 0)) if percentiles.get("p10") else 0,
+                            "p25": float(percentiles.get("p25", 0)) if percentiles.get("p25") else 0,
+                            "p50": float(percentiles.get("p50", 0)) if percentiles.get("p50") else 0,
+                            "p75": float(percentiles.get("p75", 0)) if percentiles.get("p75") else 0,
+                            "p90": float(percentiles.get("p90", 0)) if percentiles.get("p90") else 0,
+                            "p95": float(percentiles.get("p95", 0)) if percentiles.get("p95") else 0,
+                            "p99": float(percentiles.get("p99", 0)) if percentiles.get("p99") else 0,
+                            "mean": float(percentiles.get("mean", 0)) if percentiles.get("mean") else 0,
+                            "std_dev": float(percentiles.get("std_dev", 0)) if percentiles.get("std_dev") else 0,
+                            "min": float(percentiles.get("min_val", 0)) if percentiles.get("min_val") else 0,
+                            "max": float(percentiles.get("max_val", 0)) if percentiles.get("max_val") else 0
+                        }
+
+                        # Insert percentile record
+                        db.client.table("weekly_percentiles").upsert({
+                            "season_id": season_id,
+                            "week_number": current_week,
+                            "position": position,
+                            "stat_category": stat_category,
+                            "percentile_data": percentile_data,
+                            "sample_size": percentiles["sample_size"]
+                        }).execute()
+
+                        logger.info(f"Calculated percentiles for {position} {stat_category}: {percentiles['sample_size']} samples")
+
+            except Exception as e:
+                logger.error(f"Error calculating percentiles for {position} {stat_category}: {e}")
+                logger.info("Make sure you've created the 'calculate_stat_percentiles' RPC function in Supabase")
+                continue
+
     logger.info("Percentile calculation complete")
 
 async def calculate_impressiveness_scores(db: Database):
     logger.info("Calculating impressiveness scores...")
-    
-    async with db.acquire() as conn:
-        season_id = await conn.fetchval("""
-            SELECT season_id FROM seasons WHERE is_active = TRUE
-        """)
-        
-        current_week = await conn.fetchval("""
-            SELECT MAX(game_week) FROM games WHERE season_id = $1
-        """, season_id)
-        
-        recent_games = await conn.fetch("""
-            SELECT game_id FROM games 
-            WHERE season_id = $1 AND game_week = $2
-        """, season_id, current_week)
-        
-        for game_record in recent_games:
-            game_id = game_record["game_id"]
-            
-            stats = await conn.fetch("""
-                SELECT 
-                    pgs.stat_id,
-                    pgs.player_id,
-                    pgs.position,
-                    pgs.stat_category,
-                    pgs.stat_value
-                FROM player_game_stats pgs
-                WHERE pgs.game_id = $1
-            """, game_id)
-            
-            for stat in stats:
-                percentile_record = await conn.fetchrow("""
-                    SELECT percentile_data 
-                    FROM weekly_percentiles 
-                    WHERE season_id = $1 
-                        AND week_number = $2
-                        AND position = $3
-                        AND stat_category = $4
-                    ORDER BY calculation_date DESC 
-                    LIMIT 1
-                """, season_id, current_week, stat["position"], stat["stat_category"])
-                
-                if not percentile_record:
-                    continue
-                
-                percentiles = percentile_record["percentile_data"]
-                stat_value = float(stat["stat_value"])
-                
-                if stat_value >= percentiles.get("p99", 0):
-                    percentile_rank = 99
-                elif stat_value >= percentiles.get("p95", 0):
-                    percentile_rank = 95
-                elif stat_value >= percentiles.get("p90", 0):
-                    percentile_rank = 90
-                elif stat_value >= percentiles.get("p75", 0):
-                    percentile_rank = 75
-                elif stat_value >= percentiles.get("p50", 0):
-                    percentile_rank = 50
-                else:
-                    percentile_rank = 25
-                
-                impressiveness = percentile_rank * (stat_value / max(percentiles.get("mean", 1), 1))
-                
-                await conn.execute("""
-                    INSERT INTO player_performance_scores (
-                        game_id,
-                        player_id,
-                        stat_category,
-                        raw_value,
-                        percentile_rank,
-                        impressiveness_score,
-                        score_version
-                    ) VALUES ($1, $2, $3, $4, $5, $6, 'v1')
-                    ON CONFLICT (game_id, player_id, stat_category, score_version) 
-                    DO UPDATE SET
-                        raw_value = EXCLUDED.raw_value,
-                        percentile_rank = EXCLUDED.percentile_rank,
-                        impressiveness_score = EXCLUDED.impressiveness_score,
-                        calculated_at = NOW()
-                """, game_id, stat["player_id"], stat["stat_category"], stat["stat_value"], percentile_rank, impressiveness)
-    
+
+    # Get active season
+    season_result = db.client.table("seasons").select("season_id").eq("is_active", True).execute()
+    if not season_result.data:
+        logger.error("No active season found")
+        return
+    season_id = season_result.data[0]["season_id"]
+
+    # Get current week
+    week_result = db.client.table("games").select("game_week").eq("season_id", season_id).order("game_week", desc=True).limit(1).execute()
+    if not week_result.data:
+        logger.error("No games found for season")
+        return
+    current_week = week_result.data[0]["game_week"]
+
+    # Get recent games
+    games_result = db.client.table("games").select("game_id").eq("season_id", season_id).eq("game_week", current_week).execute()
+
+    for game_record in games_result.data:
+        game_id = game_record["game_id"]
+
+        # Get all stats for this game
+        stats_result = db.client.table("player_game_stats").select("stat_id, player_id, position, stat_category, stat_value").eq("game_id", game_id).execute()
+
+        for stat in stats_result.data:
+            # Get percentile data for this stat
+            percentile_result = db.client.table("weekly_percentiles").select("percentile_data").eq("season_id", season_id).eq("week_number", current_week).eq("position", stat["position"]).eq("stat_category", stat["stat_category"]).order("calculation_date", desc=True).limit(1).execute()
+
+            if not percentile_result.data:
+                continue
+
+            percentiles = percentile_result.data[0]["percentile_data"]
+            stat_value = float(stat["stat_value"])
+
+            if stat_value >= percentiles.get("p99", 0):
+                percentile_rank = 99
+            elif stat_value >= percentiles.get("p95", 0):
+                percentile_rank = 95
+            elif stat_value >= percentiles.get("p90", 0):
+                percentile_rank = 90
+            elif stat_value >= percentiles.get("p75", 0):
+                percentile_rank = 75
+            elif stat_value >= percentiles.get("p50", 0):
+                percentile_rank = 50
+            else:
+                percentile_rank = 25
+
+            impressiveness = percentile_rank * (stat_value / max(percentiles.get("mean", 1), 1))
+
+            # Insert performance score
+            db.client.table("player_performance_scores").upsert({
+                "game_id": game_id,
+                "player_id": stat["player_id"],
+                "stat_category": stat["stat_category"],
+                "raw_value": stat["stat_value"],
+                "percentile_rank": percentile_rank,
+                "impressiveness_score": impressiveness,
+                "score_version": "v1"
+            }).execute()
+
     logger.info("Impressiveness score calculation complete")
 
 async def main():
@@ -234,8 +212,8 @@ async def main():
     args = parser.parse_args()
     
     Config.validate_config()
-    
-    db = Database(Config.DATABASE_URL)
+
+    db = Database(Config.SUPABASE_URL, Config.SUPABASE_KEY)
     
     try:
         await db.connect()

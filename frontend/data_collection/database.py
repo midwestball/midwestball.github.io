@@ -1,234 +1,198 @@
-import asyncpg
+from supabase import create_client, Client
 from typing import Optional, List, Dict, Any
-from contextlib import asynccontextmanager
 import logging
 import json
 
 logger = logging.getLogger(__name__)
 
 class Database:
-    def __init__(self, connection_string: str):
-        self.connection_string = connection_string
-        self.pool = None
-    
+    def __init__(self, supabase_url: str, supabase_key: str):
+        self.supabase_url = supabase_url
+        self.supabase_key = supabase_key
+        self.client: Optional[Client] = None
+
     async def connect(self):
-        self.pool = await asyncpg.create_pool(
-            self.connection_string,
-            min_size = 2,
-            max_size = 10,
-            command_timeout = 60
-        )
-        logger.info("Database connection pool created")
-    
+        """Initialize the Supabase client"""
+        self.client = create_client(self.supabase_url, self.supabase_key)
+        logger.info("Supabase client initialized")
+
     async def close(self):
-        if self.pool:
-            await self.pool.close()
-            logger.info("Database connection pool closed")
-    
-    @asynccontextmanager
-    async def acquire(self):
-        async with self.pool.acquire() as conn:
-            yield conn
-    
+        """Close is not needed for Supabase client, but kept for compatibility"""
+        logger.info("Supabase client session ended")
+
     async def get_or_create_team(
         self,
         sport_id: int,
         team_external_id: str,
         team_data: Dict[str, Any]
     ) -> int:
-        async with self.acquire() as conn:
-            team_id = await conn.fetchval("""
-                SELECT team_id FROM teams 
-                WHERE sport_id = $1 AND team_external_id = $2
-            """, sport_id, team_external_id)
-            
-            if team_id:
-                return team_id
-            
-            team_id = await conn.fetchval("""
-                INSERT INTO teams (
-                    sport_id,
-                    team_external_id,
-                    team_name,
-                    team_abbreviation,
-                    team_display_name,
-                    team_location,
-                    team_color,
-                    team_logo_url,
-                    metadata
-                ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-                ON CONFLICT (sport_id, team_external_id) 
-                DO UPDATE SET
-                    team_name = EXCLUDED.team_name,
-                    updated_at = NOW()
-                RETURNING team_id
-            """,
-                sport_id,
-                team_external_id,
-                team_data.get("name"),
-                team_data.get("abbreviation"),
-                team_data.get("displayName"),
-                team_data.get("location"),
-                team_data.get("color"),
-                team_data.get("logo"),
-                json.dumps(team_data.get("metadata", {}))
-            )
-            
-            logger.info(f"Created/updated team: {team_data.get('name')} (ID: {team_id})")
-            return team_id
-    
+        # Check if team exists
+        result = self.client.table("teams").select("team_id").eq("sport_id", sport_id).eq("team_external_id", team_external_id).execute()
+
+        if result.data:
+            return result.data[0]["team_id"]
+
+        # Insert or update team
+        team_record = {
+            "sport_id": sport_id,
+            "team_external_id": team_external_id,
+            "team_name": team_data.get("name"),
+            "team_abbreviation": team_data.get("abbreviation"),
+            "team_display_name": team_data.get("displayName"),
+            "team_location": team_data.get("location"),
+            "team_color": team_data.get("color"),
+            "team_logo_url": team_data.get("logo"),
+            "metadata": team_data.get("metadata", {})
+        }
+
+        result = self.client.table("teams").upsert(team_record, on_conflict="sport_id,team_external_id").execute()
+
+        team_id = result.data[0]["team_id"]
+        logger.info(f"Created/updated team: {team_data.get('name')} (ID: {team_id})")
+        return team_id
+
     async def get_or_create_player(
         self,
         sport_id: int,
         player_external_id: str,
         player_data: Dict[str, Any]
     ) -> int:
-        async with self.acquire() as conn:
-            player_id = await conn.fetchval("""
-                SELECT player_id FROM players 
-                WHERE sport_id = $1 AND player_external_id = $2
-            """, sport_id, player_external_id)
-            
-            if player_id:
-                return player_id
-            
-            player_id = await conn.fetchval("""
-                INSERT INTO players (
-                    sport_id,
-                    player_external_id,
-                    player_name,
-                    player_display_name,
-                    position,
-                    jersey_number,
-                    current_team_id,
-                    metadata
-                ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-                ON CONFLICT (sport_id, player_external_id) 
-                DO UPDATE SET
-                    player_name = EXCLUDED.player_name,
-                    position = EXCLUDED.position,
-                    updated_at = NOW()
-                RETURNING player_id
-            """,
-                sport_id,
-                player_external_id,
-                player_data.get("displayName"),
-                player_data.get("displayName"),
-                player_data.get("position"),
-                player_data.get("jersey"),
-                player_data.get("team_id"),
-                json.dumps(player_data.get("metadata", {}))
-            )
-            
-            logger.info(f"Created/updated player: {player_data.get('displayName')} (ID: {player_id})")
-            return player_id
-    
+        # Check if player exists
+        result = self.client.table("players").select("player_id").eq("sport_id", sport_id).eq("player_external_id", player_external_id).execute()
+
+        if result.data:
+            return result.data[0]["player_id"]
+
+        # Insert or update player
+        player_record = {
+            "sport_id": sport_id,
+            "player_external_id": player_external_id,
+            "player_name": player_data.get("displayName"),
+            "player_display_name": player_data.get("displayName"),
+            "position": player_data.get("position"),
+            "jersey_number": player_data.get("jersey"),
+            "current_team_id": player_data.get("team_id"),
+            "metadata": player_data.get("metadata", {})
+        }
+
+        result = self.client.table("players").upsert(player_record, on_conflict="sport_id,player_external_id").execute()
+
+        player_id = result.data[0]["player_id"]
+        logger.info(f"Created/updated player: {player_data.get('displayName')} (ID: {player_id})")
+        return player_id
+
     async def insert_game(
         self,
         season_id: int,
         game_external_id: str,
         game_data: Dict[str, Any]
     ) -> Optional[int]:
-        async with self.acquire() as conn:
-            existing = await conn.fetchval("""
-                SELECT game_id FROM games 
-                WHERE season_id = $1 AND game_external_id = $2
-            """, season_id, game_external_id)
-            
-            if existing:
-                logger.info(f"Game {game_external_id} already exists")
-                return None
-            
-            game_id = await conn.fetchval("""
-                INSERT INTO games (
-                    season_id,
-                    game_external_id,
-                    game_date,
-                    game_week,
-                    home_team_id,
-                    away_team_id,
-                    home_score,
-                    away_score,
-                    game_status,
-                    venue_name,
-                    metadata
-                ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
-                RETURNING game_id
-            """,
-                season_id,
-                game_external_id,
-                game_data["game_date"],
-                game_data.get("game_week"),
-                game_data["home_team_id"],
-                game_data["away_team_id"],
-                game_data.get("home_score"),
-                game_data.get("away_score"),
-                game_data.get("status", "completed"),
-                game_data.get("venue"),
-                json.dumps(game_data.get("metadata", {}))
-            )
-            
-            logger.info(f"Inserted game {game_external_id} (ID: {game_id})")
-            return game_id
-    
+        # Check if game already exists
+        result = self.client.table("games").select("game_id").eq("season_id", season_id).eq("game_external_id", game_external_id).execute()
+
+        if result.data:
+            logger.info(f"Game {game_external_id} already exists")
+            return None
+
+        # Insert game
+        game_record = {
+            "season_id": season_id,
+            "game_external_id": game_external_id,
+            "game_date": game_data["game_date"].isoformat(),
+            "game_week": game_data.get("game_week"),
+            "home_team_id": game_data["home_team_id"],
+            "away_team_id": game_data["away_team_id"],
+            "home_score": game_data.get("home_score"),
+            "away_score": game_data.get("away_score"),
+            "game_status": game_data.get("status", "completed"),
+            "venue_name": game_data.get("venue"),
+            "metadata": game_data.get("metadata", {})
+        }
+
+        result = self.client.table("games").insert(game_record).execute()
+
+        game_id = result.data[0]["game_id"]
+        logger.info(f"Inserted game {game_external_id} (ID: {game_id})")
+        return game_id
+
     async def insert_player_stats_batch(
         self,
         game_id: int,
         stats: List[Dict[str, Any]]
     ):
-        async with self.acquire() as conn:
-            async with conn.transaction():
-                for stat in stats:
-                    try:
-                        await conn.execute("""
-                            INSERT INTO player_game_stats (
-                                game_id,
-                                player_id,
-                                team_id,
-                                position,
-                                stat_category,
-                                stat_value
-                            ) VALUES ($1, $2, $3, $4, $5, $6)
-                            ON CONFLICT (game_id, player_id, stat_category) 
-                            DO UPDATE SET
-                                stat_value = EXCLUDED.stat_value,
-                                updated_at = NOW()
-                        """,
-                            game_id,
-                            stat["player_id"],
-                            stat["team_id"],
-                            stat["position"],
-                            stat["stat_category"],
-                            stat["stat_value"]
-                        )
-                    except Exception as e:
-                        logger.error(f"Error inserting stat: {stat}, error: {e}")
-                        continue
-                
-                logger.info(f"Inserted {len(stats)} stats for game {game_id}")
-    
+        # Prepare stats for upsert
+        stat_records = []
+        for stat in stats:
+            try:
+                stat_record = {
+                    "game_id": game_id,
+                    "player_id": stat["player_id"],
+                    "team_id": stat["team_id"],
+                    "position": stat["position"],
+                    "stat_category": stat["stat_category"],
+                    "stat_value": stat["stat_value"]
+                }
+                stat_records.append(stat_record)
+            except Exception as e:
+                logger.error(f"Error preparing stat: {stat}, error: {e}")
+                continue
+
+        if stat_records:
+            # Upsert all stats
+            self.client.table("player_game_stats").upsert(
+                stat_records,
+                on_conflict="game_id,player_id,stat_category"
+            ).execute()
+
+            logger.info(f"Inserted {len(stat_records)} stats for game {game_id}")
+
     async def get_active_season(self, sport_code: str) -> Optional[int]:
-        async with self.acquire() as conn:
-            season_id = await conn.fetchval("""
-                SELECT s.season_id 
-                FROM seasons s
-                JOIN sports sp ON s.sport_id = sp.sport_id
-                WHERE sp.sport_code = $1 AND s.is_active = TRUE
-            """, sport_code)
-            return season_id
-    
+        result = self.client.rpc(
+            "get_active_season_by_sport",
+            {"p_sport_code": sport_code}
+        ).execute()
+
+        if result.data:
+            return result.data[0]["season_id"] if isinstance(result.data, list) else result.data.get("season_id")
+
+        # Fallback to manual query if RPC doesn't exist
+        result = self.client.table("seasons").select("season_id").eq("is_active", True).execute()
+
+        if result.data:
+            return result.data[0]["season_id"]
+
+        return None
+
     async def get_sport_id(self, sport_code: str) -> Optional[int]:
-        async with self.acquire() as conn:
-            sport_id = await conn.fetchval("""
-                SELECT sport_id FROM sports WHERE sport_code = $1
-            """, sport_code)
-            return sport_id
-    
+        result = self.client.table("sports").select("sport_id").eq("sport_code", sport_code).execute()
+
+        if result.data:
+            return result.data[0]["sport_id"]
+
+        return None
+
     async def get_current_week(self, season_id: int) -> int:
-        async with self.acquire() as conn:
-            week = await conn.fetchval("""
-                SELECT COALESCE(MAX(game_week), 0) 
-                FROM games 
-                WHERE season_id = $1
-            """, season_id)
-            return week or 1
+        result = self.client.table("games").select("game_week").eq("season_id", season_id).order("game_week", desc=True).limit(1).execute()
+
+        if result.data and result.data[0]["game_week"]:
+            return result.data[0]["game_week"]
+
+        return 1
+
+    async def execute_query(self, query: str, *args):
+        """
+        Execute a raw SQL query using Supabase RPC
+        This is a compatibility method for complex queries
+        """
+        # Note: For complex queries, you'll need to create RPC functions in Supabase
+        # This is a placeholder for compatibility
+        logger.warning("Direct SQL execution not supported with Supabase client. Use RPC functions instead.")
+        raise NotImplementedError("Direct SQL queries require RPC functions in Supabase")
+
+    async def fetch_one(self, query: str, *args):
+        """Compatibility method - not directly supported"""
+        raise NotImplementedError("Use Supabase table queries or RPC functions")
+
+    async def fetch_many(self, query: str, *args):
+        """Compatibility method - not directly supported"""
+        raise NotImplementedError("Use Supabase table queries or RPC functions")

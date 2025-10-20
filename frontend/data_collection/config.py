@@ -5,8 +5,9 @@ from dotenv import load_dotenv
 load_dotenv()
 
 class Config:
-    DATABASE_URL = os.getenv("DATABASE_URL")
-    
+    SUPABASE_URL = os.getenv("SUPABASE_URL")
+    SUPABASE_KEY = os.getenv("SUPABASE_KEY")
+
     ESPN_BASE_URL = "https://site.api.espn.com/apis/site/v2/sports"
     
     SPORT_CONFIG = {
@@ -82,6 +83,8 @@ class Config:
     
     @classmethod
     def validate_config(cls):
-        if not cls.DATABASE_URL:
-            raise ValueError("DATABASE_URL environment variable not set")
+        if not cls.SUPABASE_URL:
+            raise ValueError("SUPABASE_URL environment variable not set")
+        if not cls.SUPABASE_KEY:
+            raise ValueError("SUPABASE_KEY environment variable not set")
         return True
