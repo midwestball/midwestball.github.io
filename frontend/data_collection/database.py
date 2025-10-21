@@ -64,6 +64,11 @@ class Database:
             return result.data[0]["player_id"]
 
         # Insert or update player
+        # Convert birth_date from date object to ISO string for Supabase
+        birth_date = player_data.get("birth_date")
+        if birth_date and hasattr(birth_date, 'isoformat'):
+            birth_date = birth_date.isoformat()
+
         player_record = {
             "sport_id": sport_id,
             "player_external_id": player_external_id,
@@ -72,6 +77,9 @@ class Database:
             "position": player_data.get("position"),
             "jersey_number": player_data.get("jersey"),
             "current_team_id": player_data.get("team_id"),
+            "birth_date": birth_date,
+            "height_inches": player_data.get("height_inches"),
+            "weight_pounds": player_data.get("weight_pounds"),
             "metadata": player_data.get("metadata", {})
         }
 

@@ -9,12 +9,14 @@ from decimal import Decimal
 from config import Config
 from database import Database
 from stat_normalizer import StatNormalizer
+from player_parser import parse_player_data
 
 logger = logging.getLogger(__name__)
 
 class NFLCollector:
-    def __init__(self, db: Database):
-        self.db = db
+    def __init__(self, supabase_db: Database, local_db = None):
+        self.supabase_db = supabase_db
+        self.local_db = local_db
         self.session = requests.Session()
         self.session.headers.update({
             "User-Agent": "Mozilla/5.0 (Sports Analytics Platform)"
@@ -23,12 +25,12 @@ class NFLCollector:
     
     async def collect_weekly_data(self, season: int, week: int):
         logger.info(f"Starting NFL Week {week} collection for season {season}")
-        
-        season_id = await self.db.get_active_season("nfl")
+
+        season_id = await self.supabase_db.get_active_season("nfl")
         if not season_id:
             raise ValueError("No active NFL season found in database")
-        
-        sport_id = await self.db.get_sport_id("nfl")
+
+        sport_id = await self.supabase_db.get_sport_id("nfl")
         
         games = self._fetch_weekly_scoreboard(season, week)
         
@@ -122,17 +124,26 @@ class NFLCollector:
             }
         }
         
-        db_game_id = await self.db.insert_game(
+        # Insert game into Supabase
+        db_game_id = await self.supabase_db.insert_game(
             season_id,
             game_id,
             game_record
         )
-        
+
         if not db_game_id:
             logger.info(f"Game {game_id} already exists, updating stats")
-            result = self.db.client.table("games").select("game_id").eq("season_id", season_id).eq("game_external_id", game_id).execute()
+            result = self.supabase_db.client.table("games").select("game_id").eq("season_id", season_id).eq("game_external_id", game_id).execute()
             if result.data:
                 db_game_id = result.data[0]["game_id"]
+
+        # Insert game into local DB if enabled
+        if self.local_db:
+            await self.local_db.insert_game(
+                season_id,
+                game_id,
+                game_record
+            )
         
         summary = self._fetch_game_summary(game_id)
         
@@ -144,7 +155,7 @@ class NFLCollector:
             team_external_id = str(team_stats["team"]["id"])
 
             # Get team_id using Supabase
-            team_result = self.db.client.table("teams").select("team_id").eq("sport_id", sport_id).eq("team_external_id", team_external_id).execute()
+            team_result = self.supabase_db.client.table("teams").select("team_id").eq("sport_id", sport_id).eq("team_external_id", team_external_id).execute()
             team_id = team_result.data[0]["team_id"] if team_result.data else None
 
             if not team_id:
@@ -172,15 +183,24 @@ class NFLCollector:
                 })
         
         if prepared_stats:
-            await self.db.insert_player_stats_batch(db_game_id, prepared_stats)
-        
+            # Insert stats into Supabase
+            await self.supabase_db.insert_player_stats_batch(db_game_id, prepared_stats)
+
+            # Insert stats into local DB if enabled
+            if self.local_db:
+                await self.local_db.insert_player_stats_batch(db_game_id, prepared_stats)
+
         logger.info(f"Successfully processed game {game_id} with {len(prepared_stats)} stats")
         return True
     
     async def _ensure_team(self, sport_id: int, team_data: Dict) -> int:
+        """
+        Ensure team exists in both databases.
+        Returns the Supabase team_id (used for foreign keys).
+        """
         team_external_id = str(team_data["team"]["id"])
         team_info = team_data["team"]
-        
+
         team_record = {
             "name": team_info.get("name"),
             "abbreviation": team_info.get("abbreviation"),
@@ -193,12 +213,23 @@ class NFLCollector:
                 "links": team_info.get("links", [])
             }
         }
-        
-        return await self.db.get_or_create_team(
+
+        # Always create in Supabase
+        supabase_team_id = await self.supabase_db.get_or_create_team(
             sport_id,
             team_external_id,
             team_record
         )
+
+        # Optionally create in local DB
+        if self.local_db:
+            await self.local_db.get_or_create_team(
+                sport_id,
+                team_external_id,
+                team_record
+            )
+
+        return supabase_team_id
     
     async def _parse_player_stats(
         self,
@@ -208,23 +239,24 @@ class NFLCollector:
     ) -> List[Dict]:
         athlete_info = athlete_data.get("athlete", {})
         player_external_id = str(athlete_info.get("id"))
-        
-        player_record = {
-            "displayName": athlete_info.get("displayName"),
-            "position": athlete_info.get("position", {}).get("abbreviation"),
-            "jersey": athlete_info.get("jersey"),
-            "team_id": team_id,
-            "metadata": {
-                "headshot": athlete_info.get("headshot", {}).get("href"),
-                "links": athlete_info.get("links", [])
-            }
-        }
-        
-        player_id = await self.db.get_or_create_player(
+
+        # Parse player data with proper field extraction
+        player_record = parse_player_data(athlete_info, team_id)
+
+        # Create player in Supabase
+        player_id = await self.supabase_db.get_or_create_player(
             sport_id,
             player_external_id,
             player_record
         )
+
+        # Create player in local DB if enabled
+        if self.local_db:
+            await self.local_db.get_or_create_player(
+                sport_id,
+                player_external_id,
+                player_record
+            )
         
         stats = []
         stat_lines = athlete_data.get("stats", [])
@@ -256,8 +288,8 @@ class NFLCollector:
     
     async def seed_teams_and_players(self):
         logger.info("Seeding NFL teams and players...")
-        
-        sport_id = await self.db.get_sport_id("nfl")
+
+        sport_id = await self.supabase_db.get_sport_id("nfl")
         
         url = f"{self.espn_base}teams"
         response = self.session.get(url)
@@ -277,42 +309,59 @@ class NFLCollector:
                 "metadata": {}
             }
             
-            team_id = await self.db.get_or_create_team(
+            # Create team in Supabase
+            team_id = await self.supabase_db.get_or_create_team(
                 sport_id,
                 team_external_id,
                 team_record
             )
+
+            # Create team in local DB if enabled
+            if self.local_db:
+                await self.local_db.get_or_create_team(
+                    sport_id,
+                    team_external_id,
+                    team_record
+                )
             
             time.sleep(0.5)
             
             roster_url = f"{self.espn_base}teams/{team_external_id}/roster"
             roster_response = self.session.get(roster_url)
             roster_data = roster_response.json()
-            
-            athletes = roster_data.get("athletes", [])
-            for athlete in athletes:
-                player_external_id = str(athlete.get("id"))
-                
-                player_record = {
-                    "displayName": athlete.get("displayName") or athlete.get("name") or f"Player {athlete.get('id', 'Unknown')}",
-                    "position": athlete.get("position", {}).get("abbreviation") if isinstance(athlete.get("position"), dict) else athlete.get("position"),
-                    "jersey": athlete.get("jersey"),
-                    "team_id": team_id,
-                    "metadata": {
-                        "height": athlete.get("height"),
-                        "weight": athlete.get("weight"),
-                        "age": athlete.get("age"),
-                        "experience": athlete.get("experience", {}).get("years")
-                    }
-                }
-                
-                await self.db.get_or_create_player(
-                    sport_id,
-                    player_external_id,
-                    player_record
-                )
-            
-            logger.info(f"Seeded team {team_info.get('name')} with {len(athletes)} players")
+
+            # ESPN API returns athletes grouped by position
+            # Structure: athletes: [{position: "offense", items: [...]}, {position: "defense", items: [...]}]
+            athlete_groups = roster_data.get("athletes", [])
+
+            total_players = 0
+            for group in athlete_groups:
+                athletes = group.get("items", [])
+
+                for athlete in athletes:
+                    player_external_id = str(athlete.get("id"))
+
+                    # Parse player data with proper field extraction
+                    player_record = parse_player_data(athlete, team_id)
+
+                    # Create player in Supabase
+                    await self.supabase_db.get_or_create_player(
+                        sport_id,
+                        player_external_id,
+                        player_record
+                    )
+
+                    # Create player in local DB if enabled
+                    if self.local_db:
+                        await self.local_db.get_or_create_player(
+                            sport_id,
+                            player_external_id,
+                            player_record
+                        )
+
+                    total_players += 1
+
+            logger.info(f"Seeded team {team_info.get('name')} with {total_players} players")
             time.sleep(1)
         
         logger.info("Seeding complete!")

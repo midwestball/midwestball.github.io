@@ -5,9 +5,15 @@ from dotenv import load_dotenv
 load_dotenv()
 
 class Config:
+    # Supabase Configuration
     SUPABASE_URL = os.getenv("SUPABASE_URL")
     SUPABASE_KEY = os.getenv("SUPABASE_KEY")
 
+    # Local PostgreSQL Configuration
+    LOCAL_DATABASE_URL = os.getenv("LOCAL_DATABASE_URL")
+    USE_LOCAL_DB = os.getenv("USE_LOCAL_DB", "false").lower() == "true"
+
+    # ESPN Configuration
     ESPN_BASE_URL = "https://site.api.espn.com/apis/site/v2/sports"
     
     SPORT_CONFIG = {
@@ -87,4 +93,9 @@ class Config:
             raise ValueError("SUPABASE_URL environment variable not set")
         if not cls.SUPABASE_KEY:
             raise ValueError("SUPABASE_KEY environment variable not set")
+
+        # Only validate local DB if it's enabled
+        if cls.USE_LOCAL_DB and not cls.LOCAL_DATABASE_URL:
+            raise ValueError("USE_LOCAL_DB is true but LOCAL_DATABASE_URL is not set")
+
         return True
