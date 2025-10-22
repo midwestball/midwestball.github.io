@@ -121,6 +121,7 @@ python main.py --mode collect --season 2024 --week 8 --use-local-db
 python main.py --mode collect --season 2024 --week 8
 ```
 
+
 ### Analytics
 
 ```bash

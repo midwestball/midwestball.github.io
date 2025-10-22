@@ -157,67 +157,95 @@ async def calculate_percentiles_local(local_db: LocalDatabase):
 
     logger.info("Percentile calculation complete")
 
-async def calculate_impressiveness_scores(db: Database):
-    logger.info("Calculating impressiveness scores...")
+async def calculate_impressiveness_scores_local(local_db: LocalDatabase):
+    """
+    Calculate impressiveness scores using local PostgreSQL database.
+    This function requires a LocalDatabase instance.
+    """
+    logger.info("Calculating impressiveness scores on local database...")
 
-    # Get active season
-    season_result = db.client.table("seasons").select("season_id").eq("is_active", True).execute()
-    if not season_result.data:
-        logger.error("No active season found")
-        return
-    season_id = season_result.data[0]["season_id"]
+    async with local_db.acquire() as conn:
+        season_id = await conn.fetchval("""
+            SELECT season_id FROM seasons WHERE is_active = TRUE LIMIT 1
+        """)
 
-    # Get current week
-    week_result = db.client.table("games").select("game_week").eq("season_id", season_id).order("game_week", desc=True).limit(1).execute()
-    if not week_result.data:
-        logger.error("No games found for season")
-        return
-    current_week = week_result.data[0]["game_week"]
+        if not season_id:
+            logger.error("No active season found")
+            return
 
-    # Get recent games
-    games_result = db.client.table("games").select("game_id").eq("season_id", season_id).eq("game_week", current_week).execute()
+        current_week = await conn.fetchval("""
+            SELECT MAX(game_week) FROM games WHERE season_id = $1
+        """, season_id)
 
-    for game_record in games_result.data:
-        game_id = game_record["game_id"]
+        if not current_week:
+            logger.error("No games found for season")
+            return
 
-        # Get all stats for this game
-        stats_result = db.client.table("player_game_stats").select("stat_id, player_id, position, stat_category, stat_value").eq("game_id", game_id).execute()
+        # Get recent games
+        games = await conn.fetch("""
+            SELECT game_id FROM games
+            WHERE season_id = $1 AND game_week = $2
+        """, season_id, current_week)
 
-        for stat in stats_result.data:
-            # Get percentile data for this stat
-            percentile_result = db.client.table("weekly_percentiles").select("percentile_data").eq("season_id", season_id).eq("week_number", current_week).eq("position", stat["position"]).eq("stat_category", stat["stat_category"]).order("calculation_date", desc=True).limit(1).execute()
+        for game_record in games:
+            game_id = game_record["game_id"]
 
-            if not percentile_result.data:
-                continue
+            # Get all stats for this game
+            stats = await conn.fetch("""
+                SELECT stat_id, player_id, position, stat_category, stat_value
+                FROM player_game_stats
+                WHERE game_id = $1
+            """, game_id)
 
-            percentiles = percentile_result.data[0]["percentile_data"]
-            stat_value = float(stat["stat_value"])
+            for stat in stats:
+                # Get percentile data for this stat
+                percentile_record = await conn.fetchrow("""
+                    SELECT percentile_data
+                    FROM weekly_percentiles
+                    WHERE season_id = $1
+                        AND week_number = $2
+                        AND position = $3
+                        AND stat_category = $4
+                    ORDER BY calculation_date DESC
+                    LIMIT 1
+                """, season_id, current_week, stat["position"], stat["stat_category"])
 
-            if stat_value >= percentiles.get("p99", 0):
-                percentile_rank = 99
-            elif stat_value >= percentiles.get("p95", 0):
-                percentile_rank = 95
-            elif stat_value >= percentiles.get("p90", 0):
-                percentile_rank = 90
-            elif stat_value >= percentiles.get("p75", 0):
-                percentile_rank = 75
-            elif stat_value >= percentiles.get("p50", 0):
-                percentile_rank = 50
-            else:
-                percentile_rank = 25
+                if not percentile_record:
+                    continue
 
-            impressiveness = percentile_rank * (stat_value / max(percentiles.get("mean", 1), 1))
+                percentiles = percentile_record["percentile_data"]
+                stat_value = float(stat["stat_value"])
 
-            # Insert performance score
-            db.client.table("player_performance_scores").upsert({
-                "game_id": game_id,
-                "player_id": stat["player_id"],
-                "stat_category": stat["stat_category"],
-                "raw_value": stat["stat_value"],
-                "percentile_rank": percentile_rank,
-                "impressiveness_score": impressiveness,
-                "score_version": "v1"
-            }).execute()
+                # Calculate percentile rank
+                if stat_value >= percentiles.get("p99", 0):
+                    percentile_rank = 99
+                elif stat_value >= percentiles.get("p95", 0):
+                    percentile_rank = 95
+                elif stat_value >= percentiles.get("p90", 0):
+                    percentile_rank = 90
+                elif stat_value >= percentiles.get("p75", 0):
+                    percentile_rank = 75
+                elif stat_value >= percentiles.get("p50", 0):
+                    percentile_rank = 50
+                else:
+                    percentile_rank = 25
+
+                impressiveness = percentile_rank * (stat_value / max(percentiles.get("mean", 1), 1))
+
+                # Insert performance score
+                await conn.execute("""
+                    INSERT INTO player_performance_scores (
+                        game_id, player_id, stat_category, raw_value,
+                        percentile_rank, impressiveness_score, score_version
+                    ) VALUES ($1, $2, $3, $4, $5, $6, 'v1')
+                    ON CONFLICT (game_id, player_id, stat_category, score_version)
+                    DO UPDATE SET
+                        raw_value = EXCLUDED.raw_value,
+                        percentile_rank = EXCLUDED.percentile_rank,
+                        impressiveness_score = EXCLUDED.impressiveness_score,
+                        calculated_at = NOW()
+                """, game_id, stat["player_id"], stat["stat_category"],
+                    stat["stat_value"], percentile_rank, impressiveness)
 
     logger.info("Impressiveness score calculation complete")
 
@@ -263,15 +291,17 @@ async def main():
                 logger.error("Percentile calculation requires local database. Use --use-local-db flag or set USE_LOCAL_DB=true in .env")
 
         elif args.mode == "scores":
-            # Use local DB if available, otherwise Supabase
-            db_for_scores = local_db if local_db else supabase_db
-            await calculate_impressiveness_scores(db_for_scores)
+            # Scores calculation requires local DB
+            if local_db:
+                await calculate_impressiveness_scores_local(local_db)
+            else:
+                logger.error("Impressiveness score calculation requires local database. Use --use-local-db flag or set USE_LOCAL_DB=true in .env")
 
         elif args.mode == "full":
             await collect_weekly_nfl(supabase_db, local_db, args.season, args.week)
             if local_db:
                 await calculate_percentiles_local(local_db)
-                await calculate_impressiveness_scores(local_db)
+                await calculate_impressiveness_scores_local(local_db)
             else:
                 logger.warning("Skipping percentiles and scores - requires local database")
 

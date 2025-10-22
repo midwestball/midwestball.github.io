@@ -137,12 +137,13 @@ class NFLCollector:
             if result.data:
                 db_game_id = result.data[0]["game_id"]
 
-        # Insert game into local DB if enabled
-        if self.local_db:
+        # Insert game into local DB if enabled, using Supabase game_id for parity
+        if self.local_db and db_game_id:
             await self.local_db.insert_game(
                 season_id,
                 game_id,
-                game_record
+                game_record,
+                supabase_game_id=db_game_id
             )
         
         summary = self._fetch_game_summary(game_id)
@@ -163,31 +164,44 @@ class NFLCollector:
                 continue
             
             for stat_group in team_stats.get("statistics", []):
+                # Get stat labels and keys for this group
+                stat_keys = stat_group.get("keys", [])
+                stat_labels = stat_group.get("labels", [])
+                stat_category = stat_group.get("name", "")
+
                 for athlete_stats in stat_group.get("athletes", []):
                     player_stats = await self._parse_player_stats(
                         athlete_stats,
                         team_id,
-                        sport_id
+                        sport_id,
+                        stat_keys,
+                        stat_labels,
+                        stat_category
                     )
                     all_stats.extend(player_stats)
         
         prepared_stats = []
         for stat in all_stats:
             if stat["stat_value"] is not None:
+                # Convert Decimal to float for JSON serialization
+                stat_value = stat["stat_value"]
+                if isinstance(stat_value, Decimal):
+                    stat_value = float(stat_value)
+
                 prepared_stats.append({
                     "player_id": stat["player_id"],
                     "team_id": stat["team_id"],
                     "position": stat["position"],
                     "stat_category": stat["stat_category"],
-                    "stat_value": stat["stat_value"]
+                    "stat_value": stat_value
                 })
         
         if prepared_stats:
             # Insert stats into Supabase
             await self.supabase_db.insert_player_stats_batch(db_game_id, prepared_stats)
 
-            # Insert stats into local DB if enabled
-            if self.local_db:
+            # Insert stats into local DB if enabled (using same game_id for parity)
+            if self.local_db and db_game_id:
                 await self.local_db.insert_player_stats_batch(db_game_id, prepared_stats)
 
         logger.info(f"Successfully processed game {game_id} with {len(prepared_stats)} stats")
@@ -235,13 +249,29 @@ class NFLCollector:
         self,
         athlete_data: Dict,
         team_id: int,
-        sport_id: int
+        sport_id: int,
+        stat_keys: List[str],
+        stat_labels: List[str],
+        stat_category: str
     ) -> List[Dict]:
         athlete_info = athlete_data.get("athlete", {})
+
+        # Handle case where athlete might not be a dict
+        if not isinstance(athlete_info, dict):
+            logger.warning(f"Invalid athlete data: {athlete_info}")
+            return []
+
         player_external_id = str(athlete_info.get("id"))
+        if not player_external_id or player_external_id == "None":
+            logger.warning(f"No player ID found in athlete data")
+            return []
 
         # Parse player data with proper field extraction
-        player_record = parse_player_data(athlete_info, team_id)
+        try:
+            player_record = parse_player_data(athlete_info, team_id)
+        except Exception as e:
+            logger.error(f"Error parsing player data for player {player_external_id}: {e}")
+            return []
 
         # Create player in Supabase
         player_id = await self.supabase_db.get_or_create_player(
@@ -250,40 +280,42 @@ class NFLCollector:
             player_record
         )
 
-        # Create player in local DB if enabled
+        # Create player in local DB if enabled, using Supabase player_id for parity
         if self.local_db:
             await self.local_db.get_or_create_player(
                 sport_id,
                 player_external_id,
-                player_record
+                player_record,
+                supabase_player_id=player_id
             )
-        
+
         stats = []
-        stat_lines = athlete_data.get("stats", [])
-        
-        for stat_value in stat_lines:
-            for stat_name, stat_val in stat_value.items():
-                if stat_name in ["name", "abbreviation", "displayValue"]:
-                    continue
-                
-                position = player_record["position"]
-                category = StatNormalizer._infer_category(stat_name, position)
-                
-                normalized = StatNormalizer.normalize_espn_stat(
-                    stat_name,
-                    str(stat_val),
-                    category
-                )
-                
-                for norm_stat in normalized:
-                    stats.append({
-                        "player_id": player_id,
-                        "team_id": team_id,
-                        "position": position,
-                        "stat_category": norm_stat["stat_category"],
-                        "stat_value": norm_stat["stat_value"]
-                    })
-        
+        stat_values = athlete_data.get("stats", [])
+
+        # Stats is a list of string values that map to the keys/labels
+        # Example: stats=['13/21', '167', '8.0', ...] maps to keys=['completions/passingAttempts', 'passingYards', ...]
+        for stat_key, stat_label, stat_value in zip(stat_keys, stat_labels, stat_values):
+            if not stat_value or stat_value == "0":
+                continue
+
+            position = player_record.get("position", "")
+
+            # Normalize the stat using the label (which matches our config mappings)
+            normalized = StatNormalizer.normalize_espn_stat(
+                stat_label,
+                str(stat_value),
+                stat_category
+            )
+
+            for norm_stat in normalized:
+                stats.append({
+                    "player_id": player_id,
+                    "team_id": team_id,
+                    "position": position,
+                    "stat_category": norm_stat["stat_category"],
+                    "stat_value": norm_stat["stat_value"]
+                })
+
         return stats
     
     async def seed_teams_and_players(self):
@@ -345,18 +377,19 @@ class NFLCollector:
                     player_record = parse_player_data(athlete, team_id)
 
                     # Create player in Supabase
-                    await self.supabase_db.get_or_create_player(
+                    player_id = await self.supabase_db.get_or_create_player(
                         sport_id,
                         player_external_id,
                         player_record
                     )
 
-                    # Create player in local DB if enabled
+                    # Create player in local DB if enabled, using Supabase player_id for parity
                     if self.local_db:
                         await self.local_db.get_or_create_player(
                             sport_id,
                             player_external_id,
-                            player_record
+                            player_record,
+                            supabase_player_id=player_id
                         )
 
                     total_players += 1

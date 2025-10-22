@@ -136,6 +136,7 @@ python main.py --mode collect --season 2024 --week 8 --use-local-db
 2. Writes games and stats to **Supabase**
 3. Also writes to **local database** (when `--use-local-db` is used)
 
+
 ### Calculate Percentiles (Local Only)
 
 Percentile calculations require local database:

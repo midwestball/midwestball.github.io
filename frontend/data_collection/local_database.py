@@ -97,10 +97,12 @@ class LocalDatabase:
         self,
         sport_id: int,
         player_external_id: str,
-        player_data: Dict[str, Any]
+        player_data: Dict[str, Any],
+        supabase_player_id: int = None
     ) -> int:
         """
         Get existing player or create new player.
+        If supabase_player_id is provided, use it to maintain ID parity with Supabase.
         Returns the player_id.
         """
         async with self.acquire() as conn:
@@ -116,31 +118,58 @@ class LocalDatabase:
             # Convert metadata dict to JSON string for insertion
             metadata_json = json.dumps(player_data.get("metadata", {}))
 
-            # Insert new player
-            player_id = await conn.fetchval("""
-                INSERT INTO players (
-                    sport_id, player_external_id, player_name, player_display_name,
-                    position, jersey_number, current_team_id, birth_date,
-                    height_inches, weight_pounds, metadata
-                ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
-                ON CONFLICT (sport_id, player_external_id)
-                DO UPDATE SET
-                    player_name = EXCLUDED.player_name,
-                    player_display_name = EXCLUDED.player_display_name,
-                    position = EXCLUDED.position,
-                    jersey_number = EXCLUDED.jersey_number,
-                    current_team_id = EXCLUDED.current_team_id,
-                    birth_date = EXCLUDED.birth_date,
-                    height_inches = EXCLUDED.height_inches,
-                    weight_pounds = EXCLUDED.weight_pounds,
-                    metadata = EXCLUDED.metadata,
-                    updated_at = NOW()
-                RETURNING player_id
-            """, sport_id, player_external_id, player_data.get("displayName"),
-                player_data.get("displayName"), player_data.get("position"),
-                player_data.get("jersey"), player_data.get("team_id"),
-                player_data.get("birth_date"), player_data.get("height_inches"),
-                player_data.get("weight_pounds"), metadata_json)
+            # Insert new player with explicit ID if provided (for Supabase parity)
+            if supabase_player_id:
+                player_id = await conn.fetchval("""
+                    INSERT INTO players (
+                        player_id, sport_id, player_external_id, player_name, player_display_name,
+                        position, jersey_number, current_team_id, birth_date,
+                        height_inches, weight_pounds, metadata
+                    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+                    ON CONFLICT (sport_id, player_external_id)
+                    DO UPDATE SET
+                        player_name = EXCLUDED.player_name,
+                        player_display_name = EXCLUDED.player_display_name,
+                        position = EXCLUDED.position,
+                        jersey_number = EXCLUDED.jersey_number,
+                        current_team_id = EXCLUDED.current_team_id,
+                        birth_date = EXCLUDED.birth_date,
+                        height_inches = EXCLUDED.height_inches,
+                        weight_pounds = EXCLUDED.weight_pounds,
+                        metadata = EXCLUDED.metadata,
+                        updated_at = NOW()
+                    RETURNING player_id
+                """, supabase_player_id, sport_id, player_external_id, player_data.get("displayName"),
+                    player_data.get("displayName"), player_data.get("position"),
+                    player_data.get("jersey"), player_data.get("team_id"),
+                    player_data.get("birth_date"), player_data.get("height_inches"),
+                    player_data.get("weight_pounds"), metadata_json)
+            else:
+                # Insert without explicit ID (auto-increment)
+                player_id = await conn.fetchval("""
+                    INSERT INTO players (
+                        sport_id, player_external_id, player_name, player_display_name,
+                        position, jersey_number, current_team_id, birth_date,
+                        height_inches, weight_pounds, metadata
+                    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+                    ON CONFLICT (sport_id, player_external_id)
+                    DO UPDATE SET
+                        player_name = EXCLUDED.player_name,
+                        player_display_name = EXCLUDED.player_display_name,
+                        position = EXCLUDED.position,
+                        jersey_number = EXCLUDED.jersey_number,
+                        current_team_id = EXCLUDED.current_team_id,
+                        birth_date = EXCLUDED.birth_date,
+                        height_inches = EXCLUDED.height_inches,
+                        weight_pounds = EXCLUDED.weight_pounds,
+                        metadata = EXCLUDED.metadata,
+                        updated_at = NOW()
+                    RETURNING player_id
+                """, sport_id, player_external_id, player_data.get("displayName"),
+                    player_data.get("displayName"), player_data.get("position"),
+                    player_data.get("jersey"), player_data.get("team_id"),
+                    player_data.get("birth_date"), player_data.get("height_inches"),
+                    player_data.get("weight_pounds"), metadata_json)
 
             logger.info(f"Created/updated player: {player_data.get('displayName')} (ID: {player_id})")
             return player_id
@@ -149,10 +178,12 @@ class LocalDatabase:
         self,
         season_id: int,
         game_external_id: str,
-        game_data: Dict[str, Any]
+        game_data: Dict[str, Any],
+        supabase_game_id: int = None
     ) -> Optional[int]:
         """
         Insert a new game if it doesn't exist.
+        If supabase_game_id is provided, use it to maintain ID parity with Supabase.
         Returns the game_id or None if game already exists.
         """
         async with self.acquire() as conn:
@@ -163,25 +194,40 @@ class LocalDatabase:
             """, season_id, game_external_id)
 
             if existing_game:
-                logger.info(f"Game {game_external_id} already exists")
-                return None
+                logger.info(f"Game {game_external_id} already exists (ID: {existing_game})")
+                return existing_game
 
             # Convert metadata dict to JSON string for insertion
             metadata_json = json.dumps(game_data.get("metadata", {}))
 
-            # Insert game
-            game_id = await conn.fetchval("""
-                INSERT INTO games (
-                    season_id, game_external_id, game_date, game_week,
-                    home_team_id, away_team_id, home_score, away_score,
-                    game_status, venue_name, metadata
-                ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
-                RETURNING game_id
-            """, season_id, game_external_id, game_data["game_date"],
-                game_data.get("game_week"), game_data["home_team_id"],
-                game_data["away_team_id"], game_data.get("home_score"),
-                game_data.get("away_score"), game_data.get("status", "completed"),
-                game_data.get("venue"), metadata_json)
+            # Insert game with explicit ID if provided (for Supabase parity)
+            if supabase_game_id:
+                game_id = await conn.fetchval("""
+                    INSERT INTO games (
+                        game_id, season_id, game_external_id, game_date, game_week,
+                        home_team_id, away_team_id, home_score, away_score,
+                        game_status, venue_name, metadata
+                    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+                    RETURNING game_id
+                """, supabase_game_id, season_id, game_external_id, game_data["game_date"],
+                    game_data.get("game_week"), game_data["home_team_id"],
+                    game_data["away_team_id"], game_data.get("home_score"),
+                    game_data.get("away_score"), game_data.get("status", "completed"),
+                    game_data.get("venue"), metadata_json)
+            else:
+                # Insert without explicit ID (auto-increment)
+                game_id = await conn.fetchval("""
+                    INSERT INTO games (
+                        season_id, game_external_id, game_date, game_week,
+                        home_team_id, away_team_id, home_score, away_score,
+                        game_status, venue_name, metadata
+                    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+                    RETURNING game_id
+                """, season_id, game_external_id, game_data["game_date"],
+                    game_data.get("game_week"), game_data["home_team_id"],
+                    game_data["away_team_id"], game_data.get("home_score"),
+                    game_data.get("away_score"), game_data.get("status", "completed"),
+                    game_data.get("venue"), metadata_json)
 
             logger.info(f"Inserted game {game_external_id} (ID: {game_id})")
             return game_id

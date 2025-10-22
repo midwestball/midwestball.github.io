@@ -155,19 +155,18 @@ class Database:
             logger.info(f"Inserted {len(stat_records)} stats for game {game_id}")
 
     async def get_active_season(self, sport_code: str) -> Optional[int]:
-        result = self.client.rpc(
-            "get_active_season_by_sport",
-            {"p_sport_code": sport_code}
-        ).execute()
+        # Get sport_id first
+        sport_result = self.client.table("sports").select("sport_id").eq("sport_code", sport_code).execute()
+        if not sport_result.data:
+            return None
 
-        if result.data:
-            return result.data[0]["season_id"] if isinstance(result.data, list) else result.data.get("season_id")
+        sport_id = sport_result.data[0]["sport_id"]
 
-        # Fallback to manual query if RPC doesn't exist
-        result = self.client.table("seasons").select("season_id").eq("is_active", True).execute()
+        # Get active season for this sport
+        season_result = self.client.table("seasons").select("season_id").eq("sport_id", sport_id).eq("is_active", True).limit(1).execute()
 
-        if result.data:
-            return result.data[0]["season_id"]
+        if season_result.data:
+            return season_result.data[0]["season_id"]
 
         return None
 
