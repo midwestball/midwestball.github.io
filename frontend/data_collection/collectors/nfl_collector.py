@@ -204,15 +204,21 @@ class NFLCollector:
                 if self.local_db and db_game_id:
                     await self.local_db.insert_player_stats_batch(db_game_id, prepared_stats)
                     logger.info(f"Inserted {len(prepared_stats)} stats to LOCAL database only")
+                    # Note: No aggregation refresh in local-stats mode (saves Supabase resources)
                 else:
                     logger.warning(f"local-stats mode requires local database, but none configured")
             else:
                 # Default: Insert to Supabase (and optionally local)
                 await self.supabase_db.insert_player_stats_batch(db_game_id, prepared_stats)
 
+                # Refresh aggregations in Supabase
+                await self.supabase_db.refresh_aggregations(db_game_id)
+
                 # Insert stats into local DB if enabled (using same game_id for parity)
                 if self.local_db and db_game_id:
                     await self.local_db.insert_player_stats_batch(db_game_id, prepared_stats)
+                    # Also refresh local aggregations
+                    await self.local_db.refresh_aggregations(db_game_id)
 
         logger.info(f"Successfully processed game {game_id} with {len(prepared_stats)} stats")
         return True

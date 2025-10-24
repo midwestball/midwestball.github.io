@@ -42,20 +42,16 @@ python main.py --mode collect
 python main.py --mode collect --season 2024 --week 10
 ```
 
-### 3. Calculate Percentiles
-Calculate statistical percentiles from local database (requires local DB).
+### 3. Backfill Aggregations
+Regenerate aggregation tables for all existing games (requires local DB).
+**Note:** This is only needed after migration or if aggregations get out of sync.
+Aggregations are automatically updated when stats are collected.
 ```bash
-python main.py --mode percentiles --use-local-db
+python main.py --mode backfill --use-local-db
 ```
 
-### 4. Calculate Impressiveness Scores
-Calculate player performance scores (requires local DB).
-```bash
-python main.py --mode scores --use-local-db
-```
-
-### 5. Full Pipeline
-Run collection + percentiles + scores in one command.
+### 4. Full Pipeline
+Run collection with automatic aggregation updates.
 ```bash
 python main.py --mode full --use-local-db
 ```
@@ -84,11 +80,11 @@ python main.py --mode collect --use-local-db --local-stats
 ### Production Collection (Minimal Supabase Usage)
 ```bash
 # Collect with stats only in local DB
+# Aggregations are NOT updated when using --local-stats (saves Supabase resources)
 python main.py --mode collect --use-local-db --local-stats
 
-# Calculate analytics locally
-python main.py --mode percentiles --use-local-db
-python main.py --mode scores --use-local-db
+# Optionally backfill local aggregations if needed
+python main.py --mode backfill --use-local-db
 ```
 
 ### Full Local Development
@@ -103,14 +99,14 @@ python main.py --mode full --local-stats
 python main.py --mode seed --use-local-db
 
 # 2. Collect all season data (one week at a time)
+# Using --local-stats keeps stats only in local DB (saves Supabase storage)
 for week in {1..18}; do
   python main.py --mode collect --week $week --use-local-db --local-stats
   sleep 2
 done
 
-# 3. Calculate analytics
-python main.py --mode percentiles --use-local-db
-python main.py --mode scores --use-local-db
+# 3. Backfill aggregations for local database
+python main.py --mode backfill --use-local-db
 ```
 
 ## Logs
@@ -125,5 +121,6 @@ Log files are automatically created in the `data_collection` directory:
 **Error: "--local-stats requires --use-local-db"**
 - Add `--use-local-db` flag or set `USE_LOCAL_DB=true` in `.env`
 
-**Error: "Percentile calculation requires local database"**
-- Percentiles and scores modes require a local database with stats data
+**Error: "Aggregation backfill requires local database"**
+- Backfill mode requires a local database with stats data
+- Add `--use-local-db` flag or set `USE_LOCAL_DB=true` in `.env`

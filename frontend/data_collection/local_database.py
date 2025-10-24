@@ -275,6 +275,20 @@ class LocalDatabase:
 
                 logger.info(f"Inserted {len(stat_records)} stats for game {game_id}")
 
+    async def refresh_aggregations(self, game_id: int):
+        """
+        Refresh aggregation tables for a specific game.
+        This should be called after stats are inserted to update aggregations.
+        Calls the refresh_aggregations_for_game SQL function.
+        """
+        try:
+            async with self.acquire() as conn:
+                await conn.execute("SELECT refresh_aggregations_for_game($1)", game_id)
+                logger.info(f"Refreshed aggregations for game {game_id}")
+        except Exception as e:
+            logger.error(f"Failed to refresh aggregations for game {game_id}: {e}")
+            # Don't raise - aggregations can be backfilled later
+
     async def get_active_season(self, sport_code: str) -> Optional[int]:
         """Get the active season_id for a given sport code"""
         async with self.acquire() as conn:

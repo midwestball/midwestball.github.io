@@ -154,6 +154,19 @@ class Database:
 
             logger.info(f"Inserted {len(stat_records)} stats for game {game_id}")
 
+    async def refresh_aggregations(self, game_id: int):
+        """
+        Refresh aggregation tables for a specific game.
+        This should be called after stats are inserted to Supabase.
+        Uses the RPC function to trigger aggregation updates.
+        """
+        try:
+            result = self.client.rpc('rpc_refresh_aggregations_for_game', {'game_id_param': game_id}).execute()
+            logger.info(f"Refreshed aggregations for game {game_id}")
+        except Exception as e:
+            logger.error(f"Failed to refresh aggregations for game {game_id}: {e}")
+            # Don't raise - aggregations can be backfilled later
+
     async def get_active_season(self, sport_code: str) -> Optional[int]:
         # Get sport_id first
         sport_result = self.client.table("sports").select("sport_id").eq("sport_code", sport_code).execute()
