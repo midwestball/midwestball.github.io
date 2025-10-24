@@ -14,9 +14,10 @@ from player_parser import parse_player_data
 logger = logging.getLogger(__name__)
 
 class NFLCollector:
-    def __init__(self, supabase_db: Database, local_db = None):
+    def __init__(self, supabase_db: Database, local_db = None, local_stats_only: bool = False):
         self.supabase_db = supabase_db
         self.local_db = local_db
+        self.local_stats_only = local_stats_only
         self.session = requests.Session()
         self.session.headers.update({
             "User-Agent": "Mozilla/5.0 (Sports Analytics Platform)"
@@ -197,12 +198,21 @@ class NFLCollector:
                 })
         
         if prepared_stats:
-            # Insert stats into Supabase
-            await self.supabase_db.insert_player_stats_batch(db_game_id, prepared_stats)
+            # Insert stats based on mode
+            if self.local_stats_only:
+                # Only insert to local DB when in local-stats mode
+                if self.local_db and db_game_id:
+                    await self.local_db.insert_player_stats_batch(db_game_id, prepared_stats)
+                    logger.info(f"Inserted {len(prepared_stats)} stats to LOCAL database only")
+                else:
+                    logger.warning(f"local-stats mode requires local database, but none configured")
+            else:
+                # Default: Insert to Supabase (and optionally local)
+                await self.supabase_db.insert_player_stats_batch(db_game_id, prepared_stats)
 
-            # Insert stats into local DB if enabled (using same game_id for parity)
-            if self.local_db and db_game_id:
-                await self.local_db.insert_player_stats_batch(db_game_id, prepared_stats)
+                # Insert stats into local DB if enabled (using same game_id for parity)
+                if self.local_db and db_game_id:
+                    await self.local_db.insert_player_stats_batch(db_game_id, prepared_stats)
 
         logger.info(f"Successfully processed game {game_id} with {len(prepared_stats)} stats")
         return True

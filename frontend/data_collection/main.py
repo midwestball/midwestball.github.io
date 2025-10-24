@@ -33,14 +33,15 @@ async def collect_weekly_nfl(
     supabase_db: Database,
     local_db: Optional[LocalDatabase] = None,
     season: int = None,
-    week: int = None
+    week: int = None,
+    local_stats: bool = False
 ):
     logger.info("Starting weekly NFL collection...")
 
     if not season:
         season = Config.SPORT_CONFIG["nfl"]["current_season"]
 
-    nfl_collector = NFLCollector(supabase_db, local_db)
+    nfl_collector = NFLCollector(supabase_db, local_db, local_stats_only=local_stats)
 
     if not week:
         season_id = await supabase_db.get_active_season("nfl")
@@ -255,6 +256,7 @@ async def main():
     parser.add_argument("--season", type = int, help = "NFL season year")
     parser.add_argument("--week", type = int, help = "NFL week number")
     parser.add_argument("--use-local-db", action = "store_true", help = "Also write to local database")
+    parser.add_argument("--local-stats", action = "store_true", help = "Store stats only in local database (requires --use-local-db)")
 
     args = parser.parse_args()
 
@@ -270,18 +272,26 @@ async def main():
     if use_local:
         local_db = LocalDatabase(Config.LOCAL_DATABASE_URL)
 
+    # Validate local-stats flag
+    if args.local_stats and not use_local:
+        logger.error("--local-stats requires --use-local-db or USE_LOCAL_DB=true in .env")
+        sys.exit(1)
+
     try:
         await supabase_db.connect()
         if local_db:
             await local_db.connect()
-            logger.info("Local database enabled - writing to both databases")
+            if args.local_stats:
+                logger.info("Local database enabled - stats will be stored ONLY in local database")
+            else:
+                logger.info("Local database enabled - writing to both databases")
 
         # Pass both databases to functions
         if args.mode == "seed":
             await seed_initial_data(supabase_db, local_db)
 
         elif args.mode == "collect":
-            await collect_weekly_nfl(supabase_db, local_db, args.season, args.week)
+            await collect_weekly_nfl(supabase_db, local_db, args.season, args.week, args.local_stats)
 
         elif args.mode == "percentiles":
             # Always use local DB for percentiles (if available)
@@ -298,7 +308,7 @@ async def main():
                 logger.error("Impressiveness score calculation requires local database. Use --use-local-db flag or set USE_LOCAL_DB=true in .env")
 
         elif args.mode == "full":
-            await collect_weekly_nfl(supabase_db, local_db, args.season, args.week)
+            await collect_weekly_nfl(supabase_db, local_db, args.season, args.week, args.local_stats)
             if local_db:
                 await calculate_percentiles_local(local_db)
                 await calculate_impressiveness_scores_local(local_db)
