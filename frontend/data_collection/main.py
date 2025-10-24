@@ -64,42 +64,118 @@ async def collect_weekly_nfl(
 # Aggregations are now automatically updated when stats are inserted (via refresh_aggregations).
 # If you need to backfill aggregations for existing data, use the backfill_aggregations function below.
 
-async def backfill_aggregations_local(local_db: LocalDatabase):
+async def backfill_aggregations(
+    supabase_db: Database,
+    local_db: Optional[LocalDatabase] = None,
+    local_stats_only: bool = False
+):
     """
-    Backfill aggregation tables for all existing games in the database.
-    This is useful after migrating or when aggregations get out of sync.
+    Backfill aggregation tables for all existing games.
+
+    Behavior matches collection modes:
+    - Default (no flags): Backfill Supabase only
+    - --use-local-db: Backfill Supabase AND local
+    - --use-local-db --local-stats: Backfill local ONLY (skip Supabase)
+
+    Args:
+        supabase_db: Supabase database instance
+        local_db: Optional local database instance
+        local_stats_only: If True, only backfill local DB (matching --local-stats behavior)
     """
-    logger.info("Backfilling aggregations for all games...")
+    logger.info("Starting aggregation backfill...")
 
-    async with local_db.acquire() as conn:
-        season_id = await conn.fetchval("""
-            SELECT season_id FROM seasons WHERE is_active = TRUE LIMIT 1
-        """)
-
-        if not season_id:
-            logger.error("No active season found")
+    # Determine where stats are stored based on mode
+    if local_stats_only:
+        if not local_db:
+            logger.error("Local-only backfill requires local database")
             return
 
-        # Get all games for the season
-        games = await conn.fetch("""
-            SELECT game_id FROM games
-            WHERE season_id = $1
-            ORDER BY game_date
-        """, season_id)
+        logger.info("Backfilling LOCAL database only (--local-stats mode)")
+
+        # Backfill local database only
+        async with local_db.acquire() as conn:
+            season_id = await conn.fetchval("""
+                SELECT season_id FROM seasons WHERE is_active = TRUE LIMIT 1
+            """)
+
+            if not season_id:
+                logger.error("No active season found in local database")
+                return
+
+            games = await conn.fetch("""
+                SELECT game_id FROM games
+                WHERE season_id = $1
+                ORDER BY game_date
+            """, season_id)
+
+            total_games = len(games)
+            logger.info(f"Found {total_games} games in local database")
+
+            for idx, game_record in enumerate(games, 1):
+                game_id = game_record["game_id"]
+                try:
+                    await conn.execute("SELECT refresh_aggregations_for_game($1)", game_id)
+                    if idx % 10 == 0:
+                        logger.info(f"Processed {idx}/{total_games} games (LOCAL)")
+                except Exception as e:
+                    logger.error(f"Failed to refresh local aggregations for game {game_id}: {e}")
+
+    else:
+        # Default: Backfill Supabase (and optionally local if enabled)
+        logger.info("Backfilling SUPABASE database" + (" and LOCAL database" if local_db else ""))
+
+        # Get games from Supabase
+        season_id = await supabase_db.get_active_season("nfl")
+        if not season_id:
+            logger.error("No active season found in Supabase")
+            return
+
+        # Get all games from Supabase
+        result = supabase_db.client.table("games").select("game_id").eq("season_id", season_id).order("game_date").execute()
+        games = result.data
 
         total_games = len(games)
-        logger.info(f"Found {total_games} games to process")
+        logger.info(f"Found {total_games} games in Supabase")
 
+        # Backfill Supabase aggregations
         for idx, game_record in enumerate(games, 1):
             game_id = game_record["game_id"]
             try:
-                await conn.execute("SELECT refresh_aggregations_for_game($1)", game_id)
-                if idx % 10 == 0:  # Log every 10 games
-                    logger.info(f"Processed {idx}/{total_games} games")
+                await supabase_db.refresh_aggregations(game_id)
+                if idx % 10 == 0:
+                    logger.info(f"Processed {idx}/{total_games} games (SUPABASE)")
             except Exception as e:
-                logger.error(f"Failed to refresh aggregations for game {game_id}: {e}")
+                logger.error(f"Failed to refresh Supabase aggregations for game {game_id}: {e}")
 
-    logger.info("Aggregation backfill complete")
+        # Also backfill local DB if --use-local-db was specified
+        if local_db:
+            logger.info("Also backfilling local database...")
+            async with local_db.acquire() as conn:
+                local_season_id = await conn.fetchval("""
+                    SELECT season_id FROM seasons WHERE is_active = TRUE LIMIT 1
+                """)
+
+                if not local_season_id:
+                    logger.warning("No active season found in local database, skipping local backfill")
+                else:
+                    local_games = await conn.fetch("""
+                        SELECT game_id FROM games
+                        WHERE season_id = $1
+                        ORDER BY game_date
+                    """, local_season_id)
+
+                    logger.info(f"Found {len(local_games)} games in local database")
+
+                    for idx, game_record in enumerate(local_games, 1):
+                        game_id = game_record["game_id"]
+                        try:
+                            await conn.execute("SELECT refresh_aggregations_for_game($1)", game_id)
+                            if idx % 10 == 0:
+                                logger.info(f"Processed {idx}/{len(local_games)} games (LOCAL)")
+                        except Exception as e:
+                            logger.error(f"Failed to refresh local aggregations for game {game_id}: {e}")
+
+    logger.info("Aggregation backfill complete!")
 
 async def main():
     parser = argparse.ArgumentParser(description = "Sports Data Collection")
@@ -146,11 +222,8 @@ async def main():
             await collect_weekly_nfl(supabase_db, local_db, args.season, args.week, args.local_stats)
 
         elif args.mode == "backfill":
-            # Backfill aggregations requires local DB
-            if local_db:
-                await backfill_aggregations_local(local_db)
-            else:
-                logger.error("Aggregation backfill requires local database. Use --use-local-db flag or set USE_LOCAL_DB=true in .env")
+            # Backfill aggregations
+            await backfill_aggregations(supabase_db, local_db, args.local_stats)
 
         elif args.mode == "full":
             await collect_weekly_nfl(supabase_db, local_db, args.season, args.week, args.local_stats)
