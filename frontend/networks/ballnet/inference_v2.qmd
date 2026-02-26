@@ -1,0 +1,1175 @@
+---
+title: GATv2-GCN NBA Player Performance Prediction
+jupyter: python3
+---
+
+
+## Local Inference (MacBook / MPS)
+
+> **Paper:** *Predicting NBA Player Performance via Graph Attention Networks with Temporal Convolutions* (Luo & Krishnamurthy 2023)
+
+This notebook runs **inference only** using pre-trained weights from Colab.
+
+1. Load cached data & pre-trained model
+2. Market evaluation
+
+
+## 0 · Device Check
+
+```{python}
+import sys, os, torch
+
+if torch.backends.mps.is_available():
+    device_name = 'Apple MPS'
+elif torch.cuda.is_available():
+    device_name = torch.cuda.get_device_name(0)
+else:
+    device_name = 'CPU'
+print(f'Device: {device_name}')
+print(f'Python: {sys.version}')
+print(f'PyTorch: {torch.__version__}')
+```
+
+## 1 · Imports & Constants
+
+```{python}
+import copy, itertools, json, logging, pickle, time, warnings
+from pathlib import Path
+warnings.filterwarnings('ignore')
+
+import matplotlib
+import matplotlib.pyplot as plt
+import matplotlib.patches as mpatches
+import numpy as np
+import pandas as pd
+import networkx as nx
+from scipy import stats
+from sklearn import preprocessing
+from sklearn.metrics import (mean_squared_error, mean_absolute_error,
+                             mean_absolute_percentage_error,
+                             root_mean_squared_error)
+from numpy.lib.stride_tricks import sliding_window_view
+
+import torch, torch.nn as nn, torch.nn.functional as F
+
+# ── Paths (local) ─────────────────────────────────────────────
+NOTEBOOK_DIR = Path('.').resolve()
+REPO_ROOT  = NOTEBOOK_DIR / 'NBA-GNN-prediction'
+REPRO_ROOT = NOTEBOOK_DIR / 'reproduction'
+MODEL_DIR  = NOTEBOOK_DIR / 'outputs' / 'model'
+FIG_DIR    = NOTEBOOK_DIR / 'outputs' / 'figures'
+DATA_DIR   = NOTEBOOK_DIR / 'outputs' / 'data'
+
+import sys
+sys.path.insert(0, str(REPO_ROOT))
+sys.path.insert(0, str(REPRO_ROOT))
+
+# ── Device ────────────────────────────────────────────────────
+if torch.backends.mps.is_available():
+    DEVICE = torch.device('mps')
+elif torch.cuda.is_available():
+    DEVICE = torch.device('cuda')
+else:
+    DEVICE = torch.device('cpu')
+print('Using device:', DEVICE)
+
+# ── Configuration ─────────────────────────────────────────────
+RUN_HISTORICAL_EVALUATION = False  # Set to True to run full test-set evaluation
+# ──────────────────────────────────────────────────────────────
+
+# ── Feature / prediction constants ────────────────────────────
+FEATURE_COLS    = ['PTS','AST','REB','TO','STL','BLK','PLUS_MINUS',
+                   'TCHS','PASS','DIST','PACE','USG_PCT','TS_PCT']
+PREDICTION_COLS = ['PTS','AST','REB','TO','STL','BLK']
+PRED_INDICES    = [FEATURE_COLS.index(c) for c in PREDICTION_COLS]
+MIN_MINUTES     = 10.0
+SEQ_LENGTH      = 10
+OFFSET          = 1
+```
+
+## 2 · Load Cached Data
+
+```{python}
+raw_df     = pd.read_parquet(DATA_DIR / 'raw_boxscores.parquet')
+X_seq      = pickle.load(open(DATA_DIR / 'X_seq.pkl', 'rb'))
+X_raw_seq  = pickle.load(open(DATA_DIR / 'X_raw.pkl', 'rb'))
+G_seq      = pickle.load(open(DATA_DIR / 'G_seq.pkl', 'rb'))
+player_ids = pickle.load(open(DATA_DIR / 'player_ids.pkl', 'rb'))
+game_dates = pickle.load(open(DATA_DIR / 'game_dates.pkl', 'rb'))
+day_seasons     = pickle.load(open(DATA_DIR / 'day_seasons.pkl', 'rb'))
+team_temporal   = pickle.load(open(DATA_DIR / 'team_temporal.pkl', 'rb'))
+pos_temporal    = pickle.load(open(DATA_DIR / 'pos_temporal.pkl', 'rb'))
+n_teams         = pickle.load(open(DATA_DIR / 'n_teams.pkl', 'rb'))
+mu_per_day = np.load(DATA_DIR / 'mu_per_day.npy')
+sd_per_day = np.load(DATA_DIR / 'sd_per_day.npy')
+print(f'X_seq shape: {X_seq.shape}   Players: {len(player_ids)}   Game-days: {len(game_dates)}')
+```
+
+## 3 · Build Tensors & Normalize
+
+```{python}
+team_temporal_t = torch.FloatTensor(team_temporal).to(DEVICE)
+pos_temporal_t  = torch.FloatTensor(pos_temporal).to(DEVICE)
+n_pos = 3
+
+def graphs_to_edges(G_seq, player_ids):
+    nd = {pid: i for i, pid in enumerate(player_ids)}
+    out = []
+    for G in G_seq:
+        edges = list(G.edges())
+        if not edges:
+            n = len(player_ids)
+            out.append(torch.stack([torch.arange(n), torch.arange(n)]).long().to(DEVICE))
+        else:
+            s, d = zip(*edges)
+            s = [nd.get(x, 0) for x in s]; d = [nd.get(x, 0) for x in d]
+            out.append(torch.stack([
+                torch.LongTensor(s + d), torch.LongTensor(d + s)]).to(DEVICE))
+    return out
+
+G_edges = graphs_to_edges(G_seq, player_ids)
+print(f'Built {len(G_edges)} edge tensors.')
+
+# ── Per-season Z-score normalization ──
+# X_seq.pkl contains raw forward-filled stats; we must normalize.
+X_seq_raw_copy = X_seq.copy()
+X_seq = (X_seq - mu_per_day) / sd_per_day
+print('Applied per-season Z-score normalization.')
+```
+
+## 4 · Season Ranges & Sliding Windows
+
+``` {python}
+unique_seasons = []
+season_ranges = {}
+prev_season = None
+
+for d, s in enumerate(day_seasons):
+    if s != prev_season:
+        if prev_season is not None:
+            season_ranges[prev_season] = (season_ranges[prev_season][0], d)
+        season_ranges[s] = (d, None)
+        unique_seasons.append(s)
+        prev_season = s
+        
+season_ranges[prev_season] = (season_ranges[prev_season][0], len(day_seasons))
+
+for s, (lo, hi) in season_ranges.items():
+    print(f'  {s}: days [{lo}, {hi})  ({hi - lo} days)')
+
+active_all = (X_raw_seq != 0).any(axis=-1)
+
+X_in_parts, X_out_parts = [], []
+G_in_parts, G_out_parts = [], []
+mask_parts = []
+target_day_indices = []
+
+for s in unique_seasons:
+    lo, hi = season_ranges[s]
+    n_days = hi - lo
+    n_win = n_days - SEQ_LENGTH - OFFSET + 1
+    if n_win <= 0: continue
+    X_s = X_seq[lo:hi]
+    Xi = sliding_window_view(X_s[:-OFFSET], SEQ_LENGTH, axis=0)
+    Xo = X_s[SEQ_LENGTH + OFFSET - 1:]
+    Gi = [G_edges[lo + t:lo + t + SEQ_LENGTH] for t in range(n_win)]
+    Go = G_edges[lo + SEQ_LENGTH + OFFSET - 1:lo + SEQ_LENGTH + OFFSET - 1 + n_win]
+    mask_s = active_all[lo + SEQ_LENGTH + OFFSET - 1:lo + SEQ_LENGTH + OFFSET - 1 + n_win]
+    days_s = list(range(lo + SEQ_LENGTH + OFFSET - 1, lo + SEQ_LENGTH + OFFSET - 1 + n_win))
+    X_in_parts.append(Xi); X_out_parts.append(Xo)
+    G_in_parts.extend(Gi); G_out_parts.extend(Go)
+    mask_parts.append(mask_s)
+    target_day_indices.extend(days_s)
+
+X_in  = torch.FloatTensor(np.concatenate(X_in_parts, axis=0))
+X_out = torch.FloatTensor(np.concatenate(X_out_parts, axis=0))
+G_in  = G_in_parts
+mask_out_t = torch.BoolTensor(np.concatenate(mask_parts, axis=0))
+target_day_indices = np.array(target_day_indices)
+
+T = len(G_in)
+t1 = int(T * 0.50)
+t2 = int(T * 0.75)
+
+X_tr, y_tr, G_tr = X_in[:t1], X_out[:t1], G_in[:t1]
+X_va, y_va, G_va = X_in[t1:t2], X_out[t1:t2], G_in[t1:t2]
+X_te, y_te, G_te = X_in[t2:],  X_out[t2:],  G_in[t2:]
+mask_te = mask_out_t[t2:]
+target_days_te = target_day_indices[t2:]
+
+print(f'Total windows: {T}  train:{t1}  val:{t2-t1}  test:{T-t2}')
+```
+
+## 5 · Load Pre-Trained Model
+
+```{python}
+from gatv2tcn import GATv2TCN
+
+model_in = len(FEATURE_COLS) + 2 + 2  # 17
+
+team_emb = nn.Linear(n_teams, 2).to(DEVICE)
+pos_emb  = nn.Linear(n_pos, 2).to(DEVICE)
+model    = GATv2TCN(
+    in_channels=model_in, out_channels=6,
+    len_input=SEQ_LENGTH, len_output=1,
+    temporal_filter=64, out_gatv2conv=32,
+    dropout_tcn=0.25, dropout_gatv2conv=0.5, head_gatv2conv=4,
+).to(DEVICE)
+
+model.load_state_dict(torch.load(MODEL_DIR / 'model.pth', map_location=DEVICE))
+team_emb.load_state_dict(torch.load(MODEL_DIR / 'team_emb.pth', map_location=DEVICE))
+pos_emb.load_state_dict(torch.load(MODEL_DIR / 'pos_emb.pth', map_location=DEVICE))
+model.eval(); team_emb.eval(); pos_emb.eval()
+
+total_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
+print(f'Trainable parameters: {total_params:,}')
+print(model)
+```
+
+## 6 · Pre-Game: Fresh Data + Lock Kalshi Props + Inference
+
+**Run this cell periodically throughout the day.**
+
+This cell does **everything** needed for accurate inference and cleanly locks in opening lines without lookahead bias:
+
+1. **Fetches missing box-score data** — catches up from last cached date to yesterday
+2. **Rebuilds today's game graph** — knows exactly which teams/players are matched up
+3. **Updates all tensors**
+4. **Locks Kalshi player props** — Reads earlier lines to prevent live-market updates from polluting the inference test, only evaluating props before games start.
+5. **Runs inference** with fresh 10-day window and saves predictions
+
+```{python}
+import requests, unicodedata, re, json, time, itertools, os
+from datetime import datetime, date, timedelta
+from nba_api.stats.endpoints import (
+    scoreboardv2,
+    boxscoretraditionalv3,
+    boxscoreadvancedv3,
+    boxscoreplayertrackv3,
+)
+
+KALSHI_BASE = 'https://api.elections.kalshi.com/trade-api/v2'
+TRACKING_DIR = NOTEBOOK_DIR / 'outputs' / 'tracking'
+TRACKING_DIR.mkdir(parents=True, exist_ok=True)
+API_DELAY = 2.0
+
+KALSHI_SERIES = {
+    'KXNBAPTS': 'PTS',
+    'KXNBAAST': 'AST',
+    'KXNBAREB': 'REB',
+}
+STAT_TO_PRED_IDX = {s: i for i, s in enumerate(PREDICTION_COLS)}
+
+def norm(s):
+    return ''.join(c for c in unicodedata.normalize('NFD', s)
+                   if unicodedata.category(c) != 'Mn').lower().strip()
+
+# ═══════════════════════════════════════════════════════════════
+# PHASE 1: Catch up on missing box-score data
+# ═══════════════════════════════════════════════════════════════
+print('═' * 60)
+print('PHASE 1: Fetching missing box-score data')
+print('═' * 60)
+
+last_cached_date = game_dates[-1]
+yesterday = (date.today() - timedelta(days=1)).isoformat()
+print(f'Last cached date: {last_cached_date}')
+print(f'Yesterday:        {yesterday}')
+
+def parse_min(m):
+    if pd.isna(m) or str(m).strip() == '': return 0.0
+    if ':' in str(m):
+        p = str(m).split(':')
+        return float(p[0]) + float(p[1]) / 60
+    return float(m)
+
+def fetch_game_boxscore(game_id):
+    """Fetch box-score for one game using v3 endpoints (matches 01_data_pipeline.py)."""
+    try:
+        time.sleep(API_DELAY)
+        dt = boxscoretraditionalv3.BoxScoreTraditionalV3(game_id=game_id).get_data_frames()[0]
+        time.sleep(API_DELAY)
+        da = boxscoreadvancedv3.BoxScoreAdvancedV3(game_id=game_id).get_data_frames()[0]
+        time.sleep(API_DELAY)
+        dk = boxscoreplayertrackv3.BoxScorePlayerTrackV3(game_id=game_id).get_data_frames()[0]
+        
+        # Normalize column names (v3 uses camelCase)
+        trad_map = {'gameId':'GAME_ID', 'personId':'PLAYER_ID', 'teamId':'TEAM_ID',
+                    'teamTricode':'TEAM_ABBREVIATION', 'minutes':'MIN',
+                    'points':'PTS', 'assists':'AST', 'reboundsTotal':'REB',
+                    'turnovers':'TO', 'steals':'STL', 'blocks':'BLK',
+                    'plusMinusPoints':'PLUS_MINUS'}
+        dt = dt.rename(columns=trad_map)
+        if 'firstName' in dt.columns and 'familyName' in dt.columns:
+            dt['PLAYER_NAME'] = (dt['firstName'].fillna('') + ' ' + dt['familyName'].fillna('')).str.strip()
+        
+        adv_map = {'gameId':'GAME_ID', 'personId':'PLAYER_ID',
+                   'pace':'PACE', 'usagePercentage':'USG_PCT',
+                   'trueShootingPercentage':'TS_PCT'}
+        da = da.rename(columns=adv_map)
+        
+        dk.columns = dk.columns.str.upper()
+        dk = dk.rename(columns={'GAMEID':'GAME_ID', 'PERSONID':'PLAYER_ID'})
+        for want, variants in [('DIST',['DIST','DISTANCE']),
+                               ('TCHS',['TCHS','TOUCHES']),
+                               ('PASS',['PASS','PASSES'])]:
+            for v in variants:
+                if v in dk.columns:
+                    dk = dk.rename(columns={v: want})
+                    break
+        
+        TRAD_COLS = ['GAME_ID','PLAYER_ID','PLAYER_NAME','TEAM_ID',
+                     'TEAM_ABBREVIATION','MIN','PTS','AST','REB','TO',
+                     'STL','BLK','PLUS_MINUS']
+        ADV_COLS = ['GAME_ID','PLAYER_ID','PACE','USG_PCT','TS_PCT']
+        
+        avt = [c for c in TRAD_COLS if c in dt.columns]
+        ava = [c for c in ADV_COLS if c in da.columns]
+        avk = ['GAME_ID','PLAYER_ID'] + [c for c in ['DIST','TCHS','PASS'] if c in dk.columns]
+        df = dt[avt].merge(da[ava], on=['GAME_ID','PLAYER_ID'], how='left')
+        df = df.merge(dk[avk], on=['GAME_ID','PLAYER_ID'], how='left')
+        df['MIN'] = df['MIN'].apply(parse_min)
+        return df[df['MIN'] >= MIN_MINUTES]
+    except Exception as e:
+        print(f'  ⚠ Skip {game_id}: {e}')
+        return None
+
+missing_dates = []
+d = datetime.strptime(last_cached_date, '%Y-%m-%d').date() + timedelta(days=1)
+end = datetime.strptime(yesterday, '%Y-%m-%d').date()
+while d <= end:
+    missing_dates.append(d.isoformat())
+    d += timedelta(days=1)
+
+new_games = {}
+for md in missing_dates:
+    try:
+        time.sleep(1.0)
+        sb = scoreboardv2.ScoreboardV2(game_date=md).get_data_frames()
+        games_df = sb[0]
+        gids = games_df[games_df['GAME_STATUS_TEXT'] == 'Final']['GAME_ID'].tolist()
+        if gids:
+            new_games[md] = gids
+            print(f'  {md}: {len(gids)} finished games')
+    except Exception as e:
+        print(f'  {md}: error checking scoreboard: {e}')
+
+total_new = sum(len(v) for v in new_games.values())
+print(f'\nTotal new games to fetch: {total_new}')
+
+new_frames = []
+for gdate, gids in sorted(new_games.items()):
+    for gid in gids:
+        print(f'  Fetching {gid} ({gdate})…')
+        df_game = fetch_game_boxscore(gid)
+        if df_game is not None and len(df_game) > 0:
+            df_game['SEASON'] = '2025-26'
+            df_game['GAME_DATE'] = gdate
+            new_frames.append(df_game)
+
+# ═══════════════════════════════════════════════════════════════
+# PHASE 2: Incrementally update all tensors
+# ═══════════════════════════════════════════════════════════════
+print(f'\n{"═" * 60}')
+print('PHASE 2: Updating tensors with new data')
+print('═' * 60)
+
+if new_frames:
+    new_df = pd.concat(new_frames, ignore_index=True)
+    raw_df_updated = pd.concat([raw_df, new_df], ignore_index=True)
+    raw_df_updated.to_parquet(DATA_DIR / 'raw_boxscores.parquet', index=False)
+    print(f'Added {len(new_df)} player-game rows ({len(new_frames)} game batches)')
+    
+    player_index = {pid: i for i, pid in enumerate(player_ids)}
+    teams_all = sorted(raw_df_updated['TEAM_ABBREVIATION'].dropna().unique())
+    team2idx = {t: i for i, t in enumerate(teams_all)}
+    pos_map = {'G':[0,1,0],'F':[1,0,0],'C':[0,0,1],
+               'F-G':[1,1,0],'G-F':[1,1,0],'F-C':[1,0,1],'C-F':[1,0,1]}
+    N = len(player_ids)
+    
+    last_team_idx = {}
+    last_pos = {}
+    for d in range(len(game_dates)):
+        for pidx_i, pid in enumerate(player_ids):
+            tt = team_temporal[d, pidx_i]
+            if tt.any():
+                last_team_idx[pid] = int(tt.argmax())
+            pt = pos_temporal[d, pidx_i]
+            if pt.any():
+                last_pos[pid] = pt.tolist()
+    
+    for gdate in sorted(new_games.keys()):
+        day_df = new_df[new_df['GAME_DATE'] == gdate]
+        if len(day_df) == 0:
+            continue
+        
+        x_day = np.zeros((N, len(FEATURE_COLS)), dtype=np.float32)
+        x_raw_day = np.zeros((N, len(FEATURE_COLS)), dtype=np.float32)
+        team_day = np.zeros((N, n_teams), dtype=np.float32)
+        pos_day = np.zeros((N, 3), dtype=np.float32)
+        
+        G = nx.Graph()
+        G.add_nodes_from(player_ids)
+        
+        for gid, grp in day_df.groupby('GAME_ID'):
+            active = grp['PLAYER_ID'].tolist()
+            for pid in active:
+                if pid in player_index:
+                    pidx = player_index[pid]
+                    row = grp[grp['PLAYER_ID'] == pid].iloc[0]
+                    vals = [float(row.get(c, 0) or 0) for c in FEATURE_COLS]
+                    x_day[pidx] = vals
+                    x_raw_day[pidx] = vals
+                    tm = row.get('TEAM_ABBREVIATION', '')
+                    if tm and tm in team2idx:
+                        last_team_idx[pid] = team2idx[tm]
+            for pA, pB in itertools.combinations(active, 2):
+                if pA in player_index and pB in player_index:
+                    G.add_edge(pA, pB)
+        
+        for pidx_i in range(N):
+            if (x_day[pidx_i] == 0).all():
+                x_day[pidx_i] = X_seq_raw_copy[-1, pidx_i]
+        
+        for pidx_i, pid in enumerate(player_ids):
+            if pid in last_team_idx:
+                team_day[pidx_i, last_team_idx[pid]] = 1.0
+            if pid in last_pos:
+                pos_day[pidx_i] = last_pos[pid]
+        
+        X_seq_raw_copy = np.concatenate([X_seq_raw_copy, x_day[None, ...]], axis=0)
+        X_raw_seq_new = np.concatenate([X_raw_seq, x_raw_day[None, ...]], axis=0)
+        
+        mu_latest = mu_per_day[-1:]
+        sd_latest = sd_per_day[-1:]
+        x_norm = (x_day[None, ...] - mu_latest) / sd_latest
+        X_seq = np.concatenate([X_seq, x_norm], axis=0)
+        
+        mu_per_day_ext = np.concatenate([mu_per_day, mu_latest], axis=0)
+        sd_per_day_ext = np.concatenate([sd_per_day, sd_latest], axis=0)
+        
+        nd = {pid: i for i, pid in enumerate(player_ids)}
+        edges = list(G.edges())
+        if edges:
+            s, d_e = zip(*edges)
+            s = [nd.get(x, 0) for x in s]
+            d_e = [nd.get(x, 0) for x in d_e]
+            ei = torch.stack([torch.LongTensor(list(s)+list(d_e)),
+                              torch.LongTensor(list(d_e)+list(s))]).to(DEVICE)
+        else:
+            ei = torch.stack([torch.arange(N), torch.arange(N)]).long().to(DEVICE)
+        G_edges.append(ei)
+        G_seq.append(G)
+        
+        team_temporal_t_new = torch.FloatTensor(team_day[None, ...]).to(DEVICE)
+        pos_temporal_t_new = torch.FloatTensor(pos_day[None, ...]).to(DEVICE)
+        team_temporal_t = torch.cat([team_temporal_t, team_temporal_t_new], dim=0)
+        pos_temporal_t = torch.cat([pos_temporal_t, pos_temporal_t_new], dim=0)
+        
+        game_dates.append(gdate)
+        day_seasons.append('2025-26')
+        
+        mu_per_day = mu_per_day_ext
+        sd_per_day = sd_per_day_ext
+        X_raw_seq = X_raw_seq_new
+        
+        active_count = (x_raw_day != 0).any(axis=-1).sum()
+        print(f'  Added {gdate}: {active_count} active players, '
+              f'{G.number_of_edges()} edges')
+    
+    with open(DATA_DIR / 'X_seq.pkl', 'wb') as f: pickle.dump(X_seq_raw_copy, f)
+    with open(DATA_DIR / 'X_raw.pkl', 'wb') as f: pickle.dump(X_raw_seq, f)
+    with open(DATA_DIR / 'G_seq.pkl', 'wb') as f: pickle.dump(G_seq, f)
+    with open(DATA_DIR / 'game_dates.pkl', 'wb') as f: pickle.dump(game_dates, f)
+    with open(DATA_DIR / 'day_seasons.pkl', 'wb') as f: pickle.dump(day_seasons, f)
+    with open(DATA_DIR / 'team_temporal.pkl', 'wb') as f: pickle.dump(team_temporal_t.cpu().numpy(), f)
+    with open(DATA_DIR / 'pos_temporal.pkl', 'wb') as f: pickle.dump(pos_temporal_t.cpu().numpy(), f)
+    np.save(DATA_DIR / 'mu_per_day.npy', mu_per_day)
+    np.save(DATA_DIR / 'sd_per_day.npy', sd_per_day)
+    print("Saved all updated tensors to disk.")
+
+    print(f'\nData now covers {game_dates[-1]} ({len(game_dates)} game-days)')
+else:
+    print('No new games to fetch — data is current.')
+
+# ═══════════════════════════════════════════════════════════════
+# PHASE 3: Build today's game graph (who is playing whom)
+# ═══════════════════════════════════════════════════════════════
+print(f'\n{"═" * 60}')
+print('PHASE 3: Building today\'s anticipated game graph')
+print('═' * 60)
+
+today_str = date.today().isoformat()
+time.sleep(1.0)
+sb = scoreboardv2.ScoreboardV2(game_date=today_str).get_data_frames()
+todays_games = sb[0]
+todays_teams = sb[1]
+print(f'Games today ({today_str}): {len(todays_games)}')
+
+teams_playing_today = set(todays_teams['TEAM_ABBREVIATION'].tolist())
+print(f'Teams playing: {sorted(teams_playing_today)}')
+
+# Filter out live/finished games to prevent fetching live lines
+started_gids = todays_games[todays_games['GAME_STATUS_ID'] > 1]['GAME_ID'].tolist()
+started_team_abbrs = set(todays_teams[todays_teams['GAME_ID'].isin(started_gids)]['TEAM_ABBREVIATION'].tolist())
+if started_team_abbrs:
+    print(f'Already started games for: {sorted(started_team_abbrs)}')
+
+name2pidx = {}
+player_to_team = {}
+for pid in player_ids:
+    rows = (raw_df if not new_frames else raw_df_updated)[
+        (raw_df if not new_frames else raw_df_updated)['PLAYER_ID'] == pid
+    ]
+    if len(rows):
+        pname_norm = norm(rows.iloc[-1]['PLAYER_NAME'])
+        name2pidx[pname_norm] = player_ids.index(pid)
+        player_to_team[pname_norm] = rows.iloc[-1]['TEAM_ABBREVIATION']
+
+
+# ═══════════════════════════════════════════════════════════════
+# PHASE 4: Pull Kalshi props (LOCKING OPENING LINES)
+# ═══════════════════════════════════════════════════════════════
+print(f'\n{"═" * 60}')
+print('PHASE 4: Fetching Kalshi NBA player props & Locking Pre-Game Lines')
+print('═' * 60)
+
+pregame_path = TRACKING_DIR / f'pregame_{today_str}.json'
+
+# Lookahead Bias Fix: Load previously saved props for today to lock them.
+# If Kalshi updates the line post-tipoff, we IGNORE it and keep our pregame snapshot.
+locked_kalshi_data = {}
+if pregame_path.exists():
+    with open(pregame_path, 'r') as f:
+        for p in json.load(f):
+            locked_kalshi_data[p['kalshi_ticker']] = {
+                'ticker': p['kalshi_ticker'],
+                'event_ticker': p['event_ticker'],
+                'player_name': p['player'],
+                'stat': p['stat'],
+                'line': p['line'],
+                'threshold': p['threshold'],
+                'yes_ask': p['yes_ask'],
+                'no_ask': p['no_ask'],
+                'yes_bid': p.get('yes_bid'),
+                'no_bid': p.get('no_bid'),
+                'last_price': p.get('last_price'),
+                'close_time': p.get('close_time', ''),
+                'game_title': p.get('game', ''),
+            }
+print(f'Loaded {len(locked_kalshi_data)} locked pre-game props from earlier today.')
+
+kalshi_props = []
+for series_ticker, stat_col in KALSHI_SERIES.items():
+    try:
+        r = requests.get(f'{KALSHI_BASE}/events',
+                         params={'series_ticker': series_ticker, 'status': 'open', 'limit': 50})
+        for ev in r.json().get('events', []):
+            mr = requests.get(f'{KALSHI_BASE}/markets',
+                              params={'event_ticker': ev['event_ticker'], 'limit': 200})
+            
+            for m in mr.json().get('markets', []):
+                ticker = m['ticker']
+                
+                # If we already have this line locked from before tip-off, keep it.
+                if ticker in locked_kalshi_data:
+                    kalshi_props.append(locked_kalshi_data[ticker])
+                    continue
+                
+                title = m.get('title', '')
+                if ':' not in title:
+                    continue
+                
+                player_name = title.split(':')[0].strip()
+                pname_norm = norm(player_name)
+                
+                # Check if the player's game has started
+                player_tm = player_to_team.get(pname_norm)
+                if player_tm in started_team_abbrs:
+                    continue
+
+                line = m.get('floor_strike', 0)
+                
+                # If this is an entirely new prop being seen, register it.
+                kalshi_props.append({
+                    'ticker': m['ticker'],
+                    'event_ticker': ev['event_ticker'],
+                    'player_name': player_name,
+                    'stat': stat_col,
+                    'line': float(line),
+                    'threshold': float(line) + 0.5,
+                    'yes_ask': m.get('yes_ask'),
+                    'no_ask': m.get('no_ask'),
+                    'yes_bid': m.get('yes_bid'),
+                    'no_bid': m.get('no_bid'),
+                    'last_price': m.get('last_price'),
+                    'close_time': m.get('close_time', ''),
+                    'game_title': ev.get('title', ''),
+                })
+    except Exception as e:
+        print(f'  ⚠ Error fetching {series_ticker}: {e}')
+
+print(f'Total props ready for inference: {len(kalshi_props)}')
+
+# ═══════════════════════════════════════════════════════════════
+# PHASE 5: Run inference with the freshest data
+# ═══════════════════════════════════════════════════════════════
+print(f'\n{"═" * 60}')
+print('PHASE 5: Running model inference')
+print('═' * 60)
+
+latest_day_idx = len(game_dates) - 1
+print(f'Using data through: {game_dates[latest_day_idx]}')
+
+model.eval(); team_emb.eval(); pos_emb.eval()
+with torch.no_grad():
+    input_days = list(range(latest_day_idx - SEQ_LENGTH + 1, latest_day_idx + 1))
+    Xl = []
+    for t_step, abs_day in enumerate(input_days):
+        tv = team_emb(team_temporal_t[abs_day])
+        pv = pos_emb(pos_temporal_t[abs_day])
+        Xl.append(torch.cat([torch.FloatTensor(X_seq[abs_day]).to(DEVICE), tv, pv], 1))
+    x = torch.stack(Xl, -1)[None, ...]
+    g_window = G_edges[latest_day_idx - SEQ_LENGTH + 1:latest_day_idx + 1]
+    model_preds_z = model(x, g_window)[0].cpu().numpy()
+
+mu_d = mu_per_day[latest_day_idx, 0, PRED_INDICES]
+sd_d = sd_per_day[latest_day_idx, 0, PRED_INDICES]
+model_preds_raw = model_preds_z * sd_d + mu_d
+
+# ═══════════════════════════════════════════════════════════════
+# PHASE 6: Build prediction table & save
+# ═══════════════════════════════════════════════════════════════
+results = []
+for prop in kalshi_props:
+    pname_norm = norm(prop['player_name'])
+    pidx = name2pidx.get(pname_norm)
+    if pidx is None:
+        continue
+    stat = prop['stat']
+    if stat not in STAT_TO_PRED_IDX:
+        continue
+    si = STAT_TO_PRED_IDX[stat]
+    pred_val = float(model_preds_raw[pidx, si])
+    threshold = prop['threshold']
+    model_says_over = pred_val >= threshold
+    
+    recent_active = int((X_raw_seq[max(0,latest_day_idx-4):latest_day_idx+1, pidx] != 0
+                         ).any(axis=-1).sum())
+    
+    results.append({
+        'date': today_str,
+        'player': prop['player_name'],
+        'stat': stat,
+        'kalshi_ticker': prop['ticker'],
+        'event_ticker': prop['event_ticker'],
+        'line': prop['line'],
+        'threshold': threshold,
+        'yes_ask': prop['yes_ask'],
+        'no_ask': prop['no_ask'],
+        'implied_prob_over': prop['yes_ask'] / 100 if prop['yes_ask'] else None,
+        'model_prediction': round(pred_val, 2),
+        'model_says_over': model_says_over,
+        'game': prop['game_title'],
+        'close_time': prop['close_time'],
+        'data_freshness': game_dates[latest_day_idx],
+        'recent_games_5d': recent_active,
+        # Post-game fields:
+        'actual_result': None,
+        'kalshi_result': None,
+        'model_correct': None,
+    })
+
+with open(pregame_path, 'w') as f:
+    json.dump(results, f, indent=2)
+
+print(f'\n✅ Saved {len(results)} predictions → {pregame_path}')
+print(f'\n── Model Predictions for {today_str} ──')
+if results:
+    df_preview = pd.DataFrame(results)[
+        ['player', 'stat', 'threshold', 'model_prediction', 'model_says_over',
+         'implied_prob_over', 'recent_games_5d', 'game']
+    ].sort_values(['game', 'player', 'stat', 'threshold'])
+    display(df_preview)
+    
+    n_over = sum(1 for r in results if r['model_says_over'])
+    n_under = len(results) - n_over
+    print(f'\nModel calls: {n_over} OVER, {n_under} UNDER')
+else:
+    print('No matching props found.')
+```
+
+## 7 · Post-Game: Grade EV Strategies
+
+**Run this cell after all games have finished.**
+We grade the expected value strategies by evaluating the true ROI% for both naive EV and conformal EV independently.
+
+```{python}
+log_path = TRACKING_DIR / 'results_log.jsonl'
+
+# Load existing graded tickers
+existing_tickers = set()
+if log_path.exists():
+    with open(log_path) as f:
+        for line in f:
+            if line.strip():
+                entry = json.loads(line)
+                existing_tickers.add(entry.get('kalshi_ticker', ''))
+
+today = date.today()
+recent_dates = [(today - timedelta(days=i)).isoformat() for i in range(5)]
+pending_preds = []
+
+# Load full EV analysis files
+for d in recent_dates:
+    full_path = TRACKING_DIR / f'full_ev_analysis_{d}.json'
+    if full_path.exists():
+        with open(full_path) as f:
+            preds = json.load(f)
+            for p in preds:
+                if 'kalshi_ticker' in p and p['kalshi_ticker'] not in existing_tickers:
+                    pending_preds.append(p)
+
+unique_pending = {p['kalshi_ticker']: p for p in pending_preds}
+pending_preds = list(unique_pending.values())
+
+if not pending_preds:
+    print('No pending predictions to grade from the last 5 days.')
+else:
+    print(f'Checking {len(pending_preds)} pending predictions for Kalshi settlement…')
+    
+    graded = []
+    wins, losses, still_pending = 0, 0, 0
+    
+    for pred in pending_preds:
+        ticker = pred['kalshi_ticker']
+        try:
+            r = requests.get(f'{KALSHI_BASE}/markets/{ticker}')
+            if r.status_code == 200:
+                m = r.json().get('market', {})
+                result = m.get('result', '')  # 'yes', 'no', or ''
+                if result in ('yes', 'no'):
+                    actual_over = (result == 'yes')
+                    pred['kalshi_result'] = result
+                    pred['actual_result'] = 'over' if actual_over else 'under'
+
+                    # Grade Naive EV Pick
+                    naive_action = pred.get('best_action', 'NO EDGE')
+                    pred['naive_bet_made'] = ('YES' in naive_action or 'NO' in naive_action) and pred.get('best_ev', 0) >= MIN_TRUE_EV
+                    if pred['naive_bet_made']:
+                        if 'YES' in naive_action:
+                            pred['naive_cost'] = pred.get('yes_ask', 0)
+                            pred['naive_won'] = actual_over
+                        else:
+                            pred['naive_cost'] = pred.get('no_ask', 0)
+                            pred['naive_won'] = not actual_over
+                        pred['naive_return'] = 100 if pred['naive_won'] else 0
+                        pred['naive_profit'] = pred['naive_return'] - pred['naive_cost']
+
+                    # Grade Conformal EV Pick
+                    conf_action = pred.get('conf_action', 'NO EDGE')
+                    pred['conf_bet_made'] = ('YES' in conf_action or 'NO' in conf_action) and pred.get('conf_best_ev', 0) >= MIN_TRUE_EV
+                    if pred['conf_bet_made']:
+                        if 'YES' in conf_action:
+                            pred['conf_cost'] = pred.get('yes_ask', 0)
+                            pred['conf_won'] = actual_over
+                        else:
+                            pred['conf_cost'] = pred.get('no_ask', 0)
+                            pred['conf_won'] = not actual_over
+                        pred['conf_return'] = 100 if pred['conf_won'] else 0
+                        pred['conf_profit'] = pred['conf_return'] - pred['conf_cost']
+                        
+                else:
+                    pred['kalshi_result'] = 'pending'
+                    still_pending += 1
+            else:
+                pred['kalshi_result'] = f'error_{r.status_code}'
+                still_pending += 1
+        except Exception as e:
+            pred['kalshi_result'] = f'error: {e}'
+            still_pending += 1
+            
+        graded.append(pred)
+    
+    new_entries = 0
+    with open(log_path, 'a') as f:
+        for g in graded:
+            if g.get('kalshi_result') in ('yes', 'no'):
+                f.write(json.dumps(g) + '\\n')
+                existing_tickers.add(g['kalshi_ticker'])
+                new_entries += 1
+    
+    print(f'\\n── Grading Results ──')
+    print(f'  Newly Graded:  {new_entries}')
+    print(f'  Still Pending: {still_pending}')
+    if still_pending > 0:
+        print('\\n⚠ Games may not have finished yet. Re-run this cell later to grade UNDER markets.')
+```
+
+## 8 · Lifetime Tracking Dashboard
+
+Reads the cumulative `results_log.jsonl` and shows overall model performance.
+
+```{python}
+log_path = TRACKING_DIR / 'results_log.jsonl'
+
+if not log_path.exists() or log_path.stat().st_size == 0:
+    print('No tracking data yet. Run the pre-game and post-game cells first.')
+else:
+    entries = []
+    with open(log_path) as f:
+        for line in f:
+            if line.strip():
+                entries.append(json.loads(line))
+    
+    df_log = pd.DataFrame(entries)
+    print(f'Total graded predictions: {len(df_log)}')
+    print(f'Date range: {df_log["date"].min()} → {df_log["date"].max()}')
+    
+    # ── Overall accuracy ──
+    total_correct = df_log['model_correct'].sum()
+    total_graded  = df_log['model_correct'].count()
+    print(f'\nOverall Accuracy: {total_correct}/{total_graded} = '
+          f'{total_correct/total_graded*100:.1f}%')
+    
+    # ── By stat ──
+    print('\n── By Stat ──')
+    by_stat = df_log.groupby('stat')['model_correct'].agg(['sum', 'count'])
+    by_stat.columns = ['correct', 'total']
+    by_stat['accuracy'] = (by_stat['correct'] / by_stat['total'] * 100).round(1)
+    display(by_stat)
+    
+    # ── By date ──
+    print('\n── By Date ──')
+    by_date = df_log.groupby('date')['model_correct'].agg(['sum', 'count'])
+    by_date.columns = ['correct', 'total']
+    by_date['accuracy'] = (by_date['correct'] / by_date['total'] * 100).round(1)
+    display(by_date)
+    
+    # ── Edge analysis: model vs. market implied probability ──
+    if 'implied_prob_over' in df_log.columns:
+        valid = df_log.dropna(subset=['implied_prob_over'])
+        if len(valid) > 10:
+            valid = valid.copy()
+            valid['impl_bucket'] = pd.cut(valid['implied_prob_over'],
+                                          bins=[0, 0.2, 0.4, 0.6, 0.8, 1.0],
+                                          labels=['0-20%', '20-40%', '40-60%', '60-80%', '80-100%'])
+            by_bucket = valid.groupby('impl_bucket', observed=True)['model_correct'].agg(['sum','count'])
+            by_bucket.columns = ['correct', 'total']
+            by_bucket['model_acc'] = (by_bucket['correct'] / by_bucket['total'] * 100).round(1)
+            print('\n── Model Accuracy by Kalshi Implied Probability ──')
+            display(by_bucket)
+    
+    # ── Cumulative accuracy chart ──
+    if len(df_log) > 5:
+        df_sorted = df_log.sort_values('date').reset_index(drop=True)
+        df_sorted['cumulative_correct'] = df_sorted['model_correct'].cumsum()
+        df_sorted['cumulative_total'] = range(1, len(df_sorted) + 1)
+        df_sorted['cumulative_accuracy'] = df_sorted['cumulative_correct'] / df_sorted['cumulative_total']
+        
+        fig, ax = plt.subplots(figsize=(12, 4))
+        ax.plot(df_sorted['cumulative_accuracy'] * 100, color='#5b8fc7', lw=2)
+        ax.axhline(50, color='gray', ls='--', lw=1, alpha=0.5, label='50% baseline')
+        ax.set_xlabel('Prediction #')
+        ax.set_ylabel('Cumulative Accuracy (%)')
+        ax.set_title('Model Cumulative Accuracy Over Time', fontweight='bold')
+        ax.legend(); ax.grid(alpha=0.2)
+        plt.tight_layout()
+        plt.savefig(FIG_DIR / 'tracking_accuracy.png', dpi=150)
+        plt.show()
+        print(f'Saved tracking_accuracy.png')
+```
+
+## 9 · Conformal Calibration (Empirical Residuals) 
+
+```{python}
+import numpy as np
+import matplotlib.pyplot as plt
+import torch
+import pickle
+
+print("Extracting empirical residual distributions from validation set...")
+model.eval(); team_emb.eval(); pos_emb.eval()
+
+val_residuals = {stat: [] for stat in PREDICTION_COLS}
+
+with torch.no_grad():
+    for i in range(len(X_va)):
+        day_i = target_day_indices[t1 + i] 
+        input_days = list(range(day_i - SEQ_LENGTH, day_i))
+
+        Xl = []
+        for t_step, abs_day in enumerate(input_days):
+            tv = team_emb(team_temporal_t[abs_day])
+            pv = pos_emb(pos_temporal_t[abs_day])
+            Xl.append(torch.cat([X_va[i, :, :, t_step].to(DEVICE), tv, pv], 1))
+        x = torch.stack(Xl, -1)[None, ...]
+
+        # Deterministic prediction for calibration
+        p_latent = model(x, G_va[i])[0].cpu().numpy()
+        t_latent = y_va[i, :, PRED_INDICES].numpy()
+
+        mu_d = mu_per_day[day_i, 0, PRED_INDICES]
+        sd_d = sd_per_day[day_i, 0, PRED_INDICES]
+        p_raw = (p_latent * sd_d) + mu_d
+        t_raw = (t_latent * sd_d) + mu_d
+
+        m = mask_out_t[t1 + i].numpy() # Active players
+        
+        # Signed residuals: Actual - Predicted
+        # Positive residual means the player scored MORE than predicted
+        res_raw = t_raw[m] - p_raw[m] 
+        
+        for s_idx, stat in enumerate(PREDICTION_COLS):
+            val_residuals[stat].extend(res_raw[:, s_idx].tolist())
+
+# Convert to numpy arrays for fast empirical CDF lookups
+for stat in PREDICTION_COLS:
+    val_residuals[stat] = np.array(val_residuals[stat])
+
+# Save for inference
+calibration_path = TRACKING_DIR / 'conformal_residuals.pkl'
+with open(calibration_path, 'wb') as f:
+    pickle.dump(val_residuals, f)
+
+print(f"Saved empirical residual pools -> {calibration_path}")
+print("\n── Historical Error Distribution (Actual - Predicted) ──")
+print(f"{'Stat':<6} | {'5th %ile':<9} | {'Median':<9} | {'95th %ile'}")
+print("-" * 40)
+for stat in PREDICTION_COLS:
+    res = val_residuals[stat]
+    p05 = np.percentile(res, 5)
+    med = np.median(res)
+    p95 = np.percentile(res, 95)
+    print(f"{stat:<6} | {p05:>9.2f} | {med:>9.2f} | {p95:>9.2f}")
+```
+
+## 10 · Conformal Probability Bet Sheet
+
+```{python}
+import json
+import pickle
+import numpy as np
+import pandas as pd
+from datetime import date
+
+# ═══════════════════════════════════════════════════════════════
+# CONFIGURATION 
+# ═══════════════════════════════════════════════════════════════
+MIN_TRUE_EV    = 2.0   
+MIN_RECENT     = 2     
+MIN_EDGE       = 0.03  
+
+pd.set_option('display.max_rows', None)
+pd.set_option('display.max_columns', None)
+
+today_str = date.today().isoformat()
+ev_path = TRACKING_DIR / f'ev_analysis_{today_str}.json'
+calibration_path = TRACKING_DIR / 'conformal_residuals.pkl'
+
+if not ev_path.exists() or not calibration_path.exists():
+    print("Missing necessary files. Ensure you have run Cell 13 and Cell 15.")
+else:
+    with open(ev_path) as f:
+        ev_rows = json.load(f)
+    df_conf = pd.DataFrame(ev_rows)
+    
+    with open(calibration_path, 'rb') as f:
+        val_residuals = pickle.load(f)
+    
+    # ── 1. Calculate Exact Probabilities via Empirical CDF ──
+    def calc_conformal_probs(row):
+        stat = row['stat']
+        res_pool = val_residuals.get(stat, np.array([0]))
+        
+        # We need the actual outcome to be greater than the Kalshi threshold.
+        # Since Residual = Actual - Predicted:
+        # Actual > Threshold  ===>  Predicted + Residual > Threshold
+        # Residual > Threshold - Predicted
+        
+        margin_needed = row['threshold'] - row['mc_mean']
+        
+        # Empirical Probability: What fraction of historical residuals beat this margin?
+        p_over = (res_pool > margin_needed).mean()
+        
+        return pd.Series({
+            'conf_p_over': p_over, 
+            'conf_p_under': 1 - p_over
+        })
+
+    df_conf[['conf_p_over', 'conf_p_under']] = df_conf.apply(calc_conformal_probs, axis=1)
+    
+    # ── 2. Calculate Expected Value ──
+    def calc_conf_ev(row):
+        y_ask = row['yes_ask']
+        n_ask = row['no_ask']
+        p_o = row['conf_p_over']
+        p_u = row['conf_p_under']
+        
+        ev_y = (p_o * (100 - y_ask) - p_u * y_ask) if pd.notna(y_ask) and y_ask > 0 else None
+        ev_n = (p_u * (100 - n_ask) - p_o * n_ask) if pd.notna(n_ask) and n_ask > 0 else None
+        
+        action = 'NO EDGE'
+        best_ev = max(ev_y or -999, ev_n or -999)
+        
+        if ev_y is not None and ev_n is not None:
+            if ev_y >= ev_n and ev_y > 0:
+                action = 'BUY YES (Over)'
+                best_ev = ev_y
+            elif ev_n > ev_y and ev_n > 0:
+                action = 'BUY NO (Under)'
+                best_ev = ev_n
+                
+        return pd.Series({
+            'conf_ev_yes': ev_y, 
+            'conf_ev_no': ev_n, 
+            'conf_action': action, 
+            'conf_best_ev': best_ev if best_ev != -999 else 0
+        })
+
+    df_conf[['conf_ev_yes', 'conf_ev_no', 'conf_action', 'conf_best_ev']] = df_conf.apply(calc_conf_ev, axis=1)
+    
+    def calc_bet_edge(row):
+        if 'YES' in row['conf_action']:
+            impl_over = row['yes_ask'] / 100 if pd.notna(row['yes_ask']) else 0
+            return row['conf_p_over'] - impl_over
+        elif 'NO' in row['conf_action']:
+            impl_under = row['no_ask'] / 100 if pd.notna(row['no_ask']) else 0
+            return row['conf_p_under'] - impl_under
+        return 0.0
+
+    df_conf['bet_edge'] = df_conf.apply(calc_bet_edge, axis=1)
+    
+    # ── 3. Apply Filters ──
+    mask = df_conf['conf_best_ev'] >= MIN_TRUE_EV
+    if MIN_RECENT is not None:
+        mask &= df_conf['recent_5d'] >= MIN_RECENT
+    if MIN_EDGE is not None:
+        mask &= (df_conf['bet_edge'] >= MIN_EDGE)
+    
+    filtered = df_conf[mask].sort_values('conf_best_ev', ascending=False).copy()
+    
+    print(f'Filters: Conformal EV ≥ {MIN_TRUE_EV}¢  |  recent ≥ {MIN_RECENT}d  |  edge ≥ {MIN_EDGE}')
+    print(f'Passed: {len(filtered)} / {len(df_conf)} props\n')
+
+    if len(filtered) == 0:
+        print('No bets pass the filters.')
+    else:
+        filtered['conf_p_over'] = (filtered['conf_p_over'] * 100).round(1).astype(str) + '%'
+        filtered['bet_edge'] = (filtered['bet_edge'] * 100).round(1).astype(str) + '%'
+        filtered['conf_best_ev'] = filtered['conf_best_ev'].round(2)
+
+        sheet_cols = ['player', 'stat', 'threshold', 'mc_mean', 
+                      'conf_p_over', 'yes_ask', 'no_ask',
+                      'conf_action', 'bet_edge', 'conf_best_ev', 'recent_5d']
+        
+        print('-- PENDING PRE-GAME BET SHEET --')
+        print('These bets have not yet been graded because the games have not concluded or results_log.jsonl is not updated.')
+        display(filtered[sheet_cols])
+        
+        n_yes = filtered['conf_action'].str.contains('YES').sum()
+        n_no  = filtered['conf_action'].str.contains('NO').sum()
+        total_ev = filtered['conf_best_ev'].sum()
+        
+        print(f'\n── Conformal Bet Sheet Summary ──')
+        print(f'  {n_yes} OVER bets  |  {n_no} UNDER bets')
+        print(f'  Avg EV per bet:   {filtered["conf_best_ev"].mean():+.2f}¢')
+        print(f'  Total EV (all):   {total_ev:+.2f}¢')
+        
+        # Save to file
+        sheet_path = TRACKING_DIR / f'conf_bet_sheet_{today_str}.json'
+        filtered.to_json(sheet_path, orient='records', indent=2)
+        print(f'\n  Saved → {sheet_path}')
+
+        # Save FULL augmented EV analysis with naive + conformal
+        full_analysis_path = TRACKING_DIR / f'full_ev_analysis_{today_str}.json'
+        df_conf.to_json(full_analysis_path, orient='records', indent=2)
+        print(f'  Saved full analysis (Naive+Conformal) → {full_analysis_path}')
+```
+
+## 11 · EV Strategy ROI Comparison
+
+Compare the win rate and actual ROI% between the Naive EV strategy and the Conformal EV strategy.
+
+```{python}
+import pandas as pd
+import json
+
+log_path = TRACKING_DIR / 'results_log.jsonl'
+
+if not log_path.exists():
+    print('Missing results log. Run the pipeline for a few days first.')
+else:
+    results = []
+    with open(log_path) as f:
+        for line in f:
+            if line.strip():
+                results.append(json.loads(line))
+    df_results = pd.DataFrame(results)
+    
+    if len(df_results) == 0:
+        print('Not enough data to compare yet.')
+    else:
+        if 'naive_bet_made' not in df_results.columns:
+            df_results['naive_bet_made'] = False
+        if 'conf_bet_made' not in df_results.columns:
+            df_results['conf_bet_made'] = False
+            
+        # Naive Strategy Stats
+        naive_bets = df_results[df_results['naive_bet_made'] == True]
+        if len(naive_bets) > 0:
+            naive_wins = naive_bets['naive_won'].sum()
+            naive_total = len(naive_bets)
+            naive_winrate = naive_wins / naive_total
+            naive_cost = naive_bets['naive_cost'].sum()
+            naive_profit = naive_bets['naive_profit'].sum()
+            naive_roi = naive_profit / naive_cost if naive_cost > 0 else 0
+        else:
+            naive_wins, naive_total, naive_winrate, naive_cost, naive_profit, naive_roi = 0, 0, 0.0, 0, 0, 0.0
+            
+        # Conformal Strategy Stats
+        conf_bets = df_results[df_results['conf_bet_made'] == True]
+        if len(conf_bets) > 0:
+            conf_wins = conf_bets['conf_won'].sum()
+            conf_total = len(conf_bets)
+            conf_winrate = conf_wins / conf_total
+            conf_cost = conf_bets['conf_cost'].sum()
+            conf_profit = conf_bets['conf_profit'].sum()
+            conf_roi = conf_profit / conf_cost if conf_cost > 0 else 0
+        else:
+            conf_wins, conf_total, conf_winrate, conf_cost, conf_profit, conf_roi = 0, 0, 0.0, 0, 0, 0.0
+            
+        print(f'── EV Strategy Comparison Dashboard ──\n')
+        
+        print(f'【 NAIVE EV STRATEGY 】')
+        print(f'Total Bets:  {naive_total}')
+        print(f'Win Rate:    {naive_wins}/{naive_total} ({naive_winrate*100:.1f}%)')
+        print(f'Total Spend: {naive_cost:.0f}¢')
+        print(f'Total PnL:   {naive_profit:+.0f}¢')
+        print(f'Actual ROI:  {naive_roi*100:+.1f}%\n')
+        
+        print(f'【 CONFORMAL EV STRATEGY 】')
+        print(f'Total Bets:  {conf_total}')
+        print(f'Win Rate:    {conf_wins}/{conf_total} ({conf_winrate*100:.1f}%)')
+        print(f'Total Spend: {conf_cost:.0f}¢')
+        print(f'Total PnL:   {conf_profit:+.0f}¢')
+        print(f'Actual ROI:  {conf_roi*100:+.1f}%\n')
+```
+
+## ✅ All Done!
+
+**Daily workflow:**
+
+1. **Before games** → Run Cells 1–9 (one-time setup), then Cell 10 (fetch data + Kalshi + inference)
+2. **EV Analysis** → Run Cell 13 (MC Dropout + EV ranking)
+3. **Bet Sheet** → Run Cell 14 (filtered picks only)
+4. **After games** → Run Cell 11 (grade results vs. settled markets)
+5. **Anytime** → Run Cells 12 & 16 (dashboards)
+
+**Data files:**
+
+* `outputs/tracking/pregame_YYYY-MM-DD.json` — Pre-game predictions
+* `outputs/tracking/ev_analysis_YYYY-MM-DD.json` — MC Dropout EV analysis
+* `outputs/tracking/conf_bet_sheet_YYYY-MM-DD.json` — Filtered actionable picks from conformal calibration
+* `outputs/tracking/results_log.jsonl` — Cumulative graded results
+

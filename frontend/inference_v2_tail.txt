@@ -1,0 +1,750 @@
+    n_over = sum(1 for r in results if r['model_says_over'])
+    n_under = len(results) - n_over
+    print(f'\nModel calls: {n_over} OVER, {n_under} UNDER')
+else:
+    print('No matching props found.')
+
+```
+
+## 11 · Post-Game: Grade Results & Append to Tracking Log
+
+**Run this cell after all games have finished.**
+
+```{python}
+log_path = TRACKING_DIR / 'results_log.jsonl'
+
+# Load existing graded tickers
+existing_tickers = set()
+if log_path.exists():
+    with open(log_path) as f:
+        for line in f:
+            if line.strip():
+                entry = json.loads(line)
+                existing_tickers.add(entry.get('kalshi_ticker', ''))
+
+# Find all pending predictions from the last 5 days
+today = date.today()
+recent_dates = [(today - timedelta(days=i)).isoformat() for i in range(5)]
+pending_preds = []
+
+for d in recent_dates:
+    pregame_path = TRACKING_DIR / f'pregame_{d}.json'
+    if pregame_path.exists():
+        with open(pregame_path) as f:
+            preds = json.load(f)
+            for p in preds:
+                if p['kalshi_ticker'] not in existing_tickers:
+                    pending_preds.append(p)
+
+unique_pending = {}
+for p in pending_preds:
+    unique_pending[p['kalshi_ticker']] = p
+pending_preds = list(unique_pending.values())
+
+if not pending_preds:
+    print('No pending predictions to grade from the last 5 days.')
+else:
+    print(f'Checking {len(pending_preds)} pending predictions for Kalshi settlement…')
+    
+    graded = []
+    wins, losses, still_pending = 0, 0, 0
+    
+    for pred in pending_preds:
+        ticker = pred['kalshi_ticker']
+        try:
+            r = requests.get(f'{KALSHI_BASE}/markets/{ticker}')
+            if r.status_code == 200:
+                m = r.json().get('market', {})
+                result = m.get('result', '')  # 'yes', 'no', or ''
+                if result in ('yes', 'no'):
+                    actual_over = (result == 'yes')
+                    model_correct = (pred['model_says_over'] == actual_over)
+                    
+                    pred['kalshi_result'] = result
+                    pred['actual_result'] = 'over' if actual_over else 'under'
+                    pred['model_correct'] = model_correct
+                    
+                    if model_correct: wins += 1
+                    else: losses += 1
+                else:
+                    pred['kalshi_result'] = 'pending'
+                    still_pending += 1
+            else:
+                pred['kalshi_result'] = f'error_{r.status_code}'
+                still_pending += 1
+        except Exception as e:
+            pred['kalshi_result'] = f'error: {e}'
+            still_pending += 1
+            
+        graded.append(pred)
+    
+    new_entries = 0
+    with open(log_path, 'a') as f:
+        for g in graded:
+            if g['kalshi_result'] in ('yes', 'no'):
+                f.write(json.dumps(g) + '\n')
+                existing_tickers.add(g['kalshi_ticker'])
+                new_entries += 1
+    
+    print(f'\n── Grading Results ──')
+    print(f'  Newly Graded:  {new_entries} ({wins} W / {losses} L)')
+    if wins + losses > 0:
+        print(f'  New Accuracy:  {wins/(wins+losses)*100:.1f}%')
+    print(f'  Still Pending: {still_pending}')
+    
+    settled = [g for g in graded if g['kalshi_result'] in ('yes', 'no')]
+    if settled:
+        df_graded = pd.DataFrame(settled)[
+            ['date', 'player', 'stat', 'threshold', 'model_prediction',
+             'model_says_over', 'actual_result', 'model_correct']
+        ].sort_values(['date', 'stat', 'player'])
+        display(df_graded)
+    elif still_pending > 0:
+        print('\n⚠ Games may not have finished yet. Re-run this cell later to grade UNDER markets.')
+
+```
+
+## 12 · Lifetime Tracking Dashboard
+
+Reads the cumulative `results_log.jsonl` and shows overall model performance.
+
+```{python}
+log_path = TRACKING_DIR / 'results_log.jsonl'
+
+if not log_path.exists() or log_path.stat().st_size == 0:
+    print('No tracking data yet. Run the pre-game and post-game cells first.')
+else:
+    entries = []
+    with open(log_path) as f:
+        for line in f:
+            if line.strip():
+                entries.append(json.loads(line))
+    
+    df_log = pd.DataFrame(entries)
+    print(f'Total graded predictions: {len(df_log)}')
+    print(f'Date range: {df_log["date"].min()} → {df_log["date"].max()}')
+    
+    # ── Overall accuracy ──
+    total_correct = df_log['model_correct'].sum()
+    total_graded  = df_log['model_correct'].count()
+    print(f'\nOverall Accuracy: {total_correct}/{total_graded} = '
+          f'{total_correct/total_graded*100:.1f}%')
+    
+    # ── By stat ──
+    print('\n── By Stat ──')
+    by_stat = df_log.groupby('stat')['model_correct'].agg(['sum', 'count'])
+    by_stat.columns = ['correct', 'total']
+    by_stat['accuracy'] = (by_stat['correct'] / by_stat['total'] * 100).round(1)
+    display(by_stat)
+    
+    # ── By date ──
+    print('\n── By Date ──')
+    by_date = df_log.groupby('date')['model_correct'].agg(['sum', 'count'])
+    by_date.columns = ['correct', 'total']
+    by_date['accuracy'] = (by_date['correct'] / by_date['total'] * 100).round(1)
+    display(by_date)
+    
+    # ── Edge analysis: model vs. market implied probability ──
+    if 'implied_prob_over' in df_log.columns:
+        valid = df_log.dropna(subset=['implied_prob_over'])
+        if len(valid) > 10:
+            valid = valid.copy()
+            valid['impl_bucket'] = pd.cut(valid['implied_prob_over'],
+                                          bins=[0, 0.2, 0.4, 0.6, 0.8, 1.0],
+                                          labels=['0-20%', '20-40%', '40-60%', '60-80%', '80-100%'])
+            by_bucket = valid.groupby('impl_bucket', observed=True)['model_correct'].agg(['sum','count'])
+            by_bucket.columns = ['correct', 'total']
+            by_bucket['model_acc'] = (by_bucket['correct'] / by_bucket['total'] * 100).round(1)
+            print('\n── Model Accuracy by Kalshi Implied Probability ──')
+            display(by_bucket)
+    
+    # ── Cumulative accuracy chart ──
+    if len(df_log) > 5:
+        df_sorted = df_log.sort_values('date').reset_index(drop=True)
+        df_sorted['cumulative_correct'] = df_sorted['model_correct'].cumsum()
+        df_sorted['cumulative_total'] = range(1, len(df_sorted) + 1)
+        df_sorted['cumulative_accuracy'] = df_sorted['cumulative_correct'] / df_sorted['cumulative_total']
+        
+        fig, ax = plt.subplots(figsize=(12, 4))
+        ax.plot(df_sorted['cumulative_accuracy'] * 100, color='#5b8fc7', lw=2)
+        ax.axhline(50, color='gray', ls='--', lw=1, alpha=0.5, label='50% baseline')
+        ax.set_xlabel('Prediction #')
+        ax.set_ylabel('Cumulative Accuracy (%)')
+        ax.set_title('Model Cumulative Accuracy Over Time', fontweight='bold')
+        ax.legend(); ax.grid(alpha=0.2)
+        plt.tight_layout()
+        plt.savefig(FIG_DIR / 'tracking_accuracy.png', dpi=150)
+        plt.show()
+        print(f'Saved tracking_accuracy.png')
+
+```
+
+## 13 · EV Analysis: MC Dropout Confidence + Edge Detection
+
+The model outputs only a point estimate, but by enabling **MC Dropout** (Monte Carlo Dropout — [Gal & Ghahramani 2016](https://arxiv.org/abs/1506.02142)),
+we can run 50 forward passes with the GATv2Conv's 50% dropout active to obtain
+a **full predictive distribution** per player per stat.
+
+This gives us:
+
+* **P(over threshold)** — the fraction of MC samples exceeding the Kalshi line
+* **Model confidence** — how tight/wide the distribution is
+* **Expected Value** — comparing our probability to Kalshi's implied probability
+
+```{python}
+# ═══════════════════════════════════════════════════════════════
+# MC Dropout: Run 50 stochastic forward passes
+# ═══════════════════════════════════════════════════════════════
+N_MC = 50  # Number of MC samples (50 gives good coverage)
+
+today_str = date.today().isoformat()
+pregame_path = TRACKING_DIR / f'pregame_{today_str}.json'
+
+if not pregame_path.exists():
+    print(f'No pre-game file for {today_str}. Run Cell 10 first.')
+else:
+    with open(pregame_path) as f:
+        predictions = json.load(f)
+    
+    if not predictions:
+        print('No predictions found in pre-game file.')
+    else:
+        print(f'Running {N_MC} MC Dropout passes for uncertainty estimation…')
+        
+        latest_day_idx = len(game_dates) - 1
+        input_days = list(range(latest_day_idx - SEQ_LENGTH + 1, latest_day_idx + 1))
+        g_window = G_edges[latest_day_idx - SEQ_LENGTH + 1:latest_day_idx + 1]
+        
+        mu_d = mu_per_day[latest_day_idx, 0, PRED_INDICES]
+        sd_d = sd_per_day[latest_day_idx, 0, PRED_INDICES]
+        
+        model.train()   # ← Enable dropout for stochastic inference
+        team_emb.eval(); pos_emb.eval()  # Keep embeddings deterministic
+        
+        mc_samples = []  # will be (N_MC, N_players, 6)
+        for mc_i in range(N_MC):
+            with torch.no_grad():
+                Xl = []
+                for t_step, abs_day in enumerate(input_days):
+                    tv = team_emb(team_temporal_t[abs_day])
+                    pv = pos_emb(pos_temporal_t[abs_day])
+                    Xl.append(torch.cat([
+                        torch.FloatTensor(X_seq[abs_day]).to(DEVICE), tv, pv], 1))
+                x = torch.stack(Xl, -1)[None, ...]
+                p_z = model(x, g_window)[0].cpu().numpy()  # (N, 6) Z-space
+                p_raw = p_z * sd_d + mu_d
+                mc_samples.append(p_raw)
+        
+        model.eval()  # Restore eval mode
+        mc_samples = np.stack(mc_samples)  # (N_MC, N_players, 6)
+        print(f'MC samples shape: {mc_samples.shape}')
+        
+        # ─── Build EV table ──────────────────────────────────────
+        name2pidx_ev = {}
+        raw_ref = raw_df if 'raw_df_updated' not in dir() else raw_df_updated
+        for pid in player_ids:
+            rows = raw_ref[raw_ref['PLAYER_ID'] == pid]
+            if len(rows):
+                name2pidx_ev[norm(rows.iloc[0]['PLAYER_NAME'])] = player_ids.index(pid)
+        
+        ev_rows = []
+        for pred in predictions:
+            pname_norm = norm(pred['player'])
+            pidx = name2pidx_ev.get(pname_norm)
+            if pidx is None:
+                continue
+            stat = pred['stat']
+            if stat not in STAT_TO_PRED_IDX:
+                continue
+            si = STAT_TO_PRED_IDX[stat]
+            
+            # Get MC distribution for this player+stat
+            mc_dist = mc_samples[:, pidx, si]  # (N_MC,)
+            threshold = pred['threshold']
+            
+            # P(over) = fraction of MC samples exceeding threshold
+            p_over = float((mc_dist >= threshold).mean())
+            p_under = 1.0 - p_over
+            
+            # Distribution stats
+            mc_mean = float(mc_dist.mean())
+            mc_std = float(mc_dist.std())
+            mc_q10 = float(np.percentile(mc_dist, 10))
+            mc_q90 = float(np.percentile(mc_dist, 90))
+            
+            # Kalshi prices (in cents)
+            yes_ask = pred.get('yes_ask') or 0
+            no_ask = pred.get('no_ask') or 0
+            
+            # EV calculation (in cents per $1 contract)
+            # Buy YES: pay yes_ask, receive 100 if over, 0 if under
+            ev_yes = p_over * (100 - yes_ask) - p_under * yes_ask if yes_ask > 0 else None
+            # Buy NO: pay no_ask, receive 100 if under, 0 if over
+            ev_no = p_under * (100 - no_ask) - p_over * no_ask if no_ask > 0 else None
+            
+            # Kalshi implied probability (from ask prices)
+            impl_over = yes_ask / 100 if yes_ask else None
+            impl_under = no_ask / 100 if no_ask else None
+            
+            # Edge = model probability vs market implied
+            edge_over = (p_over - impl_over) if impl_over else None
+            edge_under = (p_under - impl_under) if impl_under else None
+            
+            # Best action: which side has higher EV?
+            if ev_yes is not None and ev_no is not None:
+                if ev_yes >= ev_no and ev_yes > 0:
+                    best_action = 'BUY YES (Over)'
+                    best_ev = ev_yes
+                elif ev_no > ev_yes and ev_no > 0:
+                    best_action = 'BUY NO (Under)'
+                    best_ev = ev_no
+                else:
+                    best_action = 'NO EDGE'
+                    best_ev = max(ev_yes, ev_no)
+            else:
+                best_action = 'N/A'
+                best_ev = 0
+            
+            ev_rows.append({
+                'player': pred['player'],
+                'stat': stat,
+                'game': pred.get('game', ''),
+                'threshold': threshold,
+                'mc_mean': round(mc_mean, 1),
+                'mc_std': round(mc_std, 2),
+                'mc_q10_q90': f'{mc_q10:.1f}–{mc_q90:.1f}',
+                'p_over': round(p_over, 3),
+                'p_under': round(p_under, 3),
+                'yes_ask': yes_ask,
+                'no_ask': no_ask,
+                'impl_over': round(impl_over, 3) if impl_over else None,
+                'ev_yes_cents': round(ev_yes, 1) if ev_yes is not None else None,
+                'ev_no_cents': round(ev_no, 1) if ev_no is not None else None,
+                'edge_over': round(edge_over, 3) if edge_over is not None else None,
+                'best_action': best_action,
+                'best_ev': round(best_ev, 1) if best_ev else 0,
+                'recent_5d': pred.get('recent_games_5d', '?'),
+            })
+        
+        df_ev = pd.DataFrame(ev_rows)
+        
+        # ─── Save full EV analysis ──────────────────────────────
+        ev_path = TRACKING_DIR / f'ev_analysis_{today_str}.json'
+        with open(ev_path, 'w') as f:
+            json.dump(ev_rows, f, indent=2)
+        print(f'Saved full EV analysis → {ev_path}')
+        
+        # ─── Display: Top EV opportunities ──────────────────────
+        print(f'\n{"═" * 70}')
+        print(f'  TOP POSITIVE-EV OPPORTUNITIES  ({today_str})')
+        print(f'{"═" * 70}')
+        
+        pos_ev = df_ev[df_ev['best_ev'] > 0].sort_values('best_ev', ascending=False)
+        if len(pos_ev) > 0:
+            display_cols = ['player', 'stat', 'threshold', 'mc_mean', 'mc_std',
+                            'mc_q10_q90', 'p_over', 'yes_ask', 'no_ask',
+                            'ev_yes_cents', 'ev_no_cents', 'best_action', 'best_ev',
+                            'recent_5d']
+            display(pos_ev[display_cols].head(20))
+        else:
+            print('No positive-EV opportunities found.')
+        
+        print(f'\n── Summary ──')
+        print(f'Total props analyzed: {len(df_ev)}')
+        print(f'Positive EV (YES): {(df_ev["ev_yes_cents"] > 0).sum()}')
+        print(f'Positive EV (NO):  {(df_ev["ev_no_cents"] > 0).sum()}')
+        print(f'No edge:           {(df_ev["best_ev"] <= 0).sum()}')
+        
+        # ─── Confidence analysis ────────────────────────────────
+        print(f'\n{"═" * 70}')
+        print(f'  CONFIDENCE ANALYSIS')
+        print(f'{"═" * 70}')
+        
+        # High-confidence = large edge + low MC std + recent data
+        if len(pos_ev) > 0:
+            hc = pos_ev[
+                (pos_ev['mc_std'] < pos_ev['mc_std'].median()) &
+                (pos_ev['best_ev'] > pos_ev['best_ev'].median())
+            ].copy()
+            if 'recent_5d' in hc.columns:
+                hc = hc[hc['recent_5d'] >= 2]  # Player has recent data
+            if len(hc) > 0:
+                print(f'\n🎯 HIGH CONFIDENCE picks: (low MC std + high EV + recent data)')
+                display(hc[display_cols])
+            else:
+                print('No high-confidence picks meet all criteria.')
+        
+        # ─── Distribution visualization for top picks ───────────
+        top_picks = pos_ev.head(6)
+        if len(top_picks) > 0:
+            n_plots = min(len(top_picks), 6)
+            fig, axes = plt.subplots(2, 3, figsize=(16, 8))
+            axes_flat = axes.ravel()
+            
+            for idx, (_, row) in enumerate(top_picks.head(n_plots).iterrows()):
+                ax = axes_flat[idx]
+                pidx = name2pidx_ev.get(norm(row['player']))
+                si = STAT_TO_PRED_IDX[row['stat']]
+                dist = mc_samples[:, pidx, si]
+                
+                ax.hist(dist, bins=20, color='#5b8fc7', alpha=0.7, edgecolor='white',
+                        density=True, label='MC samples')
+                ax.axvline(row['threshold'], color='red', ls='--', lw=2,
+                           label=f'Line: {row["threshold"]}')
+                ax.axvline(dist.mean(), color='#70b472', ls='-', lw=2,
+                           label=f'μ={dist.mean():.1f}')
+                
+                # Shade the over region
+                ax.axvspan(row['threshold'], dist.max() + 1, alpha=0.1, color='green')
+                
+                ax.set_title(f'{row["player"]}\n{row["stat"]} | '
+                             f'P(over)={row["p_over"]:.0%} | '
+                             f'EV={row["best_ev"]:+.0f}¢',
+                             fontsize=10, fontweight='bold')
+                ax.legend(fontsize=7)
+                ax.grid(alpha=0.2)
+            
+            # Hide unused axes
+            for idx in range(n_plots, 6):
+                axes_flat[idx].set_visible(False)
+            
+            plt.suptitle(f'MC Dropout Distributions — Top EV Picks ({today_str})',
+                         fontweight='bold', fontsize=13)
+            plt.tight_layout()
+            plt.savefig(FIG_DIR / f'ev_distributions_{today_str}.png',
+                        dpi=150, bbox_inches='tight')
+            plt.show()
+            print(f'Saved ev_distributions_{today_str}.png')
+        
+        # ─── Edge-by-stat breakdown ─────────────────────────────
+        if 'edge_over' in df_ev.columns:
+            print(f'\n── Model Edge by Stat ──')
+            for stat in ['PTS', 'AST', 'REB']:
+                sub = df_ev[df_ev['stat'] == stat]
+                if len(sub) == 0:
+                    continue
+                avg_edge = sub['edge_over'].dropna().mean()
+                avg_ev_yes = sub['ev_yes_cents'].dropna().mean()
+                avg_ev_no = sub['ev_no_cents'].dropna().mean()
+                n_pos = (sub['best_ev'] > 0).sum()
+                print(f'  {stat}: avg_edge={avg_edge:+.3f}  '
+                      f'avg_EV_yes={avg_ev_yes:+.1f}¢  '
+                      f'avg_EV_no={avg_ev_no:+.1f}¢  '
+                      f'positive_EV={n_pos}/{len(sub)}')
+
+```
+
+## 14 · Conformal Calibration (Empirical Residuals)
+
+```{python}
+if RUN_HISTORICAL_EVALUATION:
+    import numpy as np
+    import matplotlib.pyplot as plt
+    import torch
+    import pickle
+
+    print("Extracting empirical residual distributions from validation set...")
+    model.eval(); team_emb.eval(); pos_emb.eval()
+
+    val_residuals = {stat: [] for stat in PREDICTION_COLS}
+
+    with torch.no_grad():
+        for i in range(len(X_va)):
+            day_i = target_day_indices[t1 + i] 
+            input_days = list(range(day_i - SEQ_LENGTH, day_i))
+
+            Xl = []
+            for t_step, abs_day in enumerate(input_days):
+                tv = team_emb(team_temporal_t[abs_day])
+                pv = pos_emb(pos_temporal_t[abs_day])
+                Xl.append(torch.cat([X_va[i, :, :, t_step].to(DEVICE), tv, pv], 1))
+            x = torch.stack(Xl, -1)[None, ...]
+
+            # Deterministic prediction for calibration
+            p_latent = model(x, G_va[i])[0].cpu().numpy()
+            t_latent = y_va[i, :, PRED_INDICES].numpy()
+
+            mu_d = mu_per_day[day_i, 0, PRED_INDICES]
+            sd_d = sd_per_day[day_i, 0, PRED_INDICES]
+            p_raw = (p_latent * sd_d) + mu_d
+            t_raw = (t_latent * sd_d) + mu_d
+
+            m = mask_out_t[t1 + i].numpy() # Active players
+        
+            # Signed residuals: Actual - Predicted
+            # Positive residual means the player scored MORE than predicted
+            res_raw = t_raw[m] - p_raw[m] 
+        
+            for s_idx, stat in enumerate(PREDICTION_COLS):
+                val_residuals[stat].extend(res_raw[:, s_idx].tolist())
+
+    # Convert to numpy arrays for fast empirical CDF lookups
+    for stat in PREDICTION_COLS:
+        val_residuals[stat] = np.array(val_residuals[stat])
+
+    # Save for inference
+    calibration_path = TRACKING_DIR / 'conformal_residuals.pkl'
+    with open(calibration_path, 'wb') as f:
+        pickle.dump(val_residuals, f)
+
+    print(f"Saved empirical residual pools -> {calibration_path}")
+    print("\n── Historical Error Distribution (Actual - Predicted) ──")
+    print(f"{'Stat':<6} | {'5th %ile':<9} | {'Median':<9} | {'95th %ile'}")
+    print("-" * 40)
+    for stat in PREDICTION_COLS:
+        res = val_residuals[stat]
+        p05 = np.percentile(res, 5)
+        med = np.median(res)
+        p95 = np.percentile(res, 95)
+        print(f"{stat:<6} | {p05:>9.2f} | {med:>9.2f} | {p95:>9.2f}")
+else:
+    print('Skipping historical evaluation...')
+
+```
+
+## 15 · Conformal Probability Bet Sheet
+
+```{python}
+import json
+import pickle
+import numpy as np
+import pandas as pd
+from datetime import date
+
+# ═══════════════════════════════════════════════════════════════
+# CONFIGURATION 
+# ═══════════════════════════════════════════════════════════════
+MIN_TRUE_EV    = 2.0   
+MIN_RECENT     = 2     
+MIN_EDGE       = 0.03  
+
+pd.set_option('display.max_rows', None)
+pd.set_option('display.max_columns', None)
+
+today_str = date.today().isoformat()
+ev_path = TRACKING_DIR / f'ev_analysis_{today_str}.json'
+calibration_path = TRACKING_DIR / 'conformal_residuals.pkl'
+
+if not ev_path.exists() or not calibration_path.exists():
+    print("Missing necessary files. Ensure you have run Cell 13 and Cell 15.")
+else:
+    with open(ev_path) as f:
+        ev_rows = json.load(f)
+    df_conf = pd.DataFrame(ev_rows)
+    
+    with open(calibration_path, 'rb') as f:
+        val_residuals = pickle.load(f)
+    
+    # ── 1. Calculate Exact Probabilities via Empirical CDF ──
+    def calc_conformal_probs(row):
+        stat = row['stat']
+        res_pool = val_residuals.get(stat, np.array([0]))
+        
+        # We need the actual outcome to be greater than the Kalshi threshold.
+        # Since Residual = Actual - Predicted:
+        # Actual > Threshold  ===>  Predicted + Residual > Threshold
+        # Residual > Threshold - Predicted
+        
+        margin_needed = row['threshold'] - row['mc_mean']
+        
+        # Empirical Probability: What fraction of historical residuals beat this margin?
+        p_over = (res_pool > margin_needed).mean()
+        
+        return pd.Series({
+            'conf_p_over': p_over, 
+            'conf_p_under': 1 - p_over
+        })
+
+    df_conf[['conf_p_over', 'conf_p_under']] = df_conf.apply(calc_conformal_probs, axis=1)
+    
+    # ── 2. Calculate Expected Value ──
+    def calc_conf_ev(row):
+        y_ask = row['yes_ask']
+        n_ask = row['no_ask']
+        p_o = row['conf_p_over']
+        p_u = row['conf_p_under']
+        
+        ev_y = (p_o * (100 - y_ask) - p_u * y_ask) if pd.notna(y_ask) and y_ask > 0 else None
+        ev_n = (p_u * (100 - n_ask) - p_o * n_ask) if pd.notna(n_ask) and n_ask > 0 else None
+        
+        action = 'NO EDGE'
+        best_ev = max(ev_y or -999, ev_n or -999)
+        
+        if ev_y is not None and ev_n is not None:
+            if ev_y >= ev_n and ev_y > 0:
+                action = 'BUY YES (Over)'
+                best_ev = ev_y
+            elif ev_n > ev_y and ev_n > 0:
+                action = 'BUY NO (Under)'
+                best_ev = ev_n
+                
+        return pd.Series({
+            'conf_ev_yes': ev_y, 
+            'conf_ev_no': ev_n, 
+            'conf_action': action, 
+            'conf_best_ev': best_ev if best_ev != -999 else 0
+        })
+
+    df_conf[['conf_ev_yes', 'conf_ev_no', 'conf_action', 'conf_best_ev']] = df_conf.apply(calc_conf_ev, axis=1)
+    
+    def calc_bet_edge(row):
+        if 'YES' in row['conf_action']:
+            impl_over = row['yes_ask'] / 100 if pd.notna(row['yes_ask']) else 0
+            return row['conf_p_over'] - impl_over
+        elif 'NO' in row['conf_action']:
+            impl_under = row['no_ask'] / 100 if pd.notna(row['no_ask']) else 0
+            return row['conf_p_under'] - impl_under
+        return 0.0
+
+    df_conf['bet_edge'] = df_conf.apply(calc_bet_edge, axis=1)
+    
+    # ── 3. Apply Filters ──
+    mask = df_conf['conf_best_ev'] >= MIN_TRUE_EV
+    if MIN_RECENT is not None:
+        mask &= df_conf['recent_5d'] >= MIN_RECENT
+    if MIN_EDGE is not None:
+        mask &= (df_conf['bet_edge'] >= MIN_EDGE)
+    
+    filtered = df_conf[mask].sort_values('conf_best_ev', ascending=False).copy()
+    
+    print(f'Filters: Conformal EV ≥ {MIN_TRUE_EV}¢  |  recent ≥ {MIN_RECENT}d  |  edge ≥ {MIN_EDGE}')
+    print(f'Passed: {len(filtered)} / {len(df_conf)} props\n')
+
+    if len(filtered) == 0:
+        print('No bets pass the filters.')
+    else:
+        filtered['conf_p_over'] = (filtered['conf_p_over'] * 100).round(1).astype(str) + '%'
+        filtered['bet_edge'] = (filtered['bet_edge'] * 100).round(1).astype(str) + '%'
+        filtered['conf_best_ev'] = filtered['conf_best_ev'].round(2)
+
+        sheet_cols = ['player', 'stat', 'threshold', 'mc_mean', 
+                      'conf_p_over', 'yes_ask', 'no_ask', 'conf_action',
+                      'conf_best_ev', 'bet_edge', 'game']
+        
+        display(filtered[sheet_cols])
+        
+        n_yes = filtered['conf_action'].str.contains('YES').sum()
+        n_no  = filtered['conf_action'].str.contains('NO').sum()
+        total_ev = filtered['conf_best_ev'].sum()
+        
+        print(f'\n── Conformal Bet Sheet Summary ──')
+        print(f'  {n_yes} OVER bets  |  {n_no} UNDER bets')
+        print(f'  Avg EV per bet:   {filtered["conf_best_ev"].mean():+.2f}¢')
+        print(f'  Total EV (all):   {total_ev:+.2f}¢')
+        
+        # Save to file
+        sheet_path = TRACKING_DIR / f'conf_bet_sheet_{today_str}.json'
+        filtered.to_json(sheet_path, orient='records', indent=2)
+        print(f'\n  Saved → {sheet_path}')
+
+```
+
+## 16 · Conformal Bet Tracking Dashboard
+
+This cell compares the performance of the **Conformal Calibration Bet Sheet** against the baseline model predictions.
+
+```{python}
+import glob
+import json
+import pandas as pd
+
+log_path = TRACKING_DIR / 'results_log.jsonl'
+sheet_files = list(TRACKING_DIR.glob('conf_bet_sheet_*.json'))
+
+if not log_path.exists() or not sheet_files:
+    print('Missing results log or conformal bet sheets. Run the pipeline for a few days first.')
+else:
+    # 1. Load the baseline results log
+    results = []
+    with open(log_path) as f:
+        for line in f:
+            if line.strip():
+                results.append(json.loads(line))
+    df_results = pd.DataFrame(results)
+    
+    # 2. Load all historical bet sheets
+    bet_dfs = []
+    for sf in sheet_files:
+        try:
+            date_str = sf.stem.replace('conf_bet_sheet_', '')
+            df_s = pd.read_json(sf)
+            if len(df_s) > 0:
+                df_s['date'] = date_str
+                bet_dfs.append(df_s)
+        except Exception as e:
+            pass
+            
+    if not bet_dfs or len(df_results) == 0:
+        print('Not enough data to compare yet.')
+    else:
+        df_bets = pd.concat(bet_dfs, ignore_index=True)
+        
+        # Merge bet sheet recommendations with graded results
+        # We match on date, player, and stat
+        df_merged = df_bets.merge(
+            df_results[['date', 'player', 'stat', 'threshold', 'actual_result', 'model_says_over']], 
+            on=['date', 'player', 'stat', 'threshold'], 
+            how='inner'
+        )
+        
+        if len(df_merged) == 0:
+            print('No matching graded bets found yet. Waiting for Kalshi markets to settle.')
+        else:
+            # Grade the conformal bets
+            def grade_conformal(row):
+                val = row.get('conf_action')
+                if not isinstance(val, str): return False
+                if 'YES' in val and row['actual_result'] == 'over': return True
+                if 'NO' in val and row['actual_result'] == 'under': return True
+                return False
+                
+            df_merged['conf_correct'] = df_merged.apply(grade_conformal, axis=1)
+            
+            # Baseline graded
+            def grade_baseline(row):
+                if row['model_says_over'] and row['actual_result'] == 'over': return True
+                if not row['model_says_over'] and row['actual_result'] == 'under': return True
+                return False
+                
+            df_merged['base_correct'] = df_merged.apply(grade_baseline, axis=1)
+            
+            conf_wins = df_merged['conf_correct'].sum()
+            base_wins = df_merged['base_correct'].sum()
+            total = len(df_merged)
+            
+            print(f'── Calibration Tracking Dashboard ──')
+            print(f'Total Recommended Bets Graded: {total}')
+            print(f'Conformal Sheet Accuracy: {conf_wins}/{total} ({conf_wins/total*100:.1f}%)')
+            print(f'Baseline Model Accuracy:  {base_wins}/{total} ({base_wins/total*100:.1f}%)')
+            
+            if conf_wins > base_wins:
+                print(f'✅ Conformal calibration improved accuracy by +{(conf_wins-base_wins)/total*100:.1f}%')
+            elif conf_wins < base_wins:
+                print(f'❌ Conformal calibration decreased accuracy by -{(base_wins-conf_wins)/total*100:.1f}%')
+            else:
+                print('⚖️ Both methods achieved identical accuracy on this subset.')
+            
+            print('\n── Recent Graded Bets ──')
+            display_cols = ['date', 'player', 'stat', 'threshold', 'conf_action', 'actual_result', 'conf_correct']
+            display(df_merged[display_cols].sort_values('date', ascending=False).head(15))
+
+```
+
+---
+
+## ✅ All Done!
+
+**Daily workflow:**
+
+1. **Before games** → Run Cells 1–9 (one-time setup), then Cell 10 (fetch data + Kalshi + inference)
+2. **EV Analysis** → Run Cell 13 (MC Dropout + EV ranking)
+3. **Bet Sheet** → Run Cell 14 (filtered picks only)
+4. **After games** → Run Cell 11 (grade results vs. settled markets)
+5. **Anytime** → Run Cells 12 & 16 (dashboards)
+
+**Data files:**
+
+* `outputs/tracking/pregame_YYYY-MM-DD.json` — Pre-game predictions
+* `outputs/tracking/ev_analysis_YYYY-MM-DD.json` — MC Dropout EV analysis
+* `outputs/tracking/conf_bet_sheet_YYYY-MM-DD.json` — Filtered actionable picks from conformal calibration
+* `outputs/tracking/results_log.jsonl` — Cumulative graded results

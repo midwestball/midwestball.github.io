@@ -1,0 +1,187 @@
+# Live Prediction Analysis
+
+``` {python}
+import pandas as pd
+preds = pd.read_csv("predictions.csv")
+```
+
+``` {python}
+# based on analysis, the best strategy is to bet on YES when price < 70 cents, prob > 0.7, and ev > 0.25
+import datetime as dt
+today = dt.datetime.now().strftime("%Y-%m-%d")
+preds = preds[(preds["yes_ask"] < 70) & (preds["p_over"] > 0.7) & (preds["ev_yes"] > 0.25) ]
+# make sure the date on the "ticker" matches today, the ticker date is in the format YYMONDD, for example, 26FEB24
+# convert today to YYMONDD format
+today_yymondd = dt.datetime.now().strftime("%y%b%d").upper()
+preds = preds[preds["ticker"].str.contains(today_yymondd)]
+
+# display 10 random picks from preds
+preds.sample(10)
+```
+
+## Comparing Against Kalshi
+``` {python}
+import requests
+import json
+
+# Result comparison and Kelly PnL calculation
+results = []
+bankroll = 1000.0  # $1000 hypothetical bankroll
+kelly_fraction = 1/16
+
+print(f"Analyzing {len(preds)} predictions...")
+
+for index, row in preds.iterrows():
+    # # test with only PTS stat
+    # if row["stat"] != "PTS":
+    #     continue
+    ticker = row["ticker"]
+    url = f"https://api.elections.kalshi.com/trade-api/v2/markets/{ticker}"
+    
+    try:
+        resp = requests.get(url)
+        resp.raise_for_status()
+        mdata = resp.json().get("market", {})
+        
+        status = mdata.get("status", "unknown")
+        result = mdata.get("result", "").lower()
+        # drop any results that are not "yes" or "no"
+        if result not in ["yes", "no"]:
+            continue
+        
+        # Determine model position
+        # We take a position if EV > 0. If both > 0, we take the higher EV one.
+        point_estimate = row["point_estimate"]
+        ev_yes = row["ev_yes"]
+        ev_no = row["ev_no"]
+        pos = None
+        price = None
+        prob = None
+        if ev_yes > 0 and ev_yes > ev_no:
+            pos = "yes"
+            price = row["yes_ask"]
+            prob = row["p_over"]
+        elif ev_no > 0:
+            pos = "no"
+            price = row["no_ask"]
+            prob = row["p_under"]
+            
+        bet_size = 0
+        pnl = 0
+        
+        if pos and price is not None and price < 100 and price > 0:
+            # f = (p*b - q) / b  => (100*p - price) / (100 - price)
+            f = (100 * prob - price) / (100 - price)
+            if f > 0:
+                bet_amount = bankroll * f * kelly_fraction
+                bet_size = bet_amount
+                
+                if status in ["settled", "finalized"]:
+                    if result == pos:
+                        # Win: profit = bet_amount * net_odds
+                        pnl = bet_amount * (100 - price) / price
+                    else:
+                        # Loss
+                        pnl = -bet_amount
+        
+        results.append({
+            "ticker": ticker,
+            "player": row["player"],
+            "stat": row["stat"],
+            "target": row["threshold"],
+            "status": status,
+            "result": result,
+            "pos": pos,
+            "point_estimate": point_estimate,
+            "price": price,
+            "prob": round(prob, 3) if prob is not None else None,
+            "bet_size": round(bet_size, 2),
+            "pnl": round(pnl, 2),
+            "ev": ev_yes if pos == "yes" else ev_no
+        })
+        
+    except Exception as e:
+        print(f"Skipping {ticker}: {e}")
+
+res_df = pd.DataFrame(results)
+
+# Display separate tables for Settled vs. Active
+from IPython.display import display
+settled_statuses = ["settled", "finalized"]
+settled = res_df[res_df["status"].isin(settled_statuses)]
+active = res_df[~res_df["status"].isin(settled_statuses)]
+
+settled['won'] = (settled['pnl'] > 0).astype(int)
+settled.to_csv('settled_results.csv', index=False)
+
+if not settled.empty:
+    print("\n--- Settled Markets PnL ---")
+    total_pnl = settled["pnl"].sum()
+    print(f"Total Hypothetical PnL: ${total_pnl:.2f}")
+    display(settled.sort_values(by="pnl", ascending=False))
+else:
+    print("\nNo markets settled yet.")
+
+if not active.empty:
+    print("\n--- Active/Upcoming Markets ---")
+    display(active.sort_values(by="bet_size", ascending=False).head(10))
+```
+
+``` {python}
+import pandas as pd
+import numpy as np
+
+df = pd.read_csv('settled_results.csv')
+
+# Ensure we have an ROI column to work with
+df['roi'] = df['pnl'] / df['bet_size']
+
+results = []
+
+for price in range(5, 101, 5):
+    for prob in np.arange(0.5, 1.01, 0.05):
+        for ev in np.arange(0.05, 1.01, 0.05):
+            mask = (df['pos'] == 'yes') & (df['price'] < price) & (df['prob'] > prob) & (df['ev'] > ev)
+            pos_yes = df[mask].copy()
+            
+            if len(pos_yes) < 50:
+                continue
+
+            # --- SHARPE ---
+            avg_roi = pos_yes['roi'].mean()
+            std_roi = pos_yes['roi'].std()
+            sharpe = (avg_roi / std_roi) if std_roi > 0 else 0
+
+            # --- SORTINO (Fixed) ---
+            # We use "Target Downside Deviation"
+            # Instead of filtering (which removes data), we replace positive returns with 0
+            # This is the technically correct way to calculate Sortino
+            downside_diffs = pos_yes['roi'].clip(upper=0) 
+            downside_deviation = np.sqrt((downside_diffs**2).mean())
+            sortino = (avg_roi / downside_deviation) if downside_deviation > 0 else 0
+
+            # --- CALMAR & MAX DRAWDOWN ---
+            # Using cumulative ROI to see percentage-based drawdown
+            cum_roi = pos_yes['roi'].cumsum()
+            peak = cum_roi.cummax()
+            dd = peak - cum_roi
+            max_dd = dd.max()
+            calmar = (avg_roi / max_dd) if max_dd > 0 else 0
+
+            results.append({
+                "price": price, "prob": round(prob, 2), "ev": round(ev, 2),
+                "n_markets": len(pos_yes),
+                "avg_pnl": pos_yes['pnl'].mean(),
+                "win_rate": pos_yes['won'].mean(),
+                "sharpe_ratio": sharpe,
+                "sortino_ratio": sortino,
+                "calmar_ratio": calmar,
+                "max_drawdown_roi": max_dd,
+                "std_roi": std_roi,
+                "avg_roi": avg_roi
+            })
+
+top_results = pd.DataFrame(results).sort_values(by=["sharpe_ratio"], ascending=False)
+print(top_results.head(10))
+```
+

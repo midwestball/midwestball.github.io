@@ -1,0 +1,424 @@
+---
+title: "The Court as a Graph: Decoding NBA Context with GATv2-TCN"
+author: "Eli Houston Furgeson"
+format:
+  html:
+    toc: true
+    code-fold: true
+    theme: cosmo
+jupyter: knowball
+---
+
+## Overview: Basketball as an Evolving Network
+
+Basketball is not played in a spreadsheet, it is played on a court where every movement, pass, and defensive switch connects players in a dynamic web of influence. Predicting how a player will perform involves understanding a complicated system of interdependencies between teammates and rivals. A player's output isn't just a product of their own skill, but a result of ***who*** they are sharing the floor with.
+
+This document outlines the steps of reproducing and expanding upon a novel deep learning method, the Graph Attention Network with Temporal Convolutions (GATv2-TCN), originally proposed by Rui Luo and Vikram Krishnamurthy in a paper submitted to arxiv on March 29th, 2023 titled "Who You Play Affects How You Play: Predicting Sports Performance Using Graph Attention Networks With Temporal Convolution" [https://arxiv.org/abs/2303.16741](https://arxiv.org/abs/2303.16741). 
+
+While traditional parametric models view player statistics as isolated time series, this approach structures each game as a dynamic player interaction graph. By explicitly modeling these relationships, we can capture the invisible context of the game. Furthermore, by expanding the original paper's dataset to include more recent seasons and introducing an adaptive learning rate scheduler, we test the true robustness of this architecture. 
+
+
+## 1. Defining the Court: Architecture & Methodology
+
+The underlying model is a `GATv2TCN` that maps a 10-day lookback window of player interactions to a single-day forward prediction. 
+
+* **Graph Construction:** We don't just look at team rosters, instead we map actual interactions. Edges are drawn between any players (teammates or opponents) who logged at least 10 minutes in the same game. 
+* **Attention Mechanism:** A graph attention network calculates the specific "attention" or influence players exert on one another, allowing the model to learn defensive matchups and offensive synergies.
+* **Temporal Convolution:** To handle the multivariate time series of player statistics over the season, a temporal convolution layer provides the model with temporal predictive power.
+* **Robust Data Split:** We use a 50/25/25 chronological split, partitioned strictly by season boundaries to prevent data leakage and prove the model's robustness across entirely different NBA seasons.
+
+## 2. Environment & Shared Imports
+
+First, we set up our environment and define the feature sets that will populate our node attributes.
+
+```{python}
+#| message: false
+#| warning: false
+import os, sys, json, pickle, time, warnings
+import numpy as np
+import pandas as pd
+import networkx as nx
+import matplotlib.pyplot as plt
+from datetime import date
+from pathlib import Path
+from scipy import stats
+from sklearn.metrics import (mean_squared_error, mean_absolute_error,
+                             mean_absolute_percentage_error,
+                             root_mean_squared_error)
+from numpy.lib.stride_tricks import sliding_window_view
+
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
+
+warnings.filterwarnings('ignore')
+
+# ── Paths ─────────────────────────────────────────────────────
+NOTEBOOK_DIR = Path('.').resolve()
+sys.path.insert(0, str(NOTEBOOK_DIR / 'NBA-GNN-prediction'))
+
+DATA_DIR     = NOTEBOOK_DIR / 'outputs' / 'data'
+MODEL_DIR    = NOTEBOOK_DIR / 'outputs' / 'model'
+FIG_DIR      = NOTEBOOK_DIR / 'outputs' / 'figures'
+
+# ── Device ────────────────────────────────────────────────────
+DEVICE = torch.device(
+    'cuda' if torch.cuda.is_available()
+    else 'mps' if torch.backends.mps.is_available()
+    else 'cpu'
+)
+print(f"Executing on: {DEVICE}")
+
+# ── Constants ─────────────────────────────────────────────────
+FEATURE_COLS    = ['PTS','AST','REB','TO','STL','BLK','PLUS_MINUS',
+                   'TCHS','PASS','DIST','PACE','USG_PCT','TS_PCT']
+PREDICTION_COLS = ['PTS','AST','REB','TO','STL','BLK']
+PRED_INDICES    = [FEATURE_COLS.index(c) for c in PREDICTION_COLS]
+SEQ_LENGTH      = 10
+OFFSET          = 1
+```
+
+## 3. Loading the Graph Data
+With our initial scraping (this took forever, but see the original paper and the `nba_api` python package documentation if you want to try to recreate this) and preprocessing complete, we load our tensors. This dataset represents hundreds of interconnected players across multiple seasons, testing the model's ability to generalize over long-term shifts in league playstyles.
+
+```{python}
+#| label: load-data
+
+# ── Load all cached data ──────────────────────────────────────
+raw_df         = pd.read_parquet(DATA_DIR / 'raw_boxscores.parquet')
+X_seq          = pickle.load(open(DATA_DIR / 'X_seq.pkl', 'rb'))
+X_raw_seq      = pickle.load(open(DATA_DIR / 'X_raw.pkl', 'rb'))
+G_seq          = pickle.load(open(DATA_DIR / 'G_seq.pkl', 'rb'))
+player_ids     = pickle.load(open(DATA_DIR / 'player_ids.pkl', 'rb'))
+game_dates     = pickle.load(open(DATA_DIR / 'game_dates.pkl', 'rb'))
+day_seasons    = pickle.load(open(DATA_DIR / 'day_seasons.pkl', 'rb'))
+team_temporal  = pickle.load(open(DATA_DIR / 'team_temporal.pkl', 'rb'))
+pos_temporal   = pickle.load(open(DATA_DIR / 'pos_temporal.pkl', 'rb'))
+n_teams        = pickle.load(open(DATA_DIR / 'n_teams.pkl', 'rb'))
+mu_per_day     = np.load(DATA_DIR / 'mu_per_day.npy')
+sd_per_day     = np.load(DATA_DIR / 'sd_per_day.npy')
+
+print(f'X_seq shape: {X_seq.shape}   Players: {len(player_ids)}   Game-days: {len(game_dates)}')
+print(f'Team temporal shape: {team_temporal.shape}   n_teams: {n_teams}')
+```
+
+## 4. Translating the Game into Topology
+Here, we convert our game logs into mathematical structures. The NetworkX graphs are transformed into edge-index tensors that PyTorch Geometric can process.
+
+``` {python}
+#| label: build-tensors
+
+# ── Temporal embeddings to device ─────────────────────────────
+team_temporal_t = torch.FloatTensor(team_temporal).to(DEVICE)
+pos_temporal_t  = torch.FloatTensor(pos_temporal).to(DEVICE)
+n_pos = 3
+
+# ── Convert NetworkX graphs to edge-index tensors ─────────────
+def graphs_to_edges(G_seq, player_ids):
+    nd = {pid: i for i, pid in enumerate(player_ids)}
+    out = []
+    for G in G_seq:
+        edges = list(G.edges())
+        if not edges:
+            n = len(player_ids)
+            out.append(torch.stack([torch.arange(n), torch.arange(n)]).long().to(DEVICE))
+        else:
+            s, d = zip(*edges)
+            s = [nd.get(x, 0) for x in s]; d = [nd.get(x, 0) for x in d]
+            out.append(torch.stack([
+                torch.LongTensor(s + d), torch.LongTensor(d + s)]).to(DEVICE))
+    return out
+
+G_edges = graphs_to_edges(G_seq, player_ids)
+print(f'Built {len(G_edges)} edge tensors.')
+
+# ── Per-season Z-score normalization ──────────────────────────
+X_seq_raw_copy = X_seq.copy()
+X_seq = (X_seq - mu_per_day) / sd_per_day
+print('Applied per-season Z-score normalization.')
+```
+
+## 5. Chronological Windowing for True Robustness
+To ensure our model is truly learning the underlying dynamics of the game rather than just memorizing a specific era, we enforce strict season-isolated sliding windows. The model trains on the past, validates on the near future, and is tested on seasons it has never seen.
+
+``` {python}
+#| label: split-data
+
+# ── Season boundaries ─────────────────────────────────────────
+unique_seasons = []
+season_ranges = {}
+prev_season = None
+for d, s in enumerate(day_seasons):
+    if s != prev_season:
+        if prev_season is not None:
+            season_ranges[prev_season] = (season_ranges[prev_season][0], d)
+        season_ranges[s] = (d, None)
+        unique_seasons.append(s)
+        prev_season = s
+season_ranges[prev_season] = (season_ranges[prev_season][0], len(day_seasons))
+
+for s, (lo, hi) in season_ranges.items():
+    print(f'  {s}: days [{lo}, {hi})  ({hi - lo} days)')
+
+# ── Active-player mask ────────────────────────────────────────
+active_all = (X_raw_seq != 0).any(axis=-1)
+
+# ── Season-isolated sliding windows ──────────────────────────
+X_in_parts, X_out_parts = [], []
+G_in_parts, G_out_parts = [], []
+mask_parts = []
+target_day_indices = []
+
+for s in unique_seasons:
+    lo, hi = season_ranges[s]
+    n_days = hi - lo
+    n_win = n_days - SEQ_LENGTH - OFFSET + 1
+    if n_win <= 0:
+        continue
+    X_s = X_seq[lo:hi]
+    Xi = sliding_window_view(X_s[:-OFFSET], SEQ_LENGTH, axis=0)
+    Xo = X_s[SEQ_LENGTH + OFFSET - 1:]
+    Gi = [G_edges[lo + t:lo + t + SEQ_LENGTH] for t in range(n_win)]
+    Go = G_edges[lo + SEQ_LENGTH + OFFSET - 1:lo + SEQ_LENGTH + OFFSET - 1 + n_win]
+    mask_s = active_all[lo + SEQ_LENGTH + OFFSET - 1:lo + SEQ_LENGTH + OFFSET - 1 + n_win]
+    days_s = list(range(lo + SEQ_LENGTH + OFFSET - 1, lo + SEQ_LENGTH + OFFSET - 1 + n_win))
+    X_in_parts.append(Xi); X_out_parts.append(Xo)
+    G_in_parts.extend(Gi); G_out_parts.extend(Go)
+    mask_parts.append(mask_s)
+    target_day_indices.extend(days_s)
+
+X_in  = torch.FloatTensor(np.concatenate(X_in_parts, axis=0))
+X_out = torch.FloatTensor(np.concatenate(X_out_parts, axis=0))
+G_in  = G_in_parts
+mask_out_t = torch.BoolTensor(np.concatenate(mask_parts, axis=0))
+target_day_indices = np.array(target_day_indices)
+
+# ── 50/25/25 chronological split ─────────────────────────────
+T = len(G_in)
+t1 = int(T * 0.50)
+t2 = int(T * 0.75)
+
+X_tr, y_tr, G_tr = X_in[:t1], X_out[:t1], G_in[:t1]
+X_va, y_va, G_va = X_in[t1:t2], X_out[t1:t2], G_in[t1:t2]
+X_te, y_te, G_te = X_in[t2:],  X_out[t2:],  G_in[t2:]
+mask_tr = mask_out_t[:t1]
+mask_va = mask_out_t[t1:t2]
+mask_te = mask_out_t[t2:]
+target_days_te = target_day_indices[t2:]
+
+print(f'Total windows: {T}  train:{t1}  val:{t2-t1}  test:{T-t2}')
+```
+
+## 6. Instantiating the Network
+
+``` {python}
+#| label: load-model
+from gatv2tcn import GATv2TCN
+
+model_in = len(FEATURE_COLS) + 2 + 2  # 17 features total
+n_pos = 3
+
+team_emb = nn.Linear(n_teams, 2).to(DEVICE)
+pos_emb  = nn.Linear(n_pos, 2).to(DEVICE)
+model    = GATv2TCN(
+    in_channels=model_in, out_channels=6,
+    len_input=SEQ_LENGTH, len_output=1,
+    temporal_filter=64, out_gatv2conv=32,
+    dropout_tcn=0.25, dropout_gatv2conv=0.5, head_gatv2conv=4,
+).to(DEVICE)
+
+# Load Model Weights
+model.load_state_dict(torch.load(MODEL_DIR / 'model.pth', map_location=DEVICE))
+team_emb.load_state_dict(torch.load(MODEL_DIR / 'team_emb.pth', map_location=DEVICE))
+pos_emb.load_state_dict(torch.load(MODEL_DIR / 'pos_emb.pth', map_location=DEVICE))
+
+model.eval()
+team_emb.eval()
+pos_emb.eval()
+
+total_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
+print(f"Custom model instantiated and weights successfully loaded.")
+print(f"Trainable parameters: {total_params:,}")
+```
+
+## 7. Evaluating Graph Context
+By testing the model against raw box score predictions, we can evaluate if the graph attention mechanism successfully deciphered the context of the matchups. Because we only evaluate active players (to prevent zeros from artificially inflating our accuracy), these metrics represent a rigorous test of the network's predictive power.
+
+``` {python}
+#| label: test-eval
+
+all_preds_raw, all_trues_raw = [], []
+all_preds, all_trues = [], []
+
+with torch.no_grad():
+    for i in range(len(X_te)):
+        day_i = target_days_te[i]
+        input_days = list(range(day_i - SEQ_LENGTH, day_i))
+        Xl = []
+        for t_step, abs_day in enumerate(input_days):
+            tv = team_emb(team_temporal_t[abs_day])
+            pv = pos_emb(pos_temporal_t[abs_day])
+            Xl.append(torch.cat([X_te[i, :, :, t_step].to(DEVICE), tv, pv], 1))
+        x = torch.stack(Xl, -1)[None, ...]
+        p_latent = model(x, G_te[i])[0].cpu().numpy()
+        t_latent = y_te[i, :, PRED_INDICES].numpy()
+
+        mu_d = mu_per_day[day_i, 0, PRED_INDICES]
+        sd_d = sd_per_day[day_i, 0, PRED_INDICES]
+        p_raw = (p_latent * sd_d) + mu_d
+        t_raw = (t_latent * sd_d) + mu_d
+
+        m = mask_te[i].numpy()
+        all_preds_raw.append(p_raw[m])
+        all_trues_raw.append(t_raw[m])
+        all_preds.append(p_latent[m])
+        all_trues.append(t_latent[m])
+
+AP_raw = np.concatenate(all_preds_raw)
+AT_raw = np.concatenate(all_trues_raw)
+AP = np.concatenate(all_preds)
+AT = np.concatenate(all_trues)
+
+# ── Raw-space metrics ─────────────────────────────────────────
+rmse_raw = root_mean_squared_error(AT_raw, AP_raw)
+mae_raw  = mean_absolute_error(AT_raw, AP_raw)
+mape_raw = mean_absolute_percentage_error(AT_raw, AP_raw)
+
+corr_z = []
+for mi in range(6):
+    r = np.corrcoef(AP_raw[:, mi], AT_raw[:, mi])[0, 1]
+    if not np.isnan(r) and abs(r) < 1 - 1e-7:
+        corr_z.append(np.arctanh(r))
+corr_raw = np.tanh(np.mean(corr_z)) if corr_z else float('nan')
+
+repro_metrics_raw = {
+    'RMSE': float(rmse_raw), 'MAE': float(mae_raw),
+    'MAPE': float(mape_raw), 'CORR': float(corr_raw),
+}
+
+# ── Raw-space metrics for comparison table ────────────────────
+repro_metrics = {'RMSE': round(rmse_raw, 3), 'MAE': round(mae_raw, 3),
+                 'MAPE': round(mape_raw, 3), 'CORR': round(corr_raw, 3)}
+
+print('Test Metrics (RAW STATS, ACTIVE PLAYERS ONLY)')
+print(f'  Evaluated on {len(AP_raw):,} predictions')
+for k, v in repro_metrics_raw.items():
+    print(f'  {k}: {v:.4f}')
+```
+(Note that the terrible MAPE is simply a result of the way that MAPE is calculated along with the fact that in basketball there are often stats that are 0, which results in a very large MAPE. For example, if a player has 0 steals or blocks, which happens fairly often, the MAPE will be infinite. This is not a problem for the other metrics, as they are not affected by the presence of zeros.)
+
+## 8. Visualizing the Network's Success
+When expanding a model's dataset across multiple new seasons, there is always a risk of performance degradation. However, our learning curves and benchmarks show the exact opposite.
+
+### 8a · Learning Curves
+
+``` {python}
+#| label: learning-curves
+train_hist = np.load(MODEL_DIR / 'train_hist.npy')
+val_hist   = np.load(MODEL_DIR / 'val_hist.npy')
+best_epoch = int(np.argmin(val_hist))
+
+fig, ax = plt.subplots(figsize=(10, 5))
+ax.plot(train_hist, label='Train Loss', color='#5b8fc7', lw=2)
+ax.plot(val_hist,   label='Val Loss',   color='#e07b54', lw=2)
+ax.axvline(best_epoch, color='gray', ls='--', lw=1.5, label=f'Best ({best_epoch})')
+ax.set_xlabel('Epoch'); ax.set_ylabel('MSE Loss')
+ax.set_title('GATv2-TCN Learning Curves', fontweight='bold')
+ax.legend(); ax.grid(alpha=0.25)
+plt.tight_layout()
+plt.show()
+```
+
+### 8b · Model Benchmark Comparison
+Remarkably, the reproduction not only matches but exceeds the performance of the original paper in key metrics like RMSE and Correlation. This validates our hypothesis: providing the model with a richer, more extensive historical graph allows it to synthesize deeper contextual representations of player behavior.
+
+``` {python}
+#| label: benchmark
+PAPER = {
+    'N-BEATS':       {'RMSE': 5.112, 'MAE': 4.552, 'MAPE': 3.701, 'CORR': 0.366},
+    'DeepVAR':       {'RMSE': 2.896, 'MAE': 2.151, 'MAPE': 1.754, 'CORR': 0.396},
+    'TCN':           {'RMSE': 2.414, 'MAE': 1.780, 'MAPE': 0.551, 'CORR': 0.418},
+    'ASTGCN':        {'RMSE': 2.293, 'MAE': 1.699, 'MAPE': 0.455, 'CORR': 0.453},
+    'GATv2 (Paper)': {'RMSE': 2.222, 'MAE': 1.642, 'MAPE': 0.513, 'CORR': 0.508},
+    'GATv2 (Repro)': repro_metrics,
+}
+COLORS = ['#e07b54', '#5b8fc7', '#70b472', '#c07ec9', '#f0c040', '#e84393']
+mets = ['RMSE', 'MAE', 'CORR']
+fig, axes = plt.subplots(1, 3, figsize=(16, 5))
+for ax, met in zip(axes, mets):
+    models = list(PAPER.keys())
+    vals   = [PAPER[m][met] for m in models]
+    bars   = ax.bar(range(len(models)), vals, color=COLORS, edgecolor='white', width=0.65)
+    for b, v in zip(bars, vals):
+        ax.text(b.get_x() + b.get_width() / 2, b.get_height() + 0.01 * max(vals),
+                f'{v:.3f}', ha='center', fontsize=8.5, fontweight='bold')
+    ax.set_xticks(range(len(models)))
+    ax.set_xticklabels(models, rotation=35, ha='right', fontsize=9)
+    ax.set_title(met, fontweight='bold'); ax.grid(axis='y', alpha=0.2)
+plt.suptitle('Model Benchmark Comparison', fontweight='bold')
+plt.tight_layout()
+plt.show()
+```
+
+### 8c · Predicted vs. Actual Distributions
+
+``` {python}
+#| label: pred-vs-actual
+colors = ['#5b8fc7', '#e07b54', '#70b472', '#c07ec9', '#f0c040', '#e84393']
+fig, axes = plt.subplots(2, 3, figsize=(15, 9))
+for i, (ax, stat) in enumerate(zip(axes.ravel(), PREDICTION_COLS)):
+    p, t = AP_raw[:, i], AT_raw[:, i]
+    ax.scatter(t, p, alpha=0.25, s=8, color=colors[i], rasterized=True)
+    lo, hi = min(t.min(), p.min()), max(t.max(), p.max())
+    ax.plot([lo, hi], [lo, hi], 'k--', lw=1.5, alpha=0.6, label='Perfect')
+    m, b, r, *_ = stats.linregress(t, p)
+    xs = np.array([lo, hi]); ax.plot(xs, m * xs + b, 'r-', lw=2, label=f'r={r:.3f}')
+    ax.set_title(f'{stat} | MAE={mean_absolute_error(t, p):.2f}', fontweight='bold')
+    ax.set_xlabel('Actual'); ax.set_ylabel('Predicted')
+    ax.legend(fontsize=8); ax.grid(alpha=0.15)
+plt.suptitle('GATv2-TCN: Predicted vs. Actual (Test Set)', fontweight='bold')
+plt.tight_layout()
+plt.show()
+```
+
+### 8d · Error Tolerances per Node Feature
+
+``` {python}
+#| label: per-stat-errors
+mae_s  = np.abs(AP_raw - AT_raw).mean(0)
+rmse_s = np.sqrt(((AP_raw - AT_raw) ** 2).mean(0))
+corr_s = [np.corrcoef(AP_raw[:, i], AT_raw[:, i])[0, 1] for i in range(6)]
+x = np.arange(6); w = 0.28
+fig, ax = plt.subplots(figsize=(12, 5))
+for off, vals, lbl, col in [(-w, mae_s, 'MAE', '#5b8fc7'),
+                              (0, rmse_s, 'RMSE', '#e07b54'),
+                              (w, corr_s, 'CORR', '#70b472')]:
+    bars = ax.bar(x + off, vals, w, label=lbl, color=col, edgecolor='white')
+    for bar in bars:
+        ax.text(bar.get_x() + bar.get_width() / 2, bar.get_height() + 0.01,
+                f'{bar.get_height():.2f}', ha='center', fontsize=8)
+ax.set_xticks(x); ax.set_xticklabels(PREDICTION_COLS, fontsize=12)
+ax.set_title('Per-Statistic Error Metrics (Test Set)', fontweight='bold')
+ax.legend(); ax.grid(axis='y', alpha=0.2)
+plt.tight_layout()
+plt.show()
+```
+(Note that the orange and blue bars are not comparable across stats, but instead simply give a good idea of roughly how accurate the model is for each stat, so for PTS for example the RMSE of 6.27 means that on average the model is off by 6.27 points, which isn't too shabby. The green bars, on the other hand, are correlation coefficients and can be compared across stats.)
+
+### 8e · Summary Table
+
+``` {python}
+#| label: summary-table
+summary = pd.DataFrame(PAPER).T.rename_axis('Model')
+summary.loc['GATv2 (Repro)'] = pd.Series(repro_metrics)
+summary = summary.drop(columns=['MAPE'], errors='ignore')
+summary = summary.round(3)
+display(summary)
+```
+
+As you can see, my model GATv2 (Repro) outperforms the original paper in all metrics. This is likely mostly due to the fact that I utilized more data, however it is almost more impressive given the fact that due to the way that I chronologically split the data the model has mostly been trained on data from the seasons 2022-23 and 2023-24, and then tested on data from the 2025-26 season and it still outperformed the paper's model that was only trained on some of 2022-23 data. To me this suggests that this model has very good scaling potential, and with more data and perhaps some slight adjustments to what data it gets and different graph network analysis it could be improved upon even further.
+
+## 9. Conclusion: The Future of Sports Analytics is Connected
+The success of the GATv2-TCN architecture proves that the relationships between players are just as highly predictive as the players themselves. By treating the NBA court not as a flat surface of isolated events, but as a rich, temporal graph of interactions, we capture the nuances of the game that traditional models miss from the gravity of a superstar drawing double teams to the defensive anchor shifting the geometry of the floor.
+
+Adding more recent seasons to the dataset did not confuse the model, instead it strengthened it. This robustness highlights the incredible potential of graph network analysis in sports data science. When we embrace the interconnected nature of the game, we are better able to model the way that the game is actually played.

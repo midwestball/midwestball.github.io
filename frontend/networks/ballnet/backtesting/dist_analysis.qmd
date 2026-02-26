@@ -1,0 +1,242 @@
+# Analyzing Distributions of Backtest Performance
+
+``` {python}
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+import seaborn as sns
+
+# Load backtest results
+df_bets_naive = pd.read_csv('backtest_naive_estimation_bets.csv')
+df_bets_conformal = pd.read_csv('backtest_conformal_calibration_bets.csv')
+df_daily_naive = pd.read_csv('backtest_naive_estimation_daily.csv')
+df_daily_conformal = pd.read_csv('backtest_conformal_calibration_daily.csv')
+
+# what columns
+print(df_bets_naive.columns)
+print(df_bets_conformal.columns)
+print(df_daily_naive.columns)
+print(df_daily_conformal.columns)
+```
+
+
+``` {python}
+import plotly.express as px
+import plotly.graph_objects as go
+import statsmodels.formula.api as smf
+
+# Add a label column to combine for plotting
+df_bets_naive['model'] = 'Naive'
+df_bets_conformal['model'] = 'Conformal'
+df_bets = pd.concat([df_bets_naive, df_bets_conformal], ignore_index=True)
+
+df_daily_naive['model'] = 'Naive'
+df_daily_conformal['model'] = 'Conformal'
+df_daily = pd.concat([df_daily_naive, df_daily_conformal], ignore_index=True)
+
+# 2. DISTRIBUTION ANALYSIS (PLOTLY)
+
+# Plot 1: Distribution of Profit per Bet (Naive vs Conformal)
+fig1 = px.histogram(
+    df_bets, x="profit", color="model", barmode="overlay", 
+    marginal="box", nbins=50, opacity=0.7,
+    title="Distribution of Profit per Bet: Naive vs. Conformal"
+)
+fig1.show()
+
+# Plot 2: Boxplot of Profit by Stat Type
+fig2 = px.box(
+    df_bets, x="stat", y="profit", color="model",
+    title="Profit Distribution by Stat Type"
+)
+fig2.show()
+
+# Plot 3: Distribution of EV by Action
+fig3 = px.violin(
+    df_bets, x="action", y="ev", color="model", box=True,
+    title="Distribution of Estimated Value (EV) by Action Type"
+)
+fig3.show()
+
+# Plot 4: Daily ROI Distribution
+fig4 = px.histogram(
+    df_daily, x="daily_roi", color="model", barmode="overlay",
+    marginal="rug", nbins=30, opacity=0.7,
+    title="Distribution of Daily ROI: Naive vs. Conformal"
+)
+fig4.show()
+
+# Plot 5: Daily Profit over Time
+fig5 = px.line(
+    df_daily, x="date", y="daily_profit", color="model",
+    title="Cumulative or Daily Profit Over Time"
+)
+fig5.show()
+
+
+# 3. REGRESSION ANALYSIS ON BETS DATAFRAMES
+
+def run_bet_regressions(df, model_name):
+    print(f"\n{'='*50}")
+    print(f"REGRESSION ANALYSIS FOR: {model_name}")
+    print(f"{'='*50}")
+    
+    # Create the binary target variable for logistic regression
+    # 1 if bet won (profit > 0), 0 otherwise
+    df = df.copy()
+    df['won'] = (df['profit'] > 0).astype(int)
+    
+    # ---------------------------------------------------------
+    # A) Logistic Regression: Predict if the bet won
+    # ---------------------------------------------------------
+    print("\n--- Logistic Regression (Target: 'won') ---")
+    # C() forces statsmodels to treat the variable as categorical
+    logit_formula = "won ~ C(stat) + C(action) + cost + ev"
+    
+    try:
+        logit_model = smf.logit(formula=logit_formula, data=df).fit(disp=0)
+        print(logit_model.summary())
+    except Exception as e:
+        print("Logistic regression failed:", e)
+
+    # ---------------------------------------------------------
+    # B) Linear Regression: Predict the actual profit
+    # ---------------------------------------------------------
+    print("\n--- Linear Regression (Target: 'profit') ---")
+    ols_formula = "profit ~ C(stat) + C(action) + cost + ev"
+    
+    try:
+        ols_model = smf.ols(formula=ols_formula, data=df).fit()
+        print(ols_model.summary())
+    except Exception as e:
+        print("Linear regression failed:", e)
+
+# Run regressions for both models
+run_bet_regressions(df_bets_naive, "Naive Estimation")
+run_bet_regressions(df_bets_conformal, "Conformal Calibration")
+```
+
+## Regression Analysis of Interactions 
+
+``` {python}
+import pandas as pd
+import plotly.express as px
+import statsmodels.formula.api as smf
+
+# 1. LOAD DATA (Conformal only for this deep dive)
+df_bets_conformal = pd.read_csv('backtest_conformal_calibration_bets.csv')
+df_bets_conformal['won'] = (df_bets_conformal['profit'] > 0).astype(int)
+
+# 2. VISUALIZATION (PLOTLY)
+
+# Plot 1: Profit Distribution by Action
+fig1 = px.box(
+    df_bets_conformal, x="action", y="profit", points="all", color="action",
+    title="Conformal Calibration: Profit Distribution by Action (BUY YES vs BUY NO)"
+)
+fig1.show()
+
+# Plot 2: EV vs Profit, Interacting with Action
+# Using trendline="ols" to visualize the interaction directly on the scatter
+fig2 = px.scatter(
+    df_bets_conformal, x="ev", y="profit", color="action", trendline="ols",
+    title="Conformal Calibration: EV vs Profit (Colored by Action)",
+    opacity=0.6,
+    labels={"ev": "Estimated Value (EV)", "profit": "Actual Profit"}
+)
+fig2.show()
+
+# Plot 3: Cost vs Profit, Interacting with Action
+fig3 = px.scatter(
+    df_bets_conformal, x="cost", y="profit", color="action", trendline="ols",
+    title="Conformal Calibration: Cost vs Profit (Colored by Action)",
+    opacity=0.6,
+    labels={"cost": "Bet Cost (Implied Odds)", "profit": "Actual Profit"}
+)
+fig3.show()
+
+
+# 3. REGRESSION ANALYSIS WITH INTERACTION TERMS
+
+print(f"\n{'='*60}")
+print("CONFORMAL CALIBRATION: INTERACTION TERM REGRESSION")
+print(f"{'='*60}")
+
+# In statsmodels, using '*' automatically includes the main effects AND the interaction term.
+# So C(action) * cost adds: action, cost, and the action:cost interaction.
+
+logit_formula_int = "won ~ C(stat) + C(action) * cost + C(action) * ev"
+print("\n--- Logistic Regression (Target: 'won') with Interactions ---")
+try:
+    logit_model_int = smf.logit(formula=logit_formula_int, data=df_bets_conformal).fit(disp=0)
+    print(logit_model_int.summary())
+except Exception as e:
+    print("Logistic regression failed:", e)
+
+
+ols_formula_int = "profit ~ C(stat) + C(action) * cost + C(action) * ev"
+print("\n--- Linear Regression (Target: 'profit') with Interactions ---")
+try:
+    ols_model_int = smf.ols(formula=ols_formula_int, data=df_bets_conformal).fit()
+    print(ols_model_int.summary())
+except Exception as e:
+    print("Linear regression failed:", e)
+```
+
+### Loading Config Summaries to Analyze
+
+``` {python}
+import pandas as pd
+import plotly.express as px
+import plotly.graph_objects as go
+import statsmodels.formula.api as smf
+
+# Load config summaries
+df_summaries = pd.read_parquet('backtest_config_summaries.parquet')
+
+df_summaries.head()
+
+# plot distribution of sharpe ratios
+fig = px.histogram(df_summaries, x="sharpe", nbins=50, title="Distribution of Sharpe Ratios")
+fig.show()
+
+# plot distribution of win rates
+fig = px.histogram(df_summaries, x="win_rate", nbins=50, title="Distribution of Win Rates")
+fig.show()
+
+# plot distribution of kelly fractions
+fig = px.histogram(df_summaries, x="kelly_frac", nbins=50, title="Distribution of Kelly Fractions")
+fig.show()
+
+# plot distribution of max game bankroll percentages
+fig = px.histogram(df_summaries, x="max_game_bankroll_pct", nbins=50, title="Distribution of Max Game Bankroll Percentages")
+fig.show()
+
+# plot distribution of min ev over
+fig = px.histogram(df_summaries, x="min_ev_over", nbins=50, title="Distribution of Min EV Over")
+fig.show()
+
+# plot distribution of min ev under
+fig = px.histogram(df_summaries, x="min_ev_under", nbins=50, title="Distribution of Min EV Under")
+fig.show()
+
+# plot distribution of max bets over
+fig = px.histogram(df_summaries, x="max_bets_over", nbins=50, title="Distribution of Max Bets Over")
+fig.show()
+
+# plot distribution of max bets under
+fig = px.histogram(df_summaries, x="max_bets_under", nbins=50, title="Distribution of Max Bets Under")
+fig.show()
+
+# plot distribution of max ask
+fig = px.histogram(df_summaries, x="max_ask", nbins=50, title="Distribution of Max Ask")
+fig.show()
+```
+
+
+``` {python}
+# plot total profit
+fig = px.histogram(df_summaries, x="total_profit", nbins=50, title="Distribution of Total Profit")
+fig.show()
+min(df_summaries['total_profit'])
+```
