@@ -5,9 +5,7 @@
 *.csv
 *.pkl
 *.jsonl
-networks/ballnet/outputs/data/*
-networks/ballnet/outputs/models/*
-networks/ballnet/outputs/tracking/*
+.DS_Store
 data/*
 # Byte-compiled / optimized / DLL files
 __pycache__/
