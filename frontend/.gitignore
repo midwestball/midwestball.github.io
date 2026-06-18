@@ -1,3 +1,4 @@
+plans/
 *.pth
 *.npy
 *.parquet
