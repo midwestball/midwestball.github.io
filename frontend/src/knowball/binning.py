@@ -25,9 +25,12 @@ def doane_bin_count(values: pl.Series) -> int:
     m3 = (deviations.pow(3).sum()) / n
     g1 = m3 / (m2 ** 1.5)
     sigma_g1 = math.sqrt(6 * (n - 2) / ((n + 1) * (n + 3)))
-
-    k = 1 + math.log2(n) + math.log2(1 + abs(g1) / sigma_g1)
-    return max(1, int(math.ceil(k)))
+    if sigma_g1 == 0:
+        # n == 2: skewness SE undefined; fall back to Sturges
+        return max(1, int(math.ceil(1 + math.log2(n))))
+    else:
+        k = 1 + math.log2(n) + math.log2(1 + abs(g1) / sigma_g1)
+        return max(1, int(math.ceil(k)))
 
 
 def histogram_bins(

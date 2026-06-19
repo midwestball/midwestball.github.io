@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import warnings
 from pathlib import Path
 
 import nflreadpy as nfl
@@ -11,10 +12,20 @@ from knowball.binning import histogram_bins
 from knowball.config import (
     DISTRIBUTION_METRICS,
     PLAYER_GAME_LOGS_PATH,
+    TIMEFRAME_ALL_TIME,
     TIMEFRAME_CURRENT_SEASON,
     TIMEFRAME_LAST_10_WEEKS,
 )
-from knowball.storage import init_db, write_parquet, write_table
+from knowball.density import compute_league_kde_frame
+from knowball.stats_schema import (
+    EXCLUDE_FROM_STATS,
+    PARQUET_DISPLAY_COLUMNS,
+    PARQUET_LOGS_SCHEMA,
+    STAT_CONTEXT_COLUMNS,
+    STAT_METRIC_COLUMNS,
+    STATS_TABLE_SCHEMA,
+)
+from knowball.storage import drop_remote_tables, init_db, init_remote_db, write_parquet, write_table
 
 PLAYER_COLUMNS = [
     "gsis_id",
@@ -48,32 +59,73 @@ GAME_COLUMNS = [
     "overtime",
 ]
 
-STATS_COLUMNS = [
-    "player_id",
-    "game_id",
-    "season",
-    "week",
-    "season_type",
-    "team",
-    "opponent_team",
-    "position",
-    "position_group",
-    "passing_epa",
-    "rushing_epa",
-    "receiving_epa",
-    "completions",
-    "attempts",
-    "passing_yards",
-    "passing_tds",
-    "rushing_yards",
-    "rushing_tds",
-    "receptions",
-    "targets",
-    "receiving_yards",
-    "receiving_tds",
-]
+RAW_CONTEXT_COLUMNS = frozenset(
+    {
+        "player_id",
+        "game_id",
+        "season",
+        "week",
+        "season_type",
+        "team",
+        "opponent_team",
+        "position",
+        "position_group",
+    }
+)
 
-PARQUET_LOG_COLUMNS = STATS_COLUMNS + ["player_name", "player_display_name"]
+
+def _ensure_game_id(df: pl.DataFrame) -> pl.DataFrame:
+    """
+    nflverse weekly files omit game_id for some seasons.
+
+    Synthesize a stable per-game key from season/week/player so rows are not
+    collapsed when deduplicating.
+    """
+    if "game_id" not in df.columns:
+        df = df.with_columns(pl.lit(None, dtype=pl.Utf8).alias("game_id"))
+
+    return df.with_columns(
+        pl.when(pl.col("game_id").is_not_null())
+        .then(pl.col("game_id"))
+        .otherwise(
+            pl.concat_str(
+                [
+                    pl.col("season").cast(pl.Utf8),
+                    pl.col("week").cast(pl.Utf8),
+                    pl.col("player_id"),
+                ],
+                separator="_",
+            )
+        )
+        .alias("game_id")
+    )
+
+
+def _resolve_stat_columns(raw: pl.DataFrame) -> list[str]:
+    """Intersect nflverse columns with our canonical stats schema."""
+    raw_metrics = set(raw.columns) - RAW_CONTEXT_COLUMNS - EXCLUDE_FROM_STATS
+    schema_metrics = set(STAT_METRIC_COLUMNS)
+
+    unknown = sorted(raw_metrics - schema_metrics)
+    missing = sorted(schema_metrics - raw_metrics)
+    if unknown:
+        warnings.warn(f"nflverse columns not in schema: {unknown}", stacklevel=2)
+    if missing:
+        warnings.warn(f"schema columns missing from nflverse: {missing}", stacklevel=2)
+
+    selected_metrics = [col for col in STAT_METRIC_COLUMNS if col in raw.columns]
+    return [*STAT_CONTEXT_COLUMNS, *selected_metrics]
+
+
+def _cast_to_schema(df: pl.DataFrame, schema: dict[str, pl.DataType]) -> pl.DataFrame:
+    casts = [
+        pl.col(name).cast(dtype)
+        for name, dtype in schema.items()
+        if name in df.columns
+    ]
+    if not casts:
+        return df
+    return df.with_columns(casts)
 
 
 def _prepare_players(raw: pl.DataFrame) -> pl.DataFrame:
@@ -97,26 +149,40 @@ def _prepare_games(raw: pl.DataFrame) -> pl.DataFrame:
 
 
 def _prepare_stats(raw: pl.DataFrame) -> pl.DataFrame:
-    return (
-        raw.filter(pl.col("player_id").is_not_null())
-        .select(STATS_COLUMNS)
-        .unique(subset=["player_id", "game_id"])
+    columns = _resolve_stat_columns(raw)
+    return _cast_to_schema(
+        _ensure_game_id(raw.filter(pl.col("player_id").is_not_null()))
+        .select(columns)
+        .unique(subset=["player_id", "game_id"]),
+        STATS_TABLE_SCHEMA,
     )
 
 
 def _prepare_parquet_logs(raw: pl.DataFrame) -> pl.DataFrame:
-    return (
-        raw.filter(pl.col("player_id").is_not_null())
-        .select(PARQUET_LOG_COLUMNS)
-        .unique(subset=["player_id", "game_id"])
+    stats_columns = _resolve_stat_columns(raw)
+    parquet_columns = stats_columns + [
+        col for col in PARQUET_DISPLAY_COLUMNS if col in raw.columns
+    ]
+    return _cast_to_schema(
+        _ensure_game_id(raw.filter(pl.col("player_id").is_not_null()))
+        .select(parquet_columns)
+        .unique(subset=["player_id", "game_id"]),
+        PARQUET_LOGS_SCHEMA,
     )
 
 
 def _filter_timeframe(stats: pl.DataFrame, timeframe: str) -> pl.DataFrame:
-    if timeframe == TIMEFRAME_CURRENT_SEASON:
+    if timeframe in (TIMEFRAME_CURRENT_SEASON, TIMEFRAME_ALL_TIME):
+        if timeframe == TIMEFRAME_CURRENT_SEASON:
+            max_season = stats.select(pl.col("season").max()).item()
+            if max_season is not None:
+                return stats.filter(pl.col("season") == max_season)
         return stats
 
     if timeframe == TIMEFRAME_LAST_10_WEEKS:
+        max_season = stats.select(pl.col("season").max()).item()
+        if max_season is not None:
+            stats = stats.filter(pl.col("season") == max_season)
         max_week = stats.select(pl.col("week").max()).item()
         if max_week is None:
             return stats
@@ -129,7 +195,11 @@ def _filter_timeframe(stats: pl.DataFrame, timeframe: str) -> pl.DataFrame:
 def compute_league_distributions(
     stats: pl.DataFrame,
     *,
-    timeframes: tuple[str, ...] = (TIMEFRAME_CURRENT_SEASON, TIMEFRAME_LAST_10_WEEKS),
+    timeframes: tuple[str, ...] = (
+        TIMEFRAME_CURRENT_SEASON,
+        TIMEFRAME_LAST_10_WEEKS,
+        TIMEFRAME_ALL_TIME,
+    ),
     metrics: tuple[str, ...] = DISTRIBUTION_METRICS,
 ) -> pl.DataFrame:
     """Pre-compute histogram bins for league-wide metric baselines."""
@@ -168,10 +238,14 @@ def ingest_seasons(
     seasons: list[int] | None = None,
     *,
     db_path: Path | None = None,
+    db_url: str | None = None,
     parquet_path: Path = PLAYER_GAME_LOGS_PATH,
 ) -> dict[str, int]:
     """
     Download nflverse data and write to local SQLite + Parquet.
+
+    Replaces all stored seasons with the seasons passed in — pass the full
+    desired range on every run (e.g. ``--from-season 2010``).
 
     Returns row counts per table written.
     """
@@ -187,16 +261,27 @@ def ingest_seasons(
     stats = _prepare_stats(raw_stats)
     parquet_logs = _prepare_parquet_logs(raw_stats)
     distributions = compute_league_distributions(stats)
+    league_kde = compute_league_kde_frame(stats, filter_timeframe=_filter_timeframe)
 
-    kwargs = {}
-    if db_path is not None:
+    kwargs: dict[str, Path | str] = {}
+    if db_url is not None:
+        kwargs["db_url"] = db_url
+    elif db_path is not None:
         kwargs["db_path"] = db_path
 
-    init_db(**kwargs)
-    write_table(players, "players", **kwargs)
-    write_table(games, "games", **kwargs)
-    write_table(stats, "stats", **kwargs)
-    write_table(distributions, "league_distributions", **kwargs)
+    if db_url is not None:
+        drop_remote_tables(db_url)
+        init_remote_db(db_url)
+    else:
+        init_db(**({"db_path": db_path} if db_path is not None else {}))
+
+    write_kwargs = kwargs
+
+    write_table(players, "players", **write_kwargs)
+    write_table(games, "games", **write_kwargs)
+    write_table(stats, "stats", **write_kwargs)
+    write_table(distributions, "league_distributions", **write_kwargs)
+    write_table(league_kde, "league_kde", **write_kwargs)
     write_parquet(parquet_logs, parquet_path)
 
     return {
@@ -204,6 +289,7 @@ def ingest_seasons(
         "games": games.height,
         "stats": stats.height,
         "league_distributions": distributions.height,
+        "league_kde": league_kde.height,
         "player_game_logs_parquet": parquet_logs.height,
         "seasons": seasons,
     }

@@ -16,7 +16,16 @@ dependencies = [
     "requests>=2.34.2",
     "sqlalchemy>=2.0.51",
     "streamlit>=1.58.0",
+    "psycopg2-binary>=2.9.10",
+    "plotly>=6.8.0",
+    "scipy>=1.17.1",
 ]
+
+[dependency-groups]
+dev = ["pytest>=8.0"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
 
 [tool.hatch.build]
 dev-mode-dirs = ["src"]

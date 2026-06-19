@@ -6,7 +6,7 @@ import sqlite3
 from pathlib import Path
 
 import polars as pl
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, text
 
 from knowball.config import DB_PATH, PARQUET_DIR, PLAYER_GAME_LOGS_PATH
 from knowball.schema import ALL_DDL
@@ -18,7 +18,7 @@ def ensure_data_dirs() -> None:
 
 
 def init_db(db_path: Path = DB_PATH) -> sqlite3.Connection:
-    """Create tables if they do not exist."""
+    """Create SQLite tables if they do not exist."""
     ensure_data_dirs()
     conn = sqlite3.connect(db_path)
     conn.execute("PRAGMA foreign_keys = ON")
@@ -26,6 +26,37 @@ def init_db(db_path: Path = DB_PATH) -> sqlite3.Connection:
         conn.executescript(ddl)
     conn.commit()
     return conn
+
+
+def init_remote_db(db_url: str) -> None:
+    """Create Postgres tables if they do not exist."""
+    engine = create_engine(db_url)
+    try:
+        with engine.begin() as conn:
+            for ddl in ALL_DDL:
+                conn.execute(text(ddl))
+    finally:
+        engine.dispose()
+
+
+def drop_remote_tables(db_url: str) -> None:
+    """Drop all knowball tables on Postgres so schema can be recreated."""
+    engine = create_engine(db_url)
+    try:
+        with engine.begin() as conn:
+            conn.execute(
+                text(
+                    "DROP TABLE IF EXISTS league_kde, league_distributions, "
+                    "stats, games, players CASCADE"
+                )
+            )
+    finally:
+        engine.dispose()
+
+
+def truncate_remote_tables(db_url: str) -> None:
+    """Clear all knowball tables on Postgres (respects FK order via CASCADE)."""
+    drop_remote_tables(db_url)
 
 
 def _sqlite_uri(db_path: Path = DB_PATH) -> str:
@@ -37,12 +68,17 @@ def write_table(
     table: str,
     *,
     db_path: Path = DB_PATH,
+    db_url: str | None = None,
     if_exists: str = "replace",
 ) -> None:
-    """Write a Polars DataFrame to a SQLite table."""
-    ensure_data_dirs()
-    init_db(db_path).close()
-    engine = create_engine(_sqlite_uri(db_path))
+    """Write a Polars DataFrame to SQLite or Postgres."""
+    if db_url:
+        init_remote_db(db_url)
+        engine = create_engine(db_url)
+    else:
+        ensure_data_dirs()
+        init_db(db_path).close()
+        engine = create_engine(_sqlite_uri(db_path))
     try:
         df.write_database(
             table_name=table,

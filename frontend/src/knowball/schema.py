@@ -1,5 +1,7 @@
 """SQLite table definitions for Phase 1 local storage."""
 
+from knowball.stats_schema import stats_ddl
+
 PLAYERS_DDL = """
 CREATE TABLE IF NOT EXISTS players (
     gsis_id TEXT PRIMARY KEY,
@@ -36,35 +38,7 @@ CREATE TABLE IF NOT EXISTS games (
 );
 """
 
-STATS_DDL = """
-CREATE TABLE IF NOT EXISTS stats (
-    player_id TEXT NOT NULL,
-    game_id TEXT NOT NULL,
-    season INTEGER NOT NULL,
-    week INTEGER NOT NULL,
-    season_type TEXT,
-    team TEXT,
-    opponent_team TEXT,
-    position TEXT,
-    position_group TEXT,
-    passing_epa REAL,
-    rushing_epa REAL,
-    receiving_epa REAL,
-    completions INTEGER,
-    attempts INTEGER,
-    passing_yards REAL,
-    passing_tds INTEGER,
-    rushing_yards REAL,
-    rushing_tds INTEGER,
-    receptions INTEGER,
-    targets INTEGER,
-    receiving_yards REAL,
-    receiving_tds INTEGER,
-    PRIMARY KEY (player_id, game_id),
-    FOREIGN KEY (player_id) REFERENCES players(gsis_id),
-    FOREIGN KEY (game_id) REFERENCES games(game_id)
-);
-"""
+STATS_DDL = stats_ddl()
 
 LEAGUE_DISTRIBUTIONS_DDL = """
 CREATE TABLE IF NOT EXISTS league_distributions (
@@ -77,4 +51,17 @@ CREATE TABLE IF NOT EXISTS league_distributions (
 );
 """
 
-ALL_DDL = (PLAYERS_DDL, GAMES_DDL, STATS_DDL, LEAGUE_DISTRIBUTIONS_DDL)
+LEAGUE_KDE_DDL = """
+CREATE TABLE IF NOT EXISTS league_kde (
+    metric TEXT NOT NULL,
+    timeframe_context TEXT NOT NULL,
+    grid_index INTEGER NOT NULL,
+    x REAL NOT NULL,
+    density REAL NOT NULL,
+    axis_min REAL NOT NULL,
+    axis_max REAL NOT NULL,
+    PRIMARY KEY (metric, timeframe_context, grid_index)
+);
+"""
+
+ALL_DDL = (PLAYERS_DDL, GAMES_DDL, STATS_DDL, LEAGUE_DISTRIBUTIONS_DDL, LEAGUE_KDE_DDL)
