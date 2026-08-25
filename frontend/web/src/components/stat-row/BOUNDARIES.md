@@ -6,7 +6,7 @@
 - Render charts only when `isStatReady` — gray unavailable states for pending / insufficient / missing / not_in_nflverse.
 - Use Recharts + square chrome (`rounded-none`, no shadows).
 - Player percentile badge comes from Ballnet JSON; do not re-orient in the chart layer.
-- `TremorDistribution.tsx` charts KDE `curve[]` for every ready stat (catalog `kind` does not change the chart).
+- `TremorDistribution.tsx` charts KDE `curve[]` for every ready stat (catalog `kind` does not change the chart). Shared `DistributionChart` accepts an explicit color + hover standing so highlights can use σ coloring without percentile fields.
 
 ## Ask First
 

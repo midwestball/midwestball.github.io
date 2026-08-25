@@ -2,7 +2,7 @@
 
 | Route | Role |
 |---|---|
-| `/` | Weekly highlights from `highlights/{season}/w{week}.json` (Stage H). Resolves week via `index/current.json`. |
+| `/` | Weekly highlights from `highlights/{season}/w{week}.json` (Stage H). Expand loads `dists/league_weekly/...` single-game KDEs. Resolves week via `index/current.json`. |
 | `/search` | Client filter over the player index. Default context is current season. |
 | `/players/[id]?season=` | Position catalog stack + season `<select>` at the bottom. Changing season reloads the same page. Do not add last-10 / all-time windows unless a human asks. |
 | `/ballnet` | Public Ballnet destination: DS writeups / research narrative (not the pipeline repo itself). |

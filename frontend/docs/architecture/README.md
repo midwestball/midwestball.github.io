@@ -31,6 +31,8 @@ Before modifying or creating new features, locate the relevant domain in the tab
 | **Ballnet JSON loader** | Storage fetch + local fallback; league merge before hydrate. | `web/src/lib/BOUNDARIES-ballnet-store.md` |
 | **Vercel + Storage deploy** | Production loads index/pages/league from public Supabase Storage; no bundled player index. | `docs/adr/2026-08-24-vercel-supabase-storage.md` |
 | **Weekly highlights** | Stage H z-score boards → `highlights/{season}/w{week}.json`; home renders only. | `docs/adr/2026-08-25-weekly-highlights-json.md` |
+| **Highlight game KDEs** | Season-of-games σ ranking + expandable home charts from `dists/league_weekly/`. | `docs/adr/2026-08-25-highlight-game-kde.md` |
+| **Highlight list** | Expandable home rows; σ color; no percentile slider. | `web/src/components/highlights/BOUNDARIES.md` |
 | **Future features** | Ordered backlog: overall %, trajectories, compare (highlights weekly path shipped). | `docs/architecture/future-features.md` |
 | **ETL contract** | Ballnet publish path for Knowball viz (Leg 1); reserved later stages. | `.plans/ballnet-etl-knowball-visualizations.md` |
 | **Weekly refresh** | Post-game ballnet recipe (lives in ballnet). | Sibling `ballnet/docs/WEEKLY_OPS.md` |

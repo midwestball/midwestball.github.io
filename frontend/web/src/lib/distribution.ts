@@ -158,6 +158,29 @@ function parseRgb(rgb: string): [number, number, number] | null {
 /** Savant-style blue (low) → red (high) percentile color. */
 export function percentileColor(percentile: number): string {
   const t = Math.min(100, Math.max(0, percentile)) / 100;
+  return savantGradient(t);
+}
+
+/** Dark text on pale mid-scale yellows/cyans; white on deep blue/red. */
+export function percentileContrastText(percentile: number): string {
+  return savantContrastText(percentileColor(percentile));
+}
+
+/**
+ * Map oriented z-score to the Savant palette. Clip ±3σ → ends of the scale;
+ * 0σ sits at mid yellow.
+ */
+export function sigmaColor(zScore: number): string {
+  const clipped = Math.min(3, Math.max(-3, zScore));
+  const t = (clipped + 3) / 6;
+  return savantGradient(t);
+}
+
+export function sigmaContrastText(zScore: number): string {
+  return savantContrastText(sigmaColor(zScore));
+}
+
+function savantGradient(t: number): string {
   const stops: Array<{ t: number; c: [number, number, number] }> = [
     { t: 0, c: [44, 123, 182] },
     { t: 0.25, c: [171, 217, 233] },
@@ -185,11 +208,43 @@ export function percentileColor(percentile: number): string {
   return `rgb(${mix(left.c[0], right.c[0])}, ${mix(left.c[1], right.c[1])}, ${mix(left.c[2], right.c[2])})`;
 }
 
-/** Dark text on pale mid-scale yellows/cyans; white on deep blue/red. */
-export function percentileContrastText(percentile: number): string {
-  const rgb = parseRgb(percentileColor(percentile));
+function savantContrastText(rgbColor: string): string {
+  const rgb = parseRgb(rgbColor);
   if (!rgb) return "#ffffff";
   const [r, g, b] = rgb;
   const luminance = (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255;
   return luminance > 0.62 ? "#18181b" : "#ffffff";
+}
+
+export function formatZScore(z: number): string {
+  const sign = z >= 0 ? "+" : "";
+  return `${sign}${z.toFixed(2)}σ`;
+}
+
+export function sigmaStandingParts(stat: {
+  label: string;
+  playerValue: number | null;
+  format: ValueFormat;
+  higherIsBetter: boolean;
+  zScore: number;
+}): {
+  prefix: string;
+  zLabel: string;
+  rest: string;
+} {
+  const note = stat.higherIsBetter ? "(Higher is better)" : "(Lower is better)";
+  const value =
+    stat.playerValue == null ? "—" : formatStatValue(stat.format, stat.playerValue);
+  return {
+    prefix: `${value} ${stat.label} is `,
+    zLabel: formatZScore(stat.zScore),
+    rest: ` versus single-game peers this season. ${note}`,
+  };
+}
+
+export function hoverSigmaStandingCopy(
+  label: string,
+  zScore: number,
+): string {
+  return `This ${label} is ${formatZScore(zScore)} versus single-game peers this season.`;
 }

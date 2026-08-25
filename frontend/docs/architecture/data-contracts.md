@@ -53,10 +53,11 @@ player_stat_values
 
 `as_of_week` is the NFL week being viewed. Ramp–hold uses `min_n = n_base × min(w, 4)` in Ballnet, then sets `qualified`.
 
-Publish path: Storage (or local `data/`) serves **scalar** `PlayerPageJson` plus **shared** `league/*.json`. Knowball merges at fetch time — still not a runtime SQL client. Weekly home boards are separate Stage H objects under `highlights/{season}/w{week}.json`.
+Publish path: Storage (or local `data/`) serves **scalar** `PlayerPageJson` plus **shared** `league/*.json`. Knowball merges at fetch time — still not a runtime SQL client. Weekly home boards are separate Stage H objects under `highlights/{season}/w{week}.json`. Expand charts load allowlist single-game KDEs from `dists/league_weekly/{season}/w{week}/{group}.json` (`scope: "league_weekly"`) — never the YTD `league/` curves.
 
 ## Do not
 
 - Store raw weekly box scores in Knowball.
 - Duplicate the KDE onto every player page JSON (or every player row in Postgres).
 - Impute 0 when NGS/PFR is missing (`missing_source`).
+- Reuse `league_ytd` curves for home highlight expand charts.

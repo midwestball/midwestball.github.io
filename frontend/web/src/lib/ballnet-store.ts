@@ -56,6 +56,8 @@ export type LeagueGroupJson = {
   season: number;
   asOfWeek: number;
   positionGroup: string;
+  /** Present on Stage H game-level files; absent on YTD league shapes. */
+  scope?: "league_weekly";
   stats: Record<string, LeagueStatShape>;
 };
 
@@ -153,6 +155,25 @@ export async function loadLeagueGroupJson(
   if (!resolved) return null;
   const { season, week } = resolved;
   const rel = `league/${season}/w${week}/${positionGroup}.json`;
+
+  const base = vizStorageBase();
+  if (base) {
+    const remote = await tryFetchRemoteJson<LeagueGroupJson>(`${base}/${rel}`);
+    if (remote) return remote;
+  }
+
+  return tryReadLocalJson<LeagueGroupJson>(path.join(ballnetDataRoot(), rel));
+}
+
+/** Stage H single-game KDEs (`dists/league_weekly/...`). Not `league_ytd`. */
+export async function loadLeagueWeeklyGroupJson(
+  positionGroup: PositionGroup | string,
+  opts?: { season?: number; asOfWeek?: number },
+): Promise<LeagueGroupJson | null> {
+  const resolved = await resolveWeek(opts);
+  if (!resolved) return null;
+  const { season, week } = resolved;
+  const rel = `dists/league_weekly/${season}/w${week}/${positionGroup}.json`;
 
   const base = vizStorageBase();
   if (base) {

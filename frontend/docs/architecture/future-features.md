@@ -4,7 +4,7 @@ Pre-compute in **ballnet** → publish JSON under reserved Storage prefixes → 
 
 ## 1. Home — best performances
 
-**Shipped (weekly):** Stage H → `highlights/{season}/w{week}.json`; Knowball `/` renders `top` + `byGroup`. See `docs/adr/2026-08-25-weekly-highlights-json.md`.
+**Shipped (weekly):** Stage H → `highlights/{season}/w{week}.json` + expandable season-of-games KDEs from `dists/league_weekly/`; Knowball `/` renders `top` + `byGroup`. See `docs/adr/2026-08-25-weekly-highlights-json.md` and `docs/adr/2026-08-25-highlight-game-kde.md`.
 
 | Follow-up | Intent |
 |---|---|
