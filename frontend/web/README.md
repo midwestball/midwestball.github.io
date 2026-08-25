@@ -4,9 +4,10 @@ Next.js app for the public Knowball site (stats viz, Ballnet writeups page, ffop
 
 ```bash
 npm install
-cp .env.example .env.local   # NEXT_PUBLIC_SUPABASE_URL required for Storage-backed pages
 npm run dev
 ```
+
+Set `NEXT_PUBLIC_SUPABASE_URL` (e.g. in `.env.local`) for Storage-backed pages.
 
 Open [http://localhost:3000](http://localhost:3000).
 

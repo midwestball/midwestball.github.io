@@ -1,27 +1,27 @@
-# knowball
+# Knowball
 
-Public football stats visualization site. Renders JSON published by [ballnet](https://github.com/ehfurgeson/ballnet). Draft optimization UI will live here; modeling stays in private **ffoptim**.
+NFL player stats, visualized. Knowball is a public web app that shows how a player’s season-to-date numbers sit in the league distribution—percentiles and density curves, not just raw totals.
 
-App: [`web/`](web/). Architecture: [`docs/architecture/README.md`](docs/architecture/README.md).
+Data is computed by [ballnet](https://github.com/ehfurgeson/ballnet) and served as JSON from Supabase Storage. This repo is the Next.js frontend only.
 
-## Deploy on Vercel
+**Stack:** Next.js (App Router) · React · Tailwind · Recharts · Vercel
 
-1. Connect this GitHub repo in Vercel.
-2. Set **Root Directory** to **`web`** in the Vercel project settings.
-3. Add environment variable **`NEXT_PUBLIC_SUPABASE_URL`** = your Supabase project URL (e.g. `https://xxxx.supabase.co`). Knowball fetches public JSON from bucket `knowball-public` — no service key needed. Without this, search may still work from a bundled index copy while every player page shows “no snapshot yet.”
-4. Redeploy after changing env vars.
-
-Data paths on Storage: `index/`, `pages/{season}/w{week}/`, `league/{season}/w{week}/`. Uploaded via `ballnet upload-storage` (see sibling `ballnet/docs/WEEKLY_OPS.md`).
-
-Product backlog (highlights, overall %, trajectories, compare): [`docs/architecture/future-features.md`](docs/architecture/future-features.md).
-
-## Local dev
+## Local development
 
 ```bash
 cd web
-cp .env.example .env.local   # set NEXT_PUBLIC_SUPABASE_URL
 npm install
 npm run dev
 ```
 
-Without Supabase, use synced copies under `web/src/data/ballnet/` (`ballnet publish-all --sync-knowball ../knowball/web`) or point `BALLNET_DATA_DIR` at a local ballnet `data/` tree with `VIZ_PREFER_LOCAL=1`.
+Set `NEXT_PUBLIC_SUPABASE_URL` to your Supabase project URL (e.g. in `.env.local`). Knowball reads the public `knowball-public` bucket—no service key required.
+
+## Deploy
+
+1. Connect this repo in Vercel and set **Root Directory** to `web`.
+2. Add `NEXT_PUBLIC_SUPABASE_URL`.
+3. Deploy.
+
+## Related
+
+- [ballnet](https://github.com/ehfurgeson/ballnet) — ingest, densities, percentiles, and JSON publish
