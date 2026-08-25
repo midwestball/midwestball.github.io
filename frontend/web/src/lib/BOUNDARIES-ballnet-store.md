@@ -22,4 +22,5 @@
 - With `VIZ_PREFER_LOCAL=1` or `BALLNET_DATA_DIR` set, remote Storage is skipped even when `NEXT_PUBLIC_SUPABASE_URL` is present (local smoke testing).
 - Legacy league files without `curve[]` keep rows pending until `league/` is re-uploaded.
 - Production (Vercel) requires `NEXT_PUBLIC_SUPABASE_URL`; there is no sibling `ballnet/data` on serverless.
+- Missing Storage env: search can still populate from bundled `src/data/ballnet/players.json` while `pages/` / `league/` fail → “Current season · no snapshot yet” / pending rows.
 - Index + page fetches use `revalidate: 3600` — expect up to one hour before a Ballnet republish shows live.

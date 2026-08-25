@@ -5,6 +5,7 @@ Knowball must serve 2016–2025 player pages from Ballnet without bundling multi
 Deploy the Next.js app from `web/` (via root `vercel.json`) and load all viz artifacts at runtime from the public Supabase Storage bucket `knowball-public` using plain `fetch` — still no `@supabase/supabase-js`. Index metadata (`index/players.json`, `index/current.json`, `index/seasons.json`) is fetched on the server with React `cache()` instead of static imports. Configure production with `NEXT_PUBLIC_SUPABASE_URL`.
 
 ### Consequences
-- **Required:** Set `NEXT_PUBLIC_SUPABASE_URL` on Vercel before deploy. Optional `VIZ_STORAGE_BASE_URL` overrides the derived Storage prefix.
+- **Required:** Set `NEXT_PUBLIC_SUPABASE_URL` on Vercel before deploy (Production + Preview as needed), then redeploy. Optional `VIZ_STORAGE_BASE_URL` overrides the derived Storage prefix.
+- **Gotcha:** Bundled `web/src/data/ballnet/players.json` can make search look healthy while player pages stay empty (“no snapshot yet”) if Storage env is missing — index has a local fallback; `pages/` / `league/` do not.
 - **Deprecated:** Treating synced `web/src/data/ballnet/*.json` as the production source of truth — keep them only as local offline fallback after `ballnet publish-all --sync-knowball`.
 - **Unchanged:** No PostgREST, no service role key, no mock KDE generation in the Next app.

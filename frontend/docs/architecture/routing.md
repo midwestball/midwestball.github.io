@@ -2,7 +2,7 @@
 
 | Route | Role |
 |---|---|
-| `/` | Weekly highlights placeholder: players/teams with strong weeks. Keep vague — no ranking formula locked. |
+| `/` | Weekly highlights placeholder until ballnet publishes `highlights/` boards. Next product: best-of-week z-scores / rarity — see `docs/architecture/future-features.md`. |
 | `/search` | Client filter over the player index. Default context is current season. |
 | `/players/[id]?season=` | Position catalog stack + season `<select>` at the bottom. Changing season reloads the same page. Do not add last-10 / all-time windows unless a human asks. |
 | `/ballnet` | Public Ballnet destination: DS writeups / research narrative (not the pipeline repo itself). |

@@ -30,7 +30,8 @@ Before modifying or creating new features, locate the relevant domain in the tab
 | **Stat catalog** | Position-group invariants and id stability. | `web/src/lib/catalog/BOUNDARIES.md` |
 | **Ballnet JSON loader** | Storage fetch + local fallback; league merge before hydrate. | `web/src/lib/BOUNDARIES-ballnet-store.md` |
 | **Vercel + Storage deploy** | Production loads index/pages/league from public Supabase Storage; no bundled player index. | `docs/adr/2026-08-24-vercel-supabase-storage.md` |
-| **ETL contract** | Ballnet publish path for Knowball viz (Leg 1). | `.plans/ballnet-etl-knowball-visualizations.md` |
+| **Future features** | Ordered backlog: home highlights / z-scores, overall %, trajectories, compare. | `docs/architecture/future-features.md` |
+| **ETL contract** | Ballnet publish path for Knowball viz (Leg 1); reserved later stages. | `.plans/ballnet-etl-knowball-visualizations.md` |
 | **Weekly refresh** | Post-game ballnet recipe (lives in ballnet). | Sibling `ballnet/docs/WEEKLY_OPS.md` |
 
 ## App map (where things live)

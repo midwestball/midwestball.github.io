@@ -8,10 +8,12 @@ App: [`web/`](web/). Architecture: [`docs/architecture/README.md`](docs/architec
 
 1. Connect this GitHub repo in Vercel.
 2. Set **Root Directory** to **`web`** in the Vercel project settings.
-3. Add environment variable **`NEXT_PUBLIC_SUPABASE_URL`** = your Supabase project URL (e.g. `https://xxxx.supabase.co`). Knowball fetches public JSON from bucket `knowball-public` — no service key needed.
-4. Deploy.
+3. Add environment variable **`NEXT_PUBLIC_SUPABASE_URL`** = your Supabase project URL (e.g. `https://xxxx.supabase.co`). Knowball fetches public JSON from bucket `knowball-public` — no service key needed. Without this, search may still work from a bundled index copy while every player page shows “no snapshot yet.”
+4. Redeploy after changing env vars.
 
 Data paths on Storage: `index/`, `pages/{season}/w{week}/`, `league/{season}/w{week}/`. Uploaded via `ballnet upload-storage` (see sibling `ballnet/docs/WEEKLY_OPS.md`).
+
+Product backlog (highlights, overall %, trajectories, compare): [`docs/architecture/future-features.md`](docs/architecture/future-features.md).
 
 ## Local dev
 
