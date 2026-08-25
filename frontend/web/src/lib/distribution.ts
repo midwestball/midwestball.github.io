@@ -109,16 +109,18 @@ export function percentileAt(stat: StatPayload, value: number): number {
 }
 
 export function playerStandingParts(stat: StatPayload): {
+  prefix: string;
   pctLabel: string;
   rest: string;
 } {
   const pct = Math.round(stat.percentile ?? 0);
-  const direction = stat.higherIsBetter ? "or lower" : "or higher";
+  const note = stat.higherIsBetter ? "(Higher is better)" : "(Lower is better)";
   const value =
     stat.playerValue == null ? "—" : formatStatValue(stat.format, stat.playerValue);
   return {
+    prefix: `${value} ${stat.label} is better than `,
     pctLabel: `${pct}%`,
-    rest: ` of the league has a ${stat.label} of ${value} ${direction}.`,
+    rest: ` of the rest of the league. ${note}`,
   };
 }
 

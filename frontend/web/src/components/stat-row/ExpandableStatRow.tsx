@@ -145,6 +145,7 @@ export function ExpandableStatRow({
             <div className={cn("px-2 pb-2", theme.chartWrap)}>
               {standing && color ? (
                 <p className={cn("mb-1 text-[11px] leading-4", theme.meta)}>
+                  {standing.prefix}
                   <span
                     className="rounded-none px-1 py-0.5 font-semibold tabular-nums"
                     style={{ backgroundColor: color, color: labelColor }}
