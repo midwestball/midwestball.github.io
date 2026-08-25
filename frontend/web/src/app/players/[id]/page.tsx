@@ -2,12 +2,21 @@ import { notFound } from "next/navigation";
 import Link from "next/link";
 import { GROUP_LABEL, positionGroupOf } from "@/lib/catalog";
 import { hydratePlayerStats } from "@/lib/catalog/hydrate";
-import { CURRENT_SEASON, getPlayer, PLAYER_INDEX } from "@/data/players";
+import {
+  DEMO_PLAYER_INDEX,
+  getPlayer,
+  loadCurrentSeasonContext,
+} from "@/data/players";
 import { TremorVariant } from "@/components/stat-row/variants";
 import { SeasonSelect } from "@/components/player/SeasonSelect";
+import { loadHydratedPlayerSnapshots } from "@/lib/ballnet-store";
+
+// Player pages are scalars; league curves load once per position group.
+export const dynamicParams = true;
+export const revalidate = 3600;
 
 export function generateStaticParams() {
-  return PLAYER_INDEX.map((player) => ({ id: player.id }));
+  return DEMO_PLAYER_INDEX.map((player) => ({ id: player.id }));
 }
 
 export default async function PlayerPage({
@@ -19,19 +28,30 @@ export default async function PlayerPage({
 }) {
   const { id } = await params;
   const { season: seasonParam } = await searchParams;
-  const player = getPlayer(id);
+  const [player, { season: currentSeason }] = await Promise.all([
+    getPlayer(id),
+    loadCurrentSeasonContext(),
+  ]);
   if (!player) notFound();
 
   const requested = Number(seasonParam);
   const season =
     player.seasons.includes(requested)
       ? requested
-      : player.seasons.includes(CURRENT_SEASON)
-        ? CURRENT_SEASON
-        : (player.seasons[player.seasons.length - 1] ?? CURRENT_SEASON);
+      : player.seasons.includes(currentSeason)
+        ? currentSeason
+        : (player.seasons[player.seasons.length - 1] ?? currentSeason);
 
-  const stats = hydratePlayerStats(player.position, []);
-  const groupLabel = GROUP_LABEL[positionGroupOf(player.position)];
+  const positionGroup = positionGroupOf(player.position);
+  const { page: pageJson, snapshots } = await loadHydratedPlayerSnapshots(
+    id,
+    positionGroup,
+    { season },
+  );
+
+  const stats = hydratePlayerStats(player.position, snapshots);
+  const groupLabel = GROUP_LABEL[positionGroup];
+  const hasSnapshot = Boolean(pageJson);
 
   return (
     <div>
@@ -46,7 +66,10 @@ export default async function PlayerPage({
             </h1>
             <p className="mt-1 max-w-xl text-sm leading-5 text-zinc-600">
               Every {player.position} row from the position catalog versus the
-              league. Snapshots are empty until Ballnet publishes JSON.
+              league.
+              {hasSnapshot
+                ? " Showing Ballnet season-to-date snapshots."
+                : " Snapshots are empty until Ballnet publishes JSON."}
             </p>
             {player.id === "demo-qb" ? (
               <p className="mt-2 text-sm text-zinc-500">
@@ -65,7 +88,9 @@ export default async function PlayerPage({
               {player.position} · {player.team} · {season}
             </p>
             <p className="mt-1 text-xs text-zinc-400">
-              Current season · no snapshot yet
+              {hasSnapshot && pageJson
+                ? `As of week ${pageJson.asOfWeek}`
+                : "Current season · no snapshot yet"}
             </p>
           </div>
         </div>

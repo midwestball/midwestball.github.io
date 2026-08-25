@@ -1,3 +1,10 @@
+> **Superseded.** Do not follow this checklist.
+> Canonical architecture: `docs/architecture/README.md` and `docs/adr/2026-08-19-visualization-json-store.md`.
+> Leg 1 ETL contract: `.plans/ballnet-etl-knowball-visualizations.md`.
+> Draft optimization belongs in private **ffoptim**, not Ballnet Leg 2 / Clerk / Stripe as described below.
+
+---
+
 ## The Knowball & Ballnet Architecture
 
 ### 1. The `ballnet` Backend (Private / Local)

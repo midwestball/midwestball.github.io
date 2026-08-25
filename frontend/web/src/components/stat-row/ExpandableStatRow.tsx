@@ -5,8 +5,8 @@ import { AnimatePresence, motion } from "framer-motion";
 import { ChevronRight } from "lucide-react";
 import { formatStatValue } from "@/lib/catalog/format";
 import {
-  ordinal,
   percentileColor,
+  percentileContrastText,
   playerStandingParts,
   type StatPayload,
 } from "@/lib/distribution";
@@ -44,11 +44,31 @@ export function ExpandableStatRow({
 }: ExpandableStatRowProps) {
   const [open, setOpen] = useState(defaultOpen);
   const ready = isStatReady(stat);
-  const color = ready && stat.percentile != null
-    ? percentileColor(stat.percentile)
-    : undefined;
+  const color =
+    ready && stat.percentile != null
+      ? percentileColor(stat.percentile)
+      : undefined;
+  const labelColor =
+    ready && stat.percentile != null
+      ? percentileContrastText(stat.percentile)
+      : undefined;
   const standing = ready ? playerStandingParts(stat) : null;
   const inline = sliderPlacement === "inline";
+
+  // Fixed width so value starts and slider starts share a column across rows.
+  const value = (
+    <span
+      className={cn(
+        "w-[4.75rem] shrink-0 truncate text-left tabular-nums",
+        theme.value,
+        !ready && "font-normal text-zinc-400",
+      )}
+    >
+      {stat.playerValue == null
+        ? "—"
+        : formatStatValue(stat.format, stat.playerValue)}
+    </span>
+  );
 
   const slider = (
     <PercentileSlider
@@ -97,28 +117,20 @@ export function ExpandableStatRow({
         >
           {stat.label}
         </span>
-        {inline ? <div className="min-w-0 flex-1">{slider}</div> : null}
-        <span
-          className={cn(
-            "shrink-0 tabular-nums",
-            theme.value,
-            !ready && "font-normal text-zinc-400",
-          )}
-        >
-          {stat.playerValue == null ? "—" : formatStatValue(stat.format, stat.playerValue)}
-        </span>
-        <span
-          className={cn(
-            "shrink-0 rounded-none px-1.5 py-0.5 text-[11px] font-semibold tabular-nums text-white",
-            !ready && "bg-zinc-300 text-zinc-600",
-          )}
-          style={color ? { backgroundColor: color } : undefined}
-        >
-          {ready && stat.percentile != null ? ordinal(stat.percentile) : "—"}
-        </span>
+        {inline ? (
+          <>
+            {value}
+            <div className="min-w-0 flex-1">{slider}</div>
+          </>
+        ) : null}
       </button>
 
-      {inline ? null : <div className="px-2 pb-2">{slider}</div>}
+      {inline ? null : (
+        <div className="flex items-center gap-2 px-2 pb-2">
+          {value}
+          <div className="min-w-0 flex-1">{slider}</div>
+        </div>
+      )}
 
       <AnimatePresence initial={false}>
         {open ? (
@@ -134,8 +146,8 @@ export function ExpandableStatRow({
               {standing && color ? (
                 <p className={cn("mb-1 text-[11px] leading-4", theme.meta)}>
                   <span
-                    className="rounded-none px-1 py-0.5 font-semibold tabular-nums text-white"
-                    style={{ backgroundColor: color }}
+                    className="rounded-none px-1 py-0.5 font-semibold tabular-nums"
+                    style={{ backgroundColor: color, color: labelColor }}
                   >
                     {standing.pctLabel}
                   </span>

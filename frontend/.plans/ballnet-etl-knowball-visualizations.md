@@ -1,9 +1,9 @@
 # Ballnet ETL brief: Knowball visualization store
 
-**Audience:** an agent working in the **ballnet** (private Python) repo.  
+**Audience:** an agent working in the **ballnet** (public Python pipeline / DS) repo.  
 **Companion file:** attach `.plans/NFL Stats Sliders.md` from knowball (ramp–hold, nflverse sources, min-n, plot type, zero mass). This brief is the **locked Knowball contract**. Where the two disagree on UI shape, **this brief wins**. Where they disagree on nflverse column names or min-n, **the sliders plan wins** for computation.
 
-Knowball is a public Next.js app that **only renders JSON**. It has no Python, no `@supabase/supabase-js`, and no mock KDE generation. Ballnet owns ingest, joins, ramp–hold, KDE/histograms, percentiles, Supabase, and publishing.
+Knowball is a public Next.js app that **only renders JSON**. It has no Python, no `@supabase/supabase-js`, and no mock KDE generation. Ballnet owns ingest, joins, ramp–hold, KDEs, percentiles, Supabase, and publishing. Fantasy draft optimization belongs in private **ffoptim**, not this pipeline.
 
 ---
 
@@ -51,12 +51,12 @@ Locked UI math (Ballnet must match):
 - Inclusive CDF \(P(X \le x)\). Caption is “of the league has a STAT of VALUE or lower/higher”, never “better than N%”.
 - Rate stats in JSON are **0–1** when catalog `format === "percent"`. UI multiplies by 100 for display.
 - CPOE uses `percent_pts`: store as **percentage points** (e.g. `+2.4`), not `0.024`.
-- Chart x-axis = raw stat on `[xMin, xMax]`. Chart y-axis = **relative frequency** (proportion). Histogram `y = count / n`. KDE `y` integrates to ~1 on the grid.
-- Continuous → Gaussian KDE with **reflection at bounds**. Discrete → **fixed uniform bins**, empty bins included.
-- High zero-mass discrete stats: **histogram with an explicit 0 bin**. Do not KDE those.
+- Chart x-axis = raw stat on `[xMin, xMax]`. Chart y-axis = **KDE density** (∫y dx ≈ 1). Do not label y as “% of the league”.
+- Every catalog id → Gaussian KDE with **reflection at catalog bounds**. Catalog `kind: discrete` is formatting metadata only; do not emit histograms.
+- High zero-mass count stats still get a reflected KDE (no separate 0-bin histogram).
 - Missing NGS/PFR: `missing_source`. **Never impute 0**.
 
-Knowball `kind` is **either** `continuous` **or** `discrete` per `stat.id`. The sliders plan’s “KDE (yds>0) + hist” cannot be two charts. For catalog-continuous hurdle stats (passing/rushing/receiving/return yards), emit a **single reflected KDE** on the qualified sample (reflection at `lowerBound`, typically 0). Do not emit a second histogram for that id.
+Knowball `kind` is **either** `continuous` **or** `discrete` per `stat.id` for formatting. It does **not** select a chart shape. For catalog-continuous hurdle stats (passing/rushing/receiving/return yards), emit a **single reflected KDE** on the qualified sample (reflection at `lowerBound`, typically 0). Do not emit a second histogram for that id.
 
 ---
 
@@ -114,13 +114,11 @@ Do **not** embed per-player weekly densities into every `PlayerPageJson` (payloa
 | `percentile` | number | 0–100, **already oriented** (`higherIsBetter` applied in Ballnet). |
 | `qualified` | boolean | `denom_ytd >= min_n` and source present. If false, Knowball maps to `insufficient_sample` unless `unavailableReason` is set. |
 | `denomYtd` | number? | Season-to-date denominator used in ramp–hold. |
-| `kind` | `"continuous"` \| `"discrete"` | Must match catalog `kind` for that id. |
+| `kind` | `"continuous"` \| `"discrete"` | Catalog metadata (formatting). Must match catalog `kind` for that id. Does **not** select histogram vs KDE. |
 | `xMin`, `xMax` | number | Prefer catalog domains so charts stay comparable. Override only if a season truly exceeds the locked domain; then expand both league curve and all players for that `(season, week, group, stat)`. |
-| `yMax` | number | Max relative frequency on the league curve/bins (Knowball y-axis). |
-| `lowerBound`, `upperBound` | number? | Continuous only. Reflection walls. Copy from catalog when present. |
-| `curve` | `{x, y}[]` | Continuous, required for `ready`. Dense grid (recommend 256–512 points) spanning `[xMin, xMax]`. |
-| `binWidth` | number? | Discrete. Must match catalog (`1`, `0.5`, or `5`). |
-| `bins` | `{x0, x1, mid, y, count}[]` | Discrete, required for `ready`. Cover `[xMin, xMax]` with **no gaps**. Include empty bins (`count: 0`, `y: 0`). |
+| `yMax` | number | Max KDE density on the league curve (Knowball y-axis). |
+| `lowerBound`, `upperBound` | number? | Reflection walls. Copy from catalog when present. |
+| `curve` | `{x, y}[]` | Required for `ready`. Dense grid (recommend 256–512 points) spanning `[xMin, xMax]`. |
 | `unavailableReason` | omit \| `insufficient_sample` \| `missing_source` \| `not_in_nflverse` | See section 6. Do not send `"ready"` or `"pending"` here. |
 
 Hydration gotchas:
@@ -128,10 +126,10 @@ Hydration gotchas:
 - No snapshot → `pending` (row still shown).
 - Snapshot with `unavailableReason` → that status.
 - Snapshot `qualified: false` and no reason → `insufficient_sample`.
-- Snapshot qualified but empty `curve`/`bins` → `pending` (treat as publish bug).
+- Snapshot qualified but empty `curve` → `pending` (treat as publish bug).
 - Catalog `alwaysUnavailable: true` → `not_in_nflverse`, ignore snapshot.
 
-Qualified **ready** rows still must include the **league** curve/bins (copied from `league_distributions` at publish time). Player pages only store a scalar overlay in Postgres; the file embeds the league shape.
+Qualified **ready** rows still must include the **league** curve (copied from `league_distributions` at publish time — or merged from `league/*.json`). Player pages only store a scalar overlay; do not embed the league shape on every page.
 
 ### 3.3 Player index JSON (search)
 
@@ -255,18 +253,18 @@ If a join fails: `missing_source` for stats that need that source. Do not drop t
 | Season `< startYear` or source not ingested yet | false | `not_in_nflverse` or `missing_source` | that reason |
 | Source row null (NGS/PFR/snaps/FTN) | false | `missing_source` | `missing_source` |
 | Source present, `denom_ytd < min_n` | false | `insufficient_sample` (or omit reason) | `insufficient_sample` |
-| Qualified, curve/bins present | true | null | `ready` |
+| Qualified, curve present | true | null | `ready` |
 | No row published for that id | — | — | `pending` |
 
 OL pass-protection ids (`sacks_allowed`, `pressures_allowed`, `block_win_rate`) must **not** be filled from guesswork. Either omit snapshots or send `not_in_nflverse`. Knowball will gray them anyway.
 
 ---
 
-## 7. Densities (how to fill `curve` / `bins`)
+## 7. Densities (how to fill `curve`)
 
 ### Distribution scopes (do not overload one table)
 
-Same `curve` / `bins` JSON shape; different **scope**. v1 only builds `league_ytd`. Reserve the names so later work does not jam player-weekly samples into `league_distributions`.
+Same `curve` JSON shape; different **scope**. v1 only builds `league_ytd`. Reserve the names so later work does not jam player-weekly samples into `league_distributions`.
 
 | `distribution_scope` | Sample | v1? | Used for |
 |---|---|---|---|
@@ -274,30 +272,23 @@ Same `curve` / `bins` JSON shape; different **scope**. v1 only builds `league_yt
 | `player_weekly` | One player’s weekly values (qualified weeks) | later | Compare individual distributions |
 | `league_weekly` | All peer-weeks in the window | later | Weekly rarity / “1 in N” / z-score peers |
 
-v1 writes only `viz.league_distributions` (= `league_ytd`). Sketch for later: `viz.player_distributions` with PK `(player_id, season, as_of_week, stat_id)` and the same curve/bins columns — **do not implement in v1**.
+v1 writes only `viz.league_distributions` (= `league_ytd`). Sketch for later: `viz.player_distributions` with PK `(player_id, season, as_of_week, stat_id)` and the same curve column — **do not implement in v1**.
 
-### Continuous
+### Every catalog id (KDE)
 
 - Gaussian KDE on the qualified peer YTD values.
-- **Reflect** at `lowerBound` / `upperBound` when the catalog sets them (percents 0–1, rating 0–158.3, seconds floors, etc.).
+- **Reflect** at `lowerBound` / `upperBound` when the catalog sets them (percents 0–1, rating 0–158.3, seconds floors, etc.). Discrete count ids usually have no catalog walls; still evaluate on `[xMin, xMax]` and normalize.
 - Evaluate on a uniform grid on `[xMin, xMax]`.
 - Normalize so \(\int y\,dx \approx 1\).
 - `yMax` = max grid `y` (Knowball sets the chart domain from this).
 - `zeroMass: "none"` NGS stats: do not invent zeros; only players with NGS rows enter the sample.
-
-### Discrete
-
-- Uniform bins of catalog `binWidth`.
-- First bin starts at `xMin`, last bin’s `x1` ≥ `xMax` (clip or extend consistently; include empty interior bins).
-- `mid = (x0 + x1) / 2`.
-- `y = count / n_sample` (relative frequency). `sum(y)` ≈ 1.
-- `zeroMass: "high"`: keep the 0 bin; do not smooth.
+- Catalog `kind` / `binWidth` do **not** select a histogram. Do not emit `bins` or `samples`.
 
 ### Percentiles
 
 For player value \(x\):
 
-1. Inclusive CDF on the **same** league curve/bins Knowball will plot: \(p = P(X \le x)\) (use the same trapezoid / bin rules as knowball `kdeCdf` / `histogramCdf` if you want tooltip hover to match the stored badge; stored `percentile` is the player standing, hover recomputes from the curve).
+1. Inclusive CDF on the **same** league curve Knowball will plot: \(p = P(X \le x)\) (knowball `kdeCdf` trapezoid).
 2. If catalog `higherIsBetter === false`, store `percentile = 100 * (1 - p)`, else `percentile = 100 * p`.
 3. Clamp to `[0, 100]`.
 
@@ -557,20 +548,18 @@ One row per GSIS player that may appear in search or player routes.
 | `as_of_week` | int | REG week 1–18 (or 22 if you include postseason later; **Knowball default is season YTD REG only** — do not mix POST into REG densities) |
 | `position_group` | text | `qb` \| `backfield` \| `pass_catcher` \| `ol` \| `def_front` \| `secondary` \| `kicker` \| `punter` \| `returner` |
 | `stat_id` | text | Catalog id |
-| `kind` | text | `continuous` \| `discrete` |
+| `kind` | text | catalog metadata `continuous` \| `discrete` |
 | `x_min` | float8 | |
 | `x_max` | float8 | |
 | `y_max` | float8 | |
 | `lower_bound` | float8 null | |
 | `upper_bound` | float8 null | |
-| `bin_width` | float8 null | discrete |
-| `curve` | jsonb null | `[{ "x": number, "y": number }, ...]` |
-| `bins` | jsonb null | `[{ "x0", "x1", "mid", "y", "count" }, ...]` |
+| `curve` | jsonb | `[{ "x": number, "y": number }, ...]` |
 | `n_sample` | int | Qualified peers |
 | `computed_at` | timestamptz | |
 | PK | `(season, as_of_week, position_group, stat_id)` | |
 
-Exactly one of `curve` / `bins` non-null matching `kind`.
+Exactly one non-null `curve` per row. Histograms are not part of the contract.
 
 **Later (do not create in v1):** `viz.player_distributions` — PK `(player_id, season, as_of_week, stat_id)`, same shape columns, `distribution_scope = player_weekly`. Publish path preferred: `dists/players/…` JSON even if the table exists.
 
@@ -592,7 +581,7 @@ Scalar overlay only.
 | `unavailable_reason` | text null | `insufficient_sample` \| `missing_source` \| `not_in_nflverse` |
 | PK | `(player_id, season, as_of_week, stat_id)` | |
 
-Do **not** store `curve`/`bins` here.
+Do **not** store `curve` here.
 
 #### `viz.publish_manifest` (recommended)
 
@@ -651,16 +640,10 @@ create table viz.league_distributions (
   y_max double precision not null,
   lower_bound double precision,
   upper_bound double precision,
-  bin_width double precision,
-  curve jsonb,
-  bins jsonb,
+  curve jsonb not null,
   n_sample int not null,
   computed_at timestamptz not null default now(),
-  primary key (season, as_of_week, position_group, stat_id),
-  constraint league_shape_chk check (
-    (kind = 'continuous' and curve is not null and bins is null)
-    or (kind = 'discrete' and bins is not null and curve is null)
-  )
+  primary key (season, as_of_week, position_group, stat_id)
 );
 
 create table viz.player_stat_values (
@@ -802,7 +785,7 @@ For each `as_of_week` in `1..W` (and at least the current week for production):
 For each `(season, as_of_week, position_group, stat_id)`:
 
 - Collect qualified peer YTD values.
-- Fit KDE or histogram.
+- Fit reflected KDE.
 - Upsert `viz.league_distributions`.
 
 Skip densities with `n_sample < 5` still **write the row** but player overlays may be `insufficient_sample` if the player also fails min-n; if the player qualifies uniquely early, you still need a league shape — use whatever qualified peers exist (can be small in week 1).
@@ -825,7 +808,8 @@ For each player-season-week:
 stats[] = for each catalog id in statsForPosition(position):
   if alwaysUnavailable: omit (Knowball will gray)
   else join player_stat_values + league_distributions
-       copy curve/bins/xMin/xMax/yMax/kind/bounds/binWidth onto snapshot
+       copy curve/xMin/xMax/yMax/kind/bounds onto snapshot
+       (prefer shared `league/*.json` merge — do not embed curve on every page)
 ```
 
 Include `schemaVersion: 1`. Write Storage object. Update `publish_manifest` and `pages/current/`.
@@ -846,14 +830,13 @@ Season dropdown on the player page reloads the **same player** for another `seas
 2. Every non-`alwaysUnavailable` catalog id has a `player_stat_values` row after a full run.
 3. `kind` matches catalog.
 4. `percent` values ∈ [0, 1] (allow tiny float error).
-5. Discrete `bins` contiguous; `sum(count) == n_sample`; empty bins present.
-6. Continuous `curve` monotonic x; integral ≈ 1.
-7. `higherIsBetter: false` stats: high raw interceptions → **low** stored percentile.
-8. Missing NGS player: `unavailable_reason = missing_source`, `player_value` null, **not** 0.
-9. Week 1 passer with 9 attempts on a rate stat with `minNBase=10`: unqualified (`min_n=10`).
-10. Week 5 passer with 32 attempts on volume stats with `minNBase=8`: qualified (`min_n=32`).
-11. OL `sacks_allowed` never `ready`.
-12. Knowball hydrate: fixture player + one real JSON → ready rows chart; missing ids still listed.
+5. Every `curve` monotonic x; integral ≈ 1 (including formerly discrete ids).
+6. `higherIsBetter: false` stats: high raw interceptions → **low** stored percentile.
+7. Missing NGS player: `unavailable_reason = missing_source`, `player_value` null, **not** 0.
+8. Week 1 passer with 9 attempts on a rate stat with `minNBase=10`: unqualified (`min_n=10`).
+9. Week 5 passer with 32 attempts on volume stats with `minNBase=8`: qualified (`min_n=32`).
+10. OL `sacks_allowed` never `ready`.
+11. Knowball hydrate: fixture player + one real JSON → ready rows chart; missing ids still listed.
 
 ---
 
@@ -885,7 +868,7 @@ Still forbidden forever for this architecture: embedding Knowball with a Postgre
 |---|---|
 | `.plans/NFL Stats Sliders.md` | Sources, min-n, zero mass, joins |
 | `web/src/lib/payload.ts` | JSON types |
-| `web/src/lib/distribution.ts` | curve/bin shapes, CDF used in UI |
+| `web/src/lib/distribution.ts` | curve shapes, CDF used in UI |
 | `web/src/lib/catalog/*.ts` | ids, domains, `higherIsBetter`, format |
 | `web/src/lib/catalog/hydrate.ts` | overlay rules |
 | `web/src/lib/stat-status.ts` | gray-row copy / ready predicate |

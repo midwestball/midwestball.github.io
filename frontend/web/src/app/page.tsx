@@ -1,8 +1,11 @@
 import Link from "next/link";
-import { PLAYER_INDEX } from "@/data/players";
+import { loadPlayerIndex } from "@/data/players";
 
-export default function Home() {
-  const featured = PLAYER_INDEX.slice(0, 4);
+export const revalidate = 3600;
+
+export default async function Home() {
+  const index = await loadPlayerIndex();
+  const featured = index.slice(0, 4);
 
   return (
     <div>

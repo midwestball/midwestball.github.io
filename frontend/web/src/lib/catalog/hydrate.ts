@@ -10,11 +10,7 @@ function availabilityFor(
   if (!snapshot) return "pending";
   if (snapshot.unavailableReason) return snapshot.unavailableReason;
   if (!snapshot.qualified) return "insufficient_sample";
-  const hasShape =
-    snapshot.kind === "continuous"
-      ? Boolean(snapshot.curve?.length)
-      : Boolean(snapshot.bins?.length);
-  return hasShape ? "ready" : "pending";
+  return Boolean(snapshot.curve?.length) ? "ready" : "pending";
 }
 
 export function hydratePlayerStats(
@@ -27,7 +23,7 @@ export function hydratePlayerStats(
     const snapshot = byId.get(definition.id);
     const availability = availabilityFor(definition, snapshot);
 
-    const base = {
+    return {
       id: definition.id,
       label: definition.label,
       section: definition.section,
@@ -41,24 +37,10 @@ export function hydratePlayerStats(
       yMax: snapshot?.yMax ?? 1,
       playerValue: snapshot?.playerValue ?? null,
       percentile: snapshot?.percentile ?? null,
-    };
-
-    if (definition.kind === "continuous") {
-      return {
-        ...base,
-        kind: "continuous" as const,
-        curve: snapshot?.curve ?? [],
-        lowerBound: snapshot?.lowerBound ?? definition.lowerBound,
-        upperBound: snapshot?.upperBound ?? definition.upperBound,
-      };
-    }
-
-    return {
-      ...base,
-      kind: "discrete" as const,
-      binWidth: snapshot?.binWidth ?? definition.binWidth ?? 1,
-      bins: snapshot?.bins ?? [],
+      curve: snapshot?.curve ?? [],
+      kind: definition.kind,
+      lowerBound: snapshot?.lowerBound ?? definition.lowerBound,
+      upperBound: snapshot?.upperBound ?? definition.upperBound,
     };
   });
 }
-

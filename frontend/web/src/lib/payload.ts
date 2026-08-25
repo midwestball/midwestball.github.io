@@ -1,28 +1,22 @@
-import type {
-  HistogramBin,
-  Point,
-  StatAvailabilityStatus,
-} from "@/lib/distribution";
+import type { Point, StatAvailabilityStatus } from "@/lib/distribution";
 
 /**
- * JSON Ballnet will publish per player-season. Display formatting lives in
- * the Knowball catalog (`format` enum), not in this payload.
+ * Per-player scalar overlay. League `curve` (and usually domain fields)
+ * come from `league/{season}/w{week}/{group}.json` and are merged at load time.
  */
 export type JsonStatSnapshot = {
   id: string;
-  playerValue: number;
-  percentile: number;
+  playerValue: number | null;
+  percentile: number | null;
   qualified: boolean;
   denomYtd?: number;
   kind: "continuous" | "discrete";
-  xMin: number;
-  xMax: number;
-  yMax: number;
+  xMin?: number;
+  xMax?: number;
+  yMax?: number;
   lowerBound?: number;
   upperBound?: number;
-  binWidth?: number;
   curve?: Point[];
-  bins?: HistogramBin[];
   unavailableReason?: Exclude<StatAvailabilityStatus, "ready" | "pending">;
 };
 
@@ -35,6 +29,7 @@ export type PlayerBio = {
 };
 
 export type PlayerPageJson = {
+  schemaVersion?: 1;
   player: PlayerBio;
   season: number;
   asOfWeek: number;

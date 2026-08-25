@@ -1,10 +1,9 @@
 /**
- * League-distribution payloads that match the contract Ballnet will serve.
+ * League-distribution payloads that match the contract Ballnet serves.
  *
- * Continuous stats → precomputed Gaussian KDE with reflection at bounds.
- * Discrete stats   → uniform-width histograms (empty bins included).
- * Y-axis           → relative frequency (proportion), never raw counts.
- * X-axis           → fixed global [min, max] so charts stay comparable.
+ * Every stat renders a KDE area chart from `curve[]`. Catalog `kind`
+ * (continuous vs discrete) is formatting metadata only — it does not
+ * select a histogram. Y-axis = KDE density (∫y dx ≈ 1).
  *
  * `format` is a catalog enum (JSON-safe). Percentile is inclusive CDF P(X ≤ x),
  * already oriented so high = good.
@@ -22,15 +21,7 @@ export type StatAvailabilityStatus =
 
 export type Point = { x: number; y: number };
 
-export type HistogramBin = {
-  x0: number;
-  x1: number;
-  mid: number;
-  y: number;
-  count: number;
-};
-
-type StatBase = {
+export type StatPayload = {
   id: string;
   label: string;
   section: string;
@@ -44,22 +35,11 @@ type StatBase = {
   availability: StatAvailabilityStatus;
   minN: number | null;
   denom: string;
-};
-
-export type ContinuousStat = StatBase & {
-  kind: "continuous";
   curve: Point[];
+  kind: "continuous" | "discrete";
   lowerBound?: number;
   upperBound?: number;
 };
-
-export type DiscreteStat = StatBase & {
-  kind: "discrete";
-  binWidth: number;
-  bins: HistogramBin[];
-};
-
-export type StatPayload = ContinuousStat | DiscreteStat;
 
 export const CHART_PLOT = {
   left: 52,
@@ -91,10 +71,15 @@ export function insertValuePoint(curve: Point[], x: number): Point[] {
   return [...curve.slice(0, nextIndex), { x, y }, ...curve.slice(nextIndex)];
 }
 
-export function shadedThrough(curve: Point[], playerValue: number): Point[] {
-  return insertValuePoint(curve, playerValue).filter(
-    (point) => point.x <= playerValue + 1e-9,
-  );
+export function shadedThrough(
+  curve: Point[],
+  playerValue: number,
+  higherIsBetter = true,
+): Point[] {
+  const withValue = insertValuePoint(curve, playerValue);
+  return higherIsBetter
+    ? withValue.filter((point) => point.x <= playerValue + 1e-9)
+    : withValue.filter((point) => point.x >= playerValue - 1e-9);
 }
 
 export function kdeCdf(curve: Point[], value: number): number {
@@ -118,27 +103,8 @@ export function kdeCdf(curve: Point[], value: number): number {
   return total > 0 ? Math.min(1, Math.max(0, mass / total)) : 0;
 }
 
-export function histogramCdf(bins: HistogramBin[], value: number): number {
-  let mass = 0;
-  for (const bin of bins) {
-    if (value >= bin.x1) {
-      mass += bin.y;
-    } else if (value > bin.x0) {
-      mass += bin.y * ((value - bin.x0) / (bin.x1 - bin.x0));
-      break;
-    } else {
-      break;
-    }
-  }
-  return Math.min(1, Math.max(0, mass));
-}
-
 export function percentileAt(stat: StatPayload, value: number): number {
-  const cdf =
-    stat.kind === "continuous"
-      ? kdeCdf(stat.curve, value)
-      : histogramCdf(stat.bins, value);
-  const pct = cdf * 100;
+  const pct = kdeCdf(stat.curve, value) * 100;
   return stat.higherIsBetter ? pct : 100 - pct;
 }
 
@@ -160,20 +126,9 @@ export function hoverStandingCopy(stat: StatPayload, value: number): string {
   return `This ${stat.label} is in the ${ordinal(percentileAt(stat, value))} percentile.`;
 }
 
-export function relativeFrequencyCopy(
-  stat: StatPayload,
-  y: number,
-  bin?: HistogramBin,
-): string {
-  const pct = (y * 100).toFixed(1);
-  if (stat.kind === "discrete" && bin) {
-    return `${pct}% of the league has ${formatStatValue(stat.format, bin.x0)}.`;
-  }
-  return `Relative frequency: ${pct}% — how common this value is (higher means more typical).`;
-}
-
-export function binHighlighted(bin: HistogramBin, playerValue: number): boolean {
-  return bin.x0 <= playerValue;
+export function relativeFrequencyCopy(y: number): string {
+  // KDE y is density (∫y dx ≈ 1), not a percent of the league.
+  return `Density: ${y.toFixed(2)} — how concentrated values are here (higher means more typical).`;
 }
 
 export function ordinal(value: number): string {
@@ -190,6 +145,12 @@ export function ordinal(value: number): string {
     default:
       return `${n}th`;
   }
+}
+
+function parseRgb(rgb: string): [number, number, number] | null {
+  const match = rgb.match(/rgb\((\d+),\s*(\d+),\s*(\d+)\)/);
+  if (!match) return null;
+  return [Number(match[1]), Number(match[2]), Number(match[3])];
 }
 
 /** Savant-style blue (low) → red (high) percentile color. */
@@ -222,8 +183,11 @@ export function percentileColor(percentile: number): string {
   return `rgb(${mix(left.c[0], right.c[0])}, ${mix(left.c[1], right.c[1])}, ${mix(left.c[2], right.c[2])})`;
 }
 
-export function withAlpha(rgb: string, alpha: number): string {
-  const match = rgb.match(/rgb\((\d+),\s*(\d+),\s*(\d+)\)/);
-  if (!match) return rgb;
-  return `rgba(${match[1]}, ${match[2]}, ${match[3]}, ${alpha})`;
+/** Dark text on pale mid-scale yellows/cyans; white on deep blue/red. */
+export function percentileContrastText(percentile: number): string {
+  const rgb = parseRgb(percentileColor(percentile));
+  if (!rgb) return "#ffffff";
+  const [r, g, b] = rgb;
+  const luminance = (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255;
+  return luminance > 0.62 ? "#18181b" : "#ffffff";
 }

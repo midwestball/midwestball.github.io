@@ -4,6 +4,7 @@ const NAV = [
   { href: "/", label: "Home" },
   { href: "/search", label: "Search" },
   { href: "/ballnet", label: "Ballnet" },
+  { href: "/ffoptim", label: "ffoptim" },
 ] as const;
 
 export function SiteHeader() {

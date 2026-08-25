@@ -188,4 +188,4 @@ Use w = NFL week number:
 | NGS averages (already volume-gated) | 1 NGS row | **4** NGS rows YTD |
 | Rare counts (TD, INT, sack, drop, FF) | 1 REG game-row | **4** game-rows YTD |
 
-**Zero mass = High** → histogram with an explicit 0 bin; do not KDE those. **NGS / PFR missing** → gray, do not impute 0 (that would look like a real zero INT/drop).
+**Zero mass = High** → still a reflected KDE (do not publish a 0-bin histogram). See knowball `docs/adr/2026-08-24-kde-only-league-shape.md`. **NGS / PFR missing** → gray, do not impute 0 (that would look like a real zero INT/drop).

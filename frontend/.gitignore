@@ -1,7 +1,12 @@
 .DS_Store
 .env
 .envrc
+.venv/
+venv/
 
 web/node_modules/
 web/.next/
 web/out/
+
+# Ballnet sync mirror (source of truth is ballnet data/index + src/data/ballnet)
+web/public/viz/

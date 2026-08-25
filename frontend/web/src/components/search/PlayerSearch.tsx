@@ -2,11 +2,19 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
-import { searchPlayers } from "@/data/players";
+import type { PlayerBio } from "@/lib/payload";
+import { searchPlayers } from "@/lib/player-index";
 
-export function PlayerSearch() {
+type PlayerSearchProps = {
+  players: PlayerBio[];
+};
+
+export function PlayerSearch({ players }: PlayerSearchProps) {
   const [query, setQuery] = useState("");
-  const players = useMemo(() => searchPlayers(query), [query]);
+  const results = useMemo(
+    () => searchPlayers(players, query),
+    [players, query],
+  );
 
   return (
     <div className="space-y-2">
@@ -18,7 +26,7 @@ export function PlayerSearch() {
         className="h-9 w-full rounded-none border border-zinc-200 bg-white px-2 text-sm text-zinc-900 outline-none placeholder:text-zinc-400 focus:border-zinc-400"
       />
       <ul className="space-y-1">
-        {players.map((player) => (
+        {results.map((player) => (
           <li key={player.id}>
             <Link
               href={`/players/${player.id}`}
@@ -37,7 +45,7 @@ export function PlayerSearch() {
           </li>
         ))}
       </ul>
-      {players.length === 0 ? (
+      {results.length === 0 ? (
         <p className="text-sm text-zinc-500">No matching players.</p>
       ) : null}
     </div>

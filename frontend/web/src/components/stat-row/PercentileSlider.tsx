@@ -4,6 +4,7 @@ import {
   CHART_PLOT,
   ordinal,
   percentileColor,
+  percentileContrastText,
   type StatPayload,
 } from "@/lib/distribution";
 import { cn } from "@/lib/utils";
@@ -30,6 +31,7 @@ export function PercentileSlider({
   const percentile = stat.percentile;
   const ready = !disabled && percentile != null;
   const color = ready ? percentileColor(percentile) : "#d4d4d8";
+  const labelColor = ready ? percentileContrastText(percentile) : "#52525b";
   const x = ready ? Math.min(100, Math.max(0, percentile)) : 0;
 
   return (
@@ -62,10 +64,14 @@ export function PercentileSlider({
             />
             <div
               className={cn(
-                "absolute top-1/2 z-10 flex size-6 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-none border border-white text-[10px] font-bold text-white",
+                "absolute top-1/2 z-10 flex size-6 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-none border border-white text-[10px] font-bold",
                 thumbClassName,
               )}
-              style={{ left: `${x}%`, backgroundColor: color }}
+              style={{
+                left: `${x}%`,
+                backgroundColor: color,
+                color: labelColor,
+              }}
             >
               {Math.round(percentile)}
             </div>

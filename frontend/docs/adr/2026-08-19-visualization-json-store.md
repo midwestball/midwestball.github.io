@@ -6,5 +6,5 @@ Ballnet stores a normalized visualization store (league distributions once per s
 
 ### Consequences
 - New stats are catalog ids first; Ballnet cannot invent slider rows the UI does not list.
-- League curves must not be duplicated per player in the private DB; page JSON may embed them for a single fetch.
-- `.plans/checklist.md` Supabase-client and Observable Plot steps are superseded by this decision and `docs/architecture/README.md`.
+- League curves must not be duplicated per player in the private DB **or** on every Storage page JSON; publish shared `league/{season}/w{week}/{group}.json` (see `2026-08-20-split-league-distributions.md`).
+- Older checklist Supabase-client and Observable Plot steps (see `.plans/archive/checklist-superseded.md`) are superseded by this decision and `docs/architecture/README.md`.

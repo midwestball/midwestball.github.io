@@ -12,12 +12,12 @@ Position catalogs are product configuration, not player data. Rows on a player p
 ## Ask First
 
 - Adding or removing a published `stat.id` (breaks existing snapshots).
-- Changing `kind` (continuous vs discrete) or chart domain for a live id.
+- Changing `kind` (continuous vs discrete formatting) or chart domain for a live id. `kind` does not select a density shape.
 - Mapping a new NFL position code to a different group.
 
 ## Never
 
-- Generate KDE/histogram samples in this repo.
+- Synthesize league sample ticks or fake KDE curves from leftover histogram bins.
 - Impute 0 for missing NGS/PFR rows.
 - Put `formatValue` functions on JSON payloads (Server → Client serialization).
 
