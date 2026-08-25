@@ -2,18 +2,15 @@
 
 Pre-compute in **ballnet** → publish JSON under reserved Storage prefixes → **knowball** only renders. Do not invent formulas or mock curves in the Next app. Detailed stage / path contracts: `.plans/ballnet-etl-knowball-visualizations.md` (§§10, 12, 15). Shared math (percentile CDF, z-score, `one_in_n`) stays a Ballnet library.
 
-## 1. Home — best performances (first)
+## 1. Home — best performances
 
-Replace the `/` placeholder with published highlight boards.
+**Shipped (weekly):** Stage H → `highlights/{season}/w{week}.json`; Knowball `/` renders `top` + `byGroup`. See `docs/adr/2026-08-25-weekly-highlights-json.md`.
 
-| Idea | Intent |
+| Follow-up | Intent |
 |---|---|
-| Weekly best games | Per-game z-scores vs peers (original “best of week” framing) |
-| Breakouts | Individual performances that look like outliers / rising spikes |
-| Boards | Best of week / season / all-time (overall + by position group) |
-| Rarity copy | Optional “1 in a thousand / million / billion” framing for shareable clips (coordinate with Mason on voice — clickbait vs credibility) |
-
-Publish target (ballnet): `highlights/{season}/w{week}.json` (+ season / all-time siblings). Knowball home fetches one board file — not N player pages.
+| Breakouts | Individual performances vs the player’s own recent baseline |
+| Boards | Best of season / all-time (overall + by position group) |
+| Rarity copy | Optional “1 in a thousand / million / billion” framing using published `oneInN` (coordinate with Mason on voice) |
 
 ## 2. Overall player percentile → team strength
 

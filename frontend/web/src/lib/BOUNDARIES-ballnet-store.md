@@ -3,7 +3,7 @@
 ## Always
 
 - Prefer Storage public URLs when configured (`NEXT_PUBLIC_SUPABASE_URL` or `VIZ_STORAGE_BASE_URL`); fall back to sibling `ballnet/data` or synced `src/data/ballnet/` copies.
-- Load `index/{players,current,seasons}.json` at runtime — do not statically import the player index into the Next bundle.
+- Load `index/{players,current,seasons}.json` and `highlights/{season}/w{week}.json` at runtime — do not statically import large boards into the Next bundle.
 - Merge `league/{season}/w{week}/{group}.json` into player snapshots before hydration so `ready` rows have `curve[]`.
 - Keep Knowball free of Supabase clients / service keys — public object fetches only.
 

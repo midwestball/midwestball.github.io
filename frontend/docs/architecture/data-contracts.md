@@ -53,7 +53,7 @@ player_stat_values
 
 `as_of_week` is the NFL week being viewed. Ramp–hold uses `min_n = n_base × min(w, 4)` in Ballnet, then sets `qualified`.
 
-Publish path: Storage (or local `data/`) serves **scalar** `PlayerPageJson` plus **shared** `league/*.json`. Knowball merges at fetch time — still not a runtime SQL client.
+Publish path: Storage (or local `data/`) serves **scalar** `PlayerPageJson` plus **shared** `league/*.json`. Knowball merges at fetch time — still not a runtime SQL client. Weekly home boards are separate Stage H objects under `highlights/{season}/w{week}.json`.
 
 ## Do not
 

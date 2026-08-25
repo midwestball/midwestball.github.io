@@ -30,7 +30,8 @@ Before modifying or creating new features, locate the relevant domain in the tab
 | **Stat catalog** | Position-group invariants and id stability. | `web/src/lib/catalog/BOUNDARIES.md` |
 | **Ballnet JSON loader** | Storage fetch + local fallback; league merge before hydrate. | `web/src/lib/BOUNDARIES-ballnet-store.md` |
 | **Vercel + Storage deploy** | Production loads index/pages/league from public Supabase Storage; no bundled player index. | `docs/adr/2026-08-24-vercel-supabase-storage.md` |
-| **Future features** | Ordered backlog: home highlights / z-scores, overall %, trajectories, compare. | `docs/architecture/future-features.md` |
+| **Weekly highlights** | Stage H z-score boards → `highlights/{season}/w{week}.json`; home renders only. | `docs/adr/2026-08-25-weekly-highlights-json.md` |
+| **Future features** | Ordered backlog: overall %, trajectories, compare (highlights weekly path shipped). | `docs/architecture/future-features.md` |
 | **ETL contract** | Ballnet publish path for Knowball viz (Leg 1); reserved later stages. | `.plans/ballnet-etl-knowball-visualizations.md` |
 | **Weekly refresh** | Post-game ballnet recipe (lives in ballnet). | Sibling `ballnet/docs/WEEKLY_OPS.md` |
 
@@ -41,6 +42,7 @@ The accepted UI lives under **`web/`**. Run with `cd web && npm install && npm r
 | Piece | Path |
 |---|---|
 | Home | `web/src/app/page.tsx` |
+| Highlight list | `web/src/components/highlights/HighlightList.tsx` |
 | Search | `web/src/app/search/page.tsx` |
 | Player page | `web/src/app/players/[id]/page.tsx` |
 | Ballnet page | `web/src/app/ballnet/page.tsx` |

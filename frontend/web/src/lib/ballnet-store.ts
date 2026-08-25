@@ -3,7 +3,12 @@ import "server-only";
 import { cache } from "react";
 import { readFile, readdir } from "node:fs/promises";
 import path from "node:path";
-import type { JsonStatSnapshot, PlayerBio, PlayerPageJson } from "@/lib/payload";
+import type {
+  JsonStatSnapshot,
+  PlayerBio,
+  PlayerPageJson,
+  HighlightsBoardJson,
+} from "@/lib/payload";
 import type { Point } from "@/lib/distribution";
 import type { PositionGroup } from "@/lib/catalog/types";
 import { vizStorageBase } from "@/lib/viz-config";
@@ -305,3 +310,31 @@ export async function loadHydratedPlayerSnapshots(
     snapshots: mergeLeagueIntoSnapshots(page.stats ?? [], league),
   };
 }
+
+/** Weekly highlight board (`highlights/{season}/w{week}.json`). */
+export const loadHighlightsBoard = cache(
+  async (opts?: {
+    season?: number;
+    week?: number;
+  }): Promise<HighlightsBoardJson | null> => {
+    let season = opts?.season;
+    let week = opts?.week;
+    if (season == null || week == null) {
+      const current = await resolveCurrentPointer();
+      if (!current) return null;
+      season = season ?? current.season;
+      week = week ?? current.week;
+    }
+    const rel = `highlights/${season}/w${week}.json`;
+
+    const base = vizStorageBase();
+    if (base) {
+      const remote = await tryFetchRemoteJson<HighlightsBoardJson>(`${base}/${rel}`);
+      if (remote) return remote;
+    }
+
+    return tryReadLocalJson<HighlightsBoardJson>(
+      path.join(ballnetDataRoot(), rel),
+    );
+  },
+);

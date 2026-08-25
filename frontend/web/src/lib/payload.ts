@@ -35,3 +35,29 @@ export type PlayerPageJson = {
   asOfWeek: number;
   stats: JsonStatSnapshot[];
 };
+
+/** One row on a Stage H weekly board (ballnet `highlights/{season}/w{week}.json`). */
+export type HighlightRow = {
+  playerId: string;
+  name: string;
+  position: string;
+  team: string;
+  opponent: string;
+  positionGroup: string;
+  statId: string;
+  statLabel: string;
+  value: number;
+  zScore: number;
+  peerN: number;
+  oneInN: number | null;
+  rank: number;
+};
+
+export type HighlightsBoardJson = {
+  schemaVersion: 1;
+  season: number;
+  week: number;
+  generatedAt?: string;
+  top: HighlightRow[];
+  byGroup: Record<string, HighlightRow[]>;
+};
