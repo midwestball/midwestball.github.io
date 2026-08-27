@@ -7,17 +7,63 @@ import {
 import { loadCurrentSeasonContext } from "@/data/players";
 import { HighlightList } from "@/components/highlights/HighlightList";
 import { GROUP_LABEL, type PositionGroup } from "@/lib/catalog";
+import type { HighlightRow } from "@/lib/payload";
 
 export const revalidate = 3600;
 
-const GROUP_ORDER: PositionGroup[] = [
+/** Offense first — most interest / denser box-score data. Kicker rides with scoring. */
+const OFFENSE_GROUPS: PositionGroup[] = [
   "qb",
   "backfield",
   "pass_catcher",
-  "def_front",
-  "secondary",
   "kicker",
 ];
+
+const DEFENSE_GROUPS: PositionGroup[] = ["def_front", "secondary"];
+
+const SIDE_TOP_N = 25;
+
+function sideTop(
+  byGroup: Record<string, HighlightRow[]> | undefined,
+  groups: PositionGroup[],
+): HighlightRow[] {
+  const rows = groups.flatMap((g) => byGroup?.[g] ?? []);
+  rows.sort((a, b) => b.zScore - a.zScore);
+  return rows.slice(0, SIDE_TOP_N).map((row, i) => ({ ...row, rank: i + 1 }));
+}
+
+function GroupSections({
+  groups,
+  byGroup,
+  season,
+  weeklyByGroup,
+}: {
+  groups: PositionGroup[];
+  byGroup: Record<string, HighlightRow[]> | undefined;
+  season: number;
+  weeklyByGroup: Record<string, LeagueGroupJson | null>;
+}) {
+  return (
+    <>
+      {groups.map((group) => {
+        const rows = byGroup?.[group] ?? [];
+        if (rows.length === 0) return null;
+        return (
+          <section key={group} className="space-y-2">
+            <h2 className="text-xs font-semibold tracking-[0.15em] text-zinc-500 uppercase">
+              {GROUP_LABEL[group]}
+            </h2>
+            <HighlightList
+              rows={rows}
+              season={season}
+              weeklyByGroup={weeklyByGroup}
+            />
+          </section>
+        );
+      })}
+    </>
+  );
+}
 
 export default async function Home() {
   const [{ season, asOfWeek }, board] = await Promise.all([
@@ -27,13 +73,16 @@ export default async function Home() {
 
   const week = board?.week ?? asOfWeek;
   const boardSeason = board?.season ?? season;
-  const top = board?.top ?? [];
-  const hasBoard = Boolean(board && top.length > 0);
+  const byGroup = board?.byGroup;
+  const offenseTop = sideTop(byGroup, OFFENSE_GROUPS);
+  const defenseTop = sideTop(byGroup, DEFENSE_GROUPS);
+  const hasBoard = Boolean(
+    board && (offenseTop.length > 0 || defenseTop.length > 0),
+  );
 
   const groupsNeeded = new Set<string>();
   if (board) {
-    for (const row of board.top) groupsNeeded.add(row.positionGroup);
-    for (const rows of Object.values(board.byGroup ?? {})) {
+    for (const rows of Object.values(byGroup ?? {})) {
       for (const row of rows) groupsNeeded.add(row.positionGroup);
     }
   }
@@ -62,42 +111,59 @@ export default async function Home() {
           </h1>
           <p className="mt-1 max-w-xl text-sm leading-5 text-zinc-600">
             {hasBoard
-              ? "Best single-game stat performances this week, ranked by z-score versus season single-game peers. Expand a row for the league distribution."
+              ? "Best single-game performances this week, offense first. Ranked by z-score versus season single-game peers — expand a row for the league distribution."
               : "Weekly standouts will land here once Ballnet publishes a highlight board for this week."}
           </p>
         </div>
       </div>
 
       <main className="mx-auto max-w-3xl space-y-6 px-4 py-4">
-        <section className="space-y-2">
-          <h2 className="text-xs font-semibold tracking-[0.15em] text-zinc-500 uppercase">
-            Top games
-          </h2>
-          <HighlightList
-            rows={top}
-            season={boardSeason}
-            weeklyByGroup={weeklyByGroup}
-          />
-        </section>
+        {hasBoard ? (
+          <>
+            <section className="space-y-2">
+              <h2 className="text-xs font-semibold tracking-[0.15em] text-zinc-500 uppercase">
+                Offense
+              </h2>
+              <HighlightList
+                rows={offenseTop}
+                season={boardSeason}
+                weeklyByGroup={weeklyByGroup}
+              />
+            </section>
 
-        {hasBoard
-          ? GROUP_ORDER.map((group) => {
-              const rows = board?.byGroup?.[group] ?? [];
-              if (rows.length === 0) return null;
-              return (
-                <section key={group} className="space-y-2">
-                  <h2 className="text-xs font-semibold tracking-[0.15em] text-zinc-500 uppercase">
-                    {GROUP_LABEL[group]}
-                  </h2>
-                  <HighlightList
-                    rows={rows}
-                    season={boardSeason}
-                    weeklyByGroup={weeklyByGroup}
-                  />
-                </section>
-              );
-            })
-          : null}
+            <GroupSections
+              groups={OFFENSE_GROUPS}
+              byGroup={byGroup}
+              season={boardSeason}
+              weeklyByGroup={weeklyByGroup}
+            />
+
+            <section className="space-y-2">
+              <h2 className="text-xs font-semibold tracking-[0.15em] text-zinc-500 uppercase">
+                Defense
+              </h2>
+              <HighlightList
+                rows={defenseTop}
+                season={boardSeason}
+                weeklyByGroup={weeklyByGroup}
+              />
+            </section>
+
+            <GroupSections
+              groups={DEFENSE_GROUPS}
+              byGroup={byGroup}
+              season={boardSeason}
+              weeklyByGroup={weeklyByGroup}
+            />
+          </>
+        ) : (
+          <section className="space-y-2">
+            <h2 className="text-xs font-semibold tracking-[0.15em] text-zinc-500 uppercase">
+              Top games
+            </h2>
+            <HighlightList rows={[]} season={boardSeason} />
+          </section>
+        )}
 
         <p className="pt-1 text-sm text-zinc-500">
           Looking for someone else?{" "}

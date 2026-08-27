@@ -2,7 +2,8 @@
 
 ## Always
 
-- Render Stage H board rows only — no client-side z-score math.
+- Render Stage H board rows only — no client-side z-score math (home may re-sort published rows into offense/defense overall lists).
+- Home layout: offense overall → offense by group → defense overall → defense by group (kicker with offense).
 - Keep square chrome (`rounded-none`, hairline borders) matching search rows.
 - Expand with Framer Motion like a stat row; chart from `dists/league_weekly` via props — never invent a curve.
 - Color collapsed z chip and expanded chart with `sigmaColor` (oriented σ), not percentile.
