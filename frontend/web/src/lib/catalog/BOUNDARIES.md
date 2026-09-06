@@ -7,6 +7,7 @@ Position catalogs are product configuration, not player data. Rows on a player p
 - Emit **every** catalog stat for the player's position, including permanently gray OL rows.
 - Keep `stat.id` stable; Ballnet snapshots join on this id.
 - Treat rate stats as **0–1** in the contract (`percent` format). Display as `%` in the UI.
+- Derived rates are **ratio-of-sums** in Ballnet Stage C (`None` when the denominator is 0 — never impute 0 efficiency).
 - Compute ramp–hold and percentiles in Ballnet. Knowball only reads `qualified` / `unavailableReason`.
 
 ## Ask First
