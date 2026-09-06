@@ -30,7 +30,7 @@ const VARIATIONS: {
     id: "section-card",
     layout: "section-card",
     title: "B · One card per section",
-    note: "Volume, Scoring, etc. each get a single square container. Rows inside are divided, not individually boxed.",
+    note: "Efficiency, Production, Volume, etc. each get a single square container. Rows inside are divided, not individually boxed.",
   },
   {
     id: "ruled",

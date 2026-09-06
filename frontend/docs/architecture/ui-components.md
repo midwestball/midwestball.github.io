@@ -10,7 +10,7 @@ Every surface is a sharp rectangle: panels, inputs, selects, buttons, nav hits, 
 
 ## Collapsed row
 
-Chevron, stat name (fixed left column), **raw value** (fixed width, left-aligned so starts line up), then inline 0–100 percentile slider (tracks share a common left edge). The percentile lives **only on the slider thumb** — no separate ordinal badge to the right. The slider track is **not** aligned to the chart x-axis. Rows are flush on the page — no per-stat card chrome or row rules. Section labels (Volume, Scoring, …) group rows with zero extra vertical gap by default.
+Chevron, stat name (fixed left column), **raw value** (fixed width, left-aligned so starts line up), then inline 0–100 percentile slider (tracks share a common left edge). The percentile lives **only on the slider thumb** — no separate ordinal badge to the right. The slider track is **not** aligned to the chart x-axis. Rows are flush on the page — no per-stat card chrome or row rules. Section labels (Efficiency, Production, Volume, …) group rows with zero extra vertical gap by default.
 
 Unavailable rows (pending, insufficient sample, missing source, not in nflverse) keep the same chrome with `—` value, empty gray track, and reduced opacity. Do not hide catalog stats.
 
