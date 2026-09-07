@@ -24,6 +24,15 @@ export function statsForPosition(position: string): StatDefinition[] {
   return STATS_BY_GROUP[positionGroupOf(position)];
 }
 
+/** Sibling volume counting-stat for search min-volume labeling / join. */
+export function volumeStatFor(
+  stat: StatDefinition,
+  group: PositionGroup,
+): StatDefinition | null {
+  if (!stat.volumeStatId) return null;
+  return STATS_BY_GROUP[group].find((s) => s.id === stat.volumeStatId) ?? null;
+}
+
 export {
   GROUP_LABEL,
   POSITION_TO_GROUP,

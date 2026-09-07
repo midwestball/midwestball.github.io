@@ -65,6 +65,11 @@ export type StatDefinition = {
   /** Ramp–hold n_base. Null means the row is permanently unavailable. */
   minNBase: number | null;
   denom: string;
+  /**
+   * Sibling counting-stat id for search min-volume (e.g. fg_pct → fg_attempts).
+   * Absent for NGS-week / games / snaps / dropbacks / air-yards denoms with no published volume sibling.
+   */
+  volumeStatId?: string;
   source: string;
   startYear: number | null;
   zeroMass: ZeroMass;

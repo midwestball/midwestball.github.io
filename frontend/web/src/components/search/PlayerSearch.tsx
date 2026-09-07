@@ -6,6 +6,7 @@ import {
   GROUP_LABEL,
   STATS_BY_GROUP,
   formatStatValue,
+  volumeStatFor,
   type PositionGroup,
   type StatDefinition,
 } from "@/lib/catalog";
@@ -76,8 +77,39 @@ function matchesQuery(row: LeaderboardRow, needle: string): boolean {
   );
 }
 
-function boardHasVolume(rows: LeaderboardRow[]): boolean {
-  return rows.some((row) => row.denomYtd != null);
+/** playerId → published counting-stat value for volumeStatId join. */
+function volumeByPlayer(
+  board: LeaderboardJson | null,
+  volumeStatId: string | undefined,
+): Map<string, number> | null {
+  if (!board || !volumeStatId) return null;
+  const rows = board.stats[volumeStatId];
+  if (!rows?.length) return null;
+  const map = new Map<string, number>();
+  for (const row of rows) {
+    if (row.value != null && Number.isFinite(row.value)) {
+      map.set(row.playerId, row.value);
+    }
+  }
+  return map.size > 0 ? map : null;
+}
+
+function resolveVolume(
+  row: LeaderboardRow,
+  byPlayer: Map<string, number> | null,
+): number | null {
+  if (byPlayer) {
+    const joined = byPlayer.get(row.playerId);
+    if (joined != null) return joined;
+  }
+  return row.denomYtd ?? null;
+}
+
+function boardHasResolvedVolume(
+  rows: LeaderboardRow[],
+  byPlayer: Map<string, number> | null,
+): boolean {
+  return rows.some((row) => resolveVolume(row, byPlayer) != null);
 }
 
 const controlBase =
@@ -111,10 +143,20 @@ export function PlayerSearch({
     [statOptions, statId],
   );
 
+  const volumeSibling = useMemo(() => {
+    if (!group || !selectedStat) return null;
+    return volumeStatFor(selectedStat, group);
+  }, [group, selectedStat]);
+
   const floor = useMemo(() => {
     if (!selectedStat) return null;
     return rampHoldMin(selectedStat, asOfWeek);
   }, [selectedStat, asOfWeek]);
+
+  const volumeMap = useMemo(
+    () => volumeByPlayer(board, selectedStat?.volumeStatId),
+    [board, selectedStat?.volumeStatId],
+  );
 
   const statRows = useMemo(() => {
     if (!statId || !board) return [];
@@ -122,20 +164,21 @@ export function PlayerSearch({
   }, [board, statId]);
 
   const hasVolumeData = useMemo(
-    () => boardHasVolume(statRows),
-    [statRows],
+    () => boardHasResolvedVolume(statRows, volumeMap),
+    [statRows, volumeMap],
   );
 
   const volumeMax = useMemo(() => {
     if (floor == null || !hasVolumeData) return floor ?? 0;
     let max = floor;
     for (const row of statRows) {
-      if (row.denomYtd != null && row.denomYtd > max) max = row.denomYtd;
+      const vol = resolveVolume(row, volumeMap);
+      if (vol != null && vol > max) max = vol;
     }
     return Math.max(max, floor);
-  }, [statRows, floor, hasVolumeData]);
+  }, [statRows, floor, hasVolumeData, volumeMap]);
 
-  /** Slider is interactive only when denoms exist and there is room above the floor. */
+  /** Interactive when resolved volumes exist and there is room above the floor. */
   const volumeInteractive =
     sortEnabled &&
     floor != null &&
@@ -211,22 +254,24 @@ export function PlayerSearch({
   const rankedRows = useMemo(() => {
     if (!statId || !board) return null;
     const rows = board.stats[statId] ?? [];
-    const useVolume = boardHasVolume(rows);
+    const useVolume = boardHasResolvedVolume(rows, volumeMap);
     const filtered = rows.filter((row) => {
       if (!matchesQuery(row, needle)) return false;
       if (useVolume) {
-        // Prefer denom when the board published it; missing denom → drop.
-        if (row.denomYtd == null || row.denomYtd < effectiveMin) return false;
+        const vol = resolveVolume(row, volumeMap);
+        // Missing resolved volume → drop (same as missing denomYtd before).
+        if (vol == null || vol < effectiveMin) return false;
         return true;
       }
-      // Legacy / missing-source boards: fall back to Ballnet ramp–hold flag.
+      // NGS / missing-source boards: fall back to Ballnet ramp–hold flag.
       return row.qualified;
     });
     return sortLeaderboardRows(filtered, sortMode);
-  }, [board, statId, needle, sortMode, effectiveMin]);
+  }, [board, statId, needle, sortMode, effectiveMin, volumeMap]);
 
   const showRanked = Boolean(group && statId);
-  const denomLabel = selectedStat?.denom ?? "volume";
+  const volumeLabel =
+    volumeSibling?.label ?? selectedStat?.denom ?? "volume";
   const sliderValue = Math.min(
     Math.max(effectiveMin, floor ?? 0),
     Math.max(volumeMax, floor ?? 0),
@@ -324,7 +369,7 @@ export function PlayerSearch({
             htmlFor="min-volume"
             className="shrink-0 text-xs text-zinc-500 whitespace-nowrap"
           >
-            Min {denomLabel}
+            Min {volumeLabel}
           </label>
           <input
             id="min-volume"
@@ -336,7 +381,7 @@ export function PlayerSearch({
             disabled={!volumeInteractive}
             onChange={(event) => setMinVolume(Number(event.target.value))}
             className="h-9 min-w-0 flex-1 cursor-pointer accent-zinc-900 disabled:cursor-not-allowed"
-            aria-label={`Minimum ${denomLabel}`}
+            aria-label={`Minimum ${volumeLabel}`}
           />
           <span
             className={`min-w-[2rem] shrink-0 text-right text-sm tabular-nums ${
