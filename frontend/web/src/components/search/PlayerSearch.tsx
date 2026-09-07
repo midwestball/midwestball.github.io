@@ -127,6 +127,7 @@ export function PlayerSearch({
   const [statId, setStatId] = useState<string | null>(null);
   const [sortMode, setSortMode] = useState<SortMode>("best");
   const [minVolume, setMinVolume] = useState<number | null>(null);
+  const [volumeDraft, setVolumeDraft] = useState("");
   const [board, setBoard] = useState<LeaderboardJson | null>(null);
   const [boardStatus, setBoardStatus] = useState<BoardStatus>("idle");
 
@@ -169,22 +170,22 @@ export function PlayerSearch({
   );
 
   const volumeMax = useMemo(() => {
-    if (floor == null || !hasVolumeData) return floor ?? 0;
-    let max = floor;
+    if (!hasVolumeData) return 0;
+    let max = 0;
     for (const row of statRows) {
       const vol = resolveVolume(row, volumeMap);
       if (vol != null && vol > max) max = vol;
     }
-    return Math.max(max, floor);
-  }, [statRows, floor, hasVolumeData, volumeMap]);
+    return max;
+  }, [statRows, hasVolumeData, volumeMap]);
 
-  /** Interactive when resolved volumes exist and there is room above the floor. */
+  /** Interactive when any resolved volume exists (range is 0…max). */
   const volumeInteractive =
     sortEnabled &&
     floor != null &&
     boardStatus === "ready" &&
     hasVolumeData &&
-    volumeMax > floor;
+    volumeMax > 0;
 
   const volumeVisible = sortEnabled && floor != null;
 
@@ -216,10 +217,43 @@ export function PlayerSearch({
   useEffect(() => {
     if (floor == null) {
       setMinVolume(null);
+      setVolumeDraft("");
       return;
     }
+    // Default to ramp–hold baseline; user may drag/type down to 0.
     setMinVolume(floor);
+    setVolumeDraft(String(floor));
   }, [floor, statId]);
+
+  // Board max can arrive after the default; never leave the value above the track.
+  useEffect(() => {
+    if (minVolume == null || volumeMax <= 0) return;
+    if (minVolume > volumeMax) {
+      setMinVolume(volumeMax);
+      setVolumeDraft(String(volumeMax));
+    }
+  }, [volumeMax, minVolume]);
+
+  function clampVolume(n: number): number {
+    const max = Math.max(volumeMax, 0);
+    if (max <= 0) return Math.max(Math.round(n), 0);
+    return Math.min(Math.max(Math.round(n), 0), max);
+  }
+
+  function setVolume(next: number) {
+    const clamped = clampVolume(next);
+    setMinVolume(clamped);
+    setVolumeDraft(String(clamped));
+  }
+
+  function commitVolumeDraft() {
+    const parsed = Number(volumeDraft.trim());
+    if (!Number.isFinite(parsed)) {
+      setVolumeDraft(String(minVolume ?? floor ?? 0));
+      return;
+    }
+    setVolume(parsed);
+  }
 
   function onSelectGroup(next: PositionGroup | "") {
     if (!next) {
@@ -272,9 +306,10 @@ export function PlayerSearch({
   const showRanked = Boolean(group && statId);
   const volumeLabel =
     volumeSibling?.label ?? selectedStat?.denom ?? "volume";
+  const sliderMax = Math.max(volumeMax, 1);
   const sliderValue = Math.min(
-    Math.max(effectiveMin, floor ?? 0),
-    Math.max(volumeMax, floor ?? 0),
+    Math.max(effectiveMin, 0),
+    sliderMax,
   );
 
   return (
@@ -352,7 +387,7 @@ export function PlayerSearch({
         </div>
 
         <div
-          className={`ml-auto flex min-w-[14rem] max-w-sm flex-1 items-center gap-2 ${
+          className={`ml-auto flex w-[16.5rem] shrink-0 items-center gap-1.5 ${
             volumeInteractive ? "" : "opacity-40"
           }`}
           title={
@@ -360,36 +395,60 @@ export function PlayerSearch({
               ? undefined
               : !hasVolumeData && boardStatus === "ready"
                 ? "Volume not available for this stat"
-                : volumeMax <= (floor ?? 0)
-                  ? "No players above the ramp–hold minimum"
-                  : undefined
+                : volumeMax <= 0
+                  ? "No volume data for this stat yet"
+                  : `Default ${floor}; drag or type 0–${Math.round(volumeMax)}`
           }
         >
           <label
             htmlFor="min-volume"
-            className="shrink-0 text-xs text-zinc-500 whitespace-nowrap"
+            className="max-w-[5.5rem] shrink-0 truncate text-xs text-zinc-500"
+            title={`Min ${volumeLabel}`}
           >
             Min {volumeLabel}
           </label>
           <input
             id="min-volume"
             type="range"
-            min={floor ?? 0}
-            max={Math.max(volumeMax, (floor ?? 0) + 1)}
+            min={0}
+            max={sliderMax}
             step={1}
             value={volumeVisible ? sliderValue : 0}
             disabled={!volumeInteractive}
-            onChange={(event) => setMinVolume(Number(event.target.value))}
-            className="h-9 min-w-0 flex-1 cursor-pointer accent-zinc-900 disabled:cursor-not-allowed"
+            onChange={(event) => setVolume(Number(event.target.value))}
+            className="h-9 w-20 shrink-0 cursor-pointer accent-zinc-900 disabled:cursor-not-allowed"
             aria-label={`Minimum ${volumeLabel}`}
           />
-          <span
-            className={`min-w-[2rem] shrink-0 text-right text-sm tabular-nums ${
-              volumeInteractive ? "text-zinc-900" : "text-zinc-400"
+          <input
+            type="number"
+            inputMode="numeric"
+            min={0}
+            max={sliderMax}
+            step={1}
+            value={volumeVisible ? volumeDraft : ""}
+            disabled={!volumeInteractive}
+            onChange={(event) => {
+              const raw = event.target.value;
+              setVolumeDraft(raw);
+              if (raw.trim() === "") return;
+              const parsed = Number(raw);
+              if (Number.isFinite(parsed)) {
+                setMinVolume(clampVolume(parsed));
+              }
+            }}
+            onBlur={commitVolumeDraft}
+            onKeyDown={(event) => {
+              if (event.key === "Enter") {
+                event.currentTarget.blur();
+              }
+            }}
+            className={`h-9 w-14 shrink-0 rounded-none border px-1 text-right text-sm tabular-nums outline-none ${
+              volumeInteractive
+                ? "border-zinc-200 bg-white text-zinc-900 focus:border-zinc-400"
+                : "cursor-not-allowed border-zinc-100 bg-zinc-50 text-zinc-400"
             }`}
-          >
-            {volumeVisible && floor != null ? Math.round(sliderValue) : "—"}
-          </span>
+            aria-label={`Minimum ${volumeLabel} value`}
+          />
         </div>
       </div>
 
