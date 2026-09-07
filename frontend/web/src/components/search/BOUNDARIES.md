@@ -6,7 +6,8 @@
 - Ranked Best/Worst lists load `leaderboards/{season}/w{week}/{group}.json` via the search server action — never N player-page fetches.
 - Sort on oriented percentile (100 = good); Best = descending, Worst = ascending; null percentiles last.
 - Filter row sits under the search input; Stat and Best/Worst stay visible but disabled (gray) until prerequisites are set.
-- Min-volume control sits on the same row, right-aligned (`ml-auto`), fixed compact width (does not `flex-1`). Default = ramp–hold `minNBase × min(asOfWeek, 5)`; range is **0…max(volume)** so users may go below baseline. Pair the range with a direct number input for large spans.
+- Filter controls and min-volume may wrap independently on narrow widths (`flex-wrap` on both the outer row and the filter group).
+- Min-volume control: label **Min Volume** (specific catalog volume name in the tooltip). On a shared row it `grow`s to fill from the filters to the right edge; `basis-[12rem]` lets it wrap on small screens, then grows to full width. The range track is `flex-1`; the number input stays fixed for precision. Default = ramp–hold `minNBase × min(asOfWeek, 5)`; range is **0…max(volume)**.
 - Resolve volume as `board.stats[volumeStatId].value` joined by `playerId` when the catalog sets `volumeStatId`; else fall back to the rate row’s `denomYtd`. If neither yields any values, filter with `qualified` and keep the slider disabled.
 - Label the control from the volume sibling’s catalog `label` (e.g. “Min Field Goal Attempts”), not the rate row’s display `denom`.
 - Keep square chrome (`rounded-none`, no pills/shadows) on Filter controls.

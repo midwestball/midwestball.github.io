@@ -322,72 +322,74 @@ export function PlayerSearch({
         className="h-9 w-full rounded-none border border-zinc-200 bg-white px-2 text-sm text-zinc-900 outline-none placeholder:text-zinc-400 focus:border-zinc-400"
       />
 
-      <div className="flex flex-wrap items-center gap-2">
-        <span className="text-xs font-semibold tracking-[0.15em] text-zinc-500 uppercase">
-          Filter
-        </span>
-        <select
-          value={group ?? ""}
-          onChange={(event) =>
-            onSelectGroup(event.target.value as PositionGroup | "")
-          }
-          aria-label="Position group"
-          className={controlEnabled}
-        >
-          <option value="">Position</option>
-          {FILTER_GROUPS.map((g) => (
-            <option key={g} value={g}>
-              {GROUP_LABEL[g]}
-            </option>
-          ))}
-        </select>
-        <select
-          value={statId ?? ""}
-          onChange={(event) => onSelectStat(event.target.value)}
-          aria-label="Stat"
-          disabled={!statEnabled}
-          className={statEnabled ? controlEnabled : controlDisabled}
-        >
-          <option value="">Stat</option>
-          {statOptions.map((stat) => (
-            <option key={stat.id} value={stat.id}>
-              {stat.label}
-            </option>
-          ))}
-        </select>
-        <div className="flex">
-          <button
-            type="button"
-            disabled={!sortEnabled}
-            onClick={() => setSortMode("best")}
-            className={`h-9 border px-3 text-sm rounded-none ${
-              !sortEnabled
-                ? "cursor-not-allowed border-zinc-100 bg-zinc-50 text-zinc-400"
-                : sortMode === "best"
-                  ? "border-zinc-900 bg-zinc-900 text-white"
-                  : "border-zinc-200 bg-white text-zinc-700 hover:bg-zinc-50"
-            }`}
+      <div className="flex flex-wrap items-center gap-x-1.5 gap-y-2">
+        <div className="flex flex-wrap items-center gap-1.5">
+          <span className="shrink-0 text-xs font-semibold tracking-[0.15em] text-zinc-500 uppercase">
+            Filter
+          </span>
+          <select
+            value={group ?? ""}
+            onChange={(event) =>
+              onSelectGroup(event.target.value as PositionGroup | "")
+            }
+            aria-label="Position group"
+            className={controlEnabled}
           >
-            Best
-          </button>
-          <button
-            type="button"
-            disabled={!sortEnabled}
-            onClick={() => setSortMode("worst")}
-            className={`h-9 border border-l-0 px-3 text-sm rounded-none ${
-              !sortEnabled
-                ? "cursor-not-allowed border-zinc-100 bg-zinc-50 text-zinc-400"
-                : sortMode === "worst"
-                  ? "border-zinc-900 bg-zinc-900 text-white"
-                  : "border-zinc-200 bg-white text-zinc-700 hover:bg-zinc-50"
-            }`}
+            <option value="">Position</option>
+            {FILTER_GROUPS.map((g) => (
+              <option key={g} value={g}>
+                {GROUP_LABEL[g]}
+              </option>
+            ))}
+          </select>
+          <select
+            value={statId ?? ""}
+            onChange={(event) => onSelectStat(event.target.value)}
+            aria-label="Stat"
+            disabled={!statEnabled}
+            className={`min-w-0 max-w-[9rem] truncate ${statEnabled ? controlEnabled : controlDisabled}`}
           >
-            Worst
-          </button>
+            <option value="">Stat</option>
+            {statOptions.map((stat) => (
+              <option key={stat.id} value={stat.id}>
+                {stat.label}
+              </option>
+            ))}
+          </select>
+          <div className="flex shrink-0">
+            <button
+              type="button"
+              disabled={!sortEnabled}
+              onClick={() => setSortMode("best")}
+              className={`h-9 border px-2 text-sm rounded-none ${
+                !sortEnabled
+                  ? "cursor-not-allowed border-zinc-100 bg-zinc-50 text-zinc-400"
+                  : sortMode === "best"
+                    ? "border-zinc-900 bg-zinc-900 text-white"
+                    : "border-zinc-200 bg-white text-zinc-700 hover:bg-zinc-50"
+              }`}
+            >
+              Best
+            </button>
+            <button
+              type="button"
+              disabled={!sortEnabled}
+              onClick={() => setSortMode("worst")}
+              className={`h-9 border border-l-0 px-2 text-sm rounded-none ${
+                !sortEnabled
+                  ? "cursor-not-allowed border-zinc-100 bg-zinc-50 text-zinc-400"
+                  : sortMode === "worst"
+                    ? "border-zinc-900 bg-zinc-900 text-white"
+                    : "border-zinc-200 bg-white text-zinc-700 hover:bg-zinc-50"
+              }`}
+            >
+              Worst
+            </button>
+          </div>
         </div>
 
         <div
-          className={`ml-auto flex w-[16.5rem] shrink-0 items-center gap-1.5 ${
+          className={`flex min-w-0 grow basis-[12rem] items-center gap-1 ${
             volumeInteractive ? "" : "opacity-40"
           }`}
           title={
@@ -397,15 +399,14 @@ export function PlayerSearch({
                 ? "Volume not available for this stat"
                 : volumeMax <= 0
                   ? "No volume data for this stat yet"
-                  : `Default ${floor}; drag or type 0–${Math.round(volumeMax)}`
+                  : `Min ${volumeLabel} (default ${floor}; 0–${Math.round(volumeMax)})`
           }
         >
           <label
             htmlFor="min-volume"
-            className="max-w-[5.5rem] shrink-0 truncate text-xs text-zinc-500"
-            title={`Min ${volumeLabel}`}
+            className="shrink-0 text-xs text-zinc-500 whitespace-nowrap"
           >
-            Min {volumeLabel}
+            Min Volume
           </label>
           <input
             id="min-volume"
@@ -416,7 +417,7 @@ export function PlayerSearch({
             value={volumeVisible ? sliderValue : 0}
             disabled={!volumeInteractive}
             onChange={(event) => setVolume(Number(event.target.value))}
-            className="h-9 w-20 shrink-0 cursor-pointer accent-zinc-900 disabled:cursor-not-allowed"
+            className="h-9 min-w-0 flex-1 cursor-pointer accent-zinc-900 disabled:cursor-not-allowed"
             aria-label={`Minimum ${volumeLabel}`}
           />
           <input
@@ -442,7 +443,7 @@ export function PlayerSearch({
                 event.currentTarget.blur();
               }
             }}
-            className={`h-9 w-14 shrink-0 rounded-none border px-1 text-right text-sm tabular-nums outline-none ${
+            className={`h-9 w-11 shrink-0 rounded-none border px-0.5 text-right text-sm tabular-nums outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none ${
               volumeInteractive
                 ? "border-zinc-200 bg-white text-zinc-900 focus:border-zinc-400"
                 : "cursor-not-allowed border-zinc-100 bg-zinc-50 text-zinc-400"
