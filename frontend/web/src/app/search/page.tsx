@@ -1,12 +1,17 @@
 import { PlayerSearch } from "@/components/search/PlayerSearch";
-import { loadCurrentSeasonContext, loadPlayerIndex } from "@/data/players";
+import {
+  loadCurrentSeasonContext,
+  loadPlayerIndex,
+  loadPublishedSeasons,
+} from "@/data/players";
 
 export const revalidate = 3600;
 
 export default async function SearchPage() {
-  const [players, { season, asOfWeek }] = await Promise.all([
+  const [players, current, seasons] = await Promise.all([
     loadPlayerIndex(),
     loadCurrentSeasonContext(),
+    loadPublishedSeasons(),
   ]);
 
   return (
@@ -24,7 +29,11 @@ export default async function SearchPage() {
         </div>
       </div>
       <main className="mx-auto max-w-3xl px-4 py-4">
-        <PlayerSearch players={players} season={season} asOfWeek={asOfWeek} />
+        <PlayerSearch
+          players={players}
+          seasons={seasons}
+          initialSeason={current.season}
+        />
       </main>
     </div>
   );

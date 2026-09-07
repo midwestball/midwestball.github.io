@@ -32,10 +32,15 @@ const FILTER_GROUPS: PositionGroup[] = [
 type SortMode = "best" | "worst";
 type BoardStatus = "idle" | "loading" | "ready" | "error";
 
-type PlayerSearchProps = {
-  players: PlayerBio[];
+type PublishedSeason = {
   season: number;
   asOfWeek: number;
+};
+
+type PlayerSearchProps = {
+  players: PlayerBio[];
+  seasons: PublishedSeason[];
+  initialSeason: number;
 };
 
 /** Mirror Ballnet ramp–hold: min_n = n_base × min(w, 5). */
@@ -119,10 +124,11 @@ const controlDisabled = `${controlBase} cursor-not-allowed border-zinc-100 bg-zi
 
 export function PlayerSearch({
   players,
-  season,
-  asOfWeek,
+  seasons,
+  initialSeason,
 }: PlayerSearchProps) {
   const [query, setQuery] = useState("");
+  const [season, setSeason] = useState(initialSeason);
   const [group, setGroup] = useState<PositionGroup | null>(null);
   const [statId, setStatId] = useState<string | null>(null);
   const [sortMode, setSortMode] = useState<SortMode>("best");
@@ -130,6 +136,21 @@ export function PlayerSearch({
   const [volumeDraft, setVolumeDraft] = useState("");
   const [board, setBoard] = useState<LeaderboardJson | null>(null);
   const [boardStatus, setBoardStatus] = useState<BoardStatus>("idle");
+
+  const seasonOptions = useMemo(() => {
+    if (seasons.some((s) => s.season === initialSeason)) return seasons;
+    return [{ season: initialSeason, asOfWeek: 18 }, ...seasons].sort(
+      (a, b) => b.season - a.season,
+    );
+  }, [seasons, initialSeason]);
+
+  const asOfWeek = useMemo(() => {
+    return (
+      seasonOptions.find((s) => s.season === season)?.asOfWeek ??
+      seasonOptions[0]?.asOfWeek ??
+      18
+    );
+  }, [seasonOptions, season]);
 
   const statEnabled = group != null;
   const sortEnabled = group != null && statId != null;
@@ -281,9 +302,10 @@ export function PlayerSearch({
   const effectiveMin = minVolume ?? floor ?? 0;
 
   const bioResults = useMemo(() => {
-    const scoped = group ? filterPlayersByGroup(players, group) : players;
+    const inSeason = players.filter((player) => player.seasons.includes(season));
+    const scoped = group ? filterPlayersByGroup(inSeason, group) : inSeason;
     return searchPlayers(scoped, query);
-  }, [players, group, query]);
+  }, [players, group, query, season]);
 
   const rankedRows = useMemo(() => {
     if (!statId || !board) return null;
@@ -314,13 +336,27 @@ export function PlayerSearch({
 
   return (
     <div className="space-y-2">
-      <input
-        type="search"
-        value={query}
-        onChange={(event) => setQuery(event.target.value)}
-        placeholder="Search players, positions, teams"
-        className="h-9 w-full rounded-none border border-zinc-200 bg-white px-2 text-sm text-zinc-900 outline-none placeholder:text-zinc-400 focus:border-zinc-400"
-      />
+      <div className="flex items-center gap-1.5">
+        <input
+          type="search"
+          value={query}
+          onChange={(event) => setQuery(event.target.value)}
+          placeholder="Search players, positions, teams"
+          className="h-9 min-w-0 flex-1 rounded-none border border-zinc-200 bg-white px-2 text-sm text-zinc-900 outline-none placeholder:text-zinc-400 focus:border-zinc-400"
+        />
+        <select
+          value={season}
+          onChange={(event) => setSeason(Number(event.target.value))}
+          aria-label="Season"
+          className={`${controlEnabled} shrink-0`}
+        >
+          {seasonOptions.map((row) => (
+            <option key={row.season} value={row.season}>
+              {row.season}
+            </option>
+          ))}
+        </select>
+      </div>
 
       <div className="flex flex-wrap items-center gap-x-1.5 gap-y-2">
         <div className="flex flex-wrap items-center gap-1.5">
@@ -465,7 +501,7 @@ export function PlayerSearch({
             {rankedRows.map((row) => (
               <li key={row.playerId}>
                 <Link
-                  href={`/players/${row.playerId}`}
+                  href={`/players/${row.playerId}?season=${season}`}
                   className="flex items-center justify-between rounded-none border border-zinc-200 bg-white px-3 py-2 hover:bg-zinc-50"
                 >
                   <div>
@@ -503,7 +539,7 @@ export function PlayerSearch({
             {bioResults.map((player) => (
               <li key={player.id}>
                 <Link
-                  href={`/players/${player.id}`}
+                  href={`/players/${player.id}?season=${season}`}
                   className="flex items-center justify-between rounded-none border border-zinc-200 bg-white px-3 py-2 hover:bg-zinc-50"
                 >
                   <div>
@@ -512,9 +548,7 @@ export function PlayerSearch({
                       {player.position} · {player.team}
                     </p>
                   </div>
-                  <span className="text-xs text-zinc-400">
-                    {player.seasons[player.seasons.length - 1]}
-                  </span>
+                  <span className="text-xs text-zinc-400">{season}</span>
                 </Link>
               </li>
             ))}

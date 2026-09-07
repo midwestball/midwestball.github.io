@@ -3,7 +3,9 @@
 ## Always
 
 - Position filter options are publishable **groups** (`GROUP_LABEL`), not raw NFL codes; stats come from `STATS_BY_GROUP` (skip `alwaysUnavailable`).
+- Year select sits to the right of the search input; options come from Ballnet `index/seasons.json` (plus current). Bio list is scoped to players whose `seasons` include the selected year. Changing year also reloads `leaderboards/{season}/w{asOfWeek}/…` using that season’s published final week and recomputes the ramp–hold floor.
 - Ranked Best/Worst lists load `leaderboards/{season}/w{week}/{group}.json` via the search server action — never N player-page fetches.
+- Player result links include `?season=` for the selected search year.
 - Sort on oriented percentile (100 = good); Best = descending, Worst = ascending; null percentiles last.
 - Filter row sits under the search input; Stat and Best/Worst stay visible but disabled (gray) until prerequisites are set.
 - Filter controls and min-volume may wrap independently on narrow widths (`flex-wrap` on both the outer row and the filter group).
