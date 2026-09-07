@@ -6,7 +6,7 @@ Search needs position → stat → best/worst ranking, but `index/players.json` 
 
 ## Decision
 
-Ballnet publishes one precomputed board per publishable group at `leaderboards/{season}/w{week}/{group}.json`, built from Stage E `ytd_*_pct.parquet`. Rows still include `denomYtd` for ramp–hold parity and fallback. Knowball loads that artifact (Storage → local fallback) and sorts client-side; percentiles are already oriented so Best = high percentile. Min-volume slider defaults to ramp–hold `minNBase × min(asOfWeek, 4)` and filters on catalog `volumeStatId` joined from the sibling counting-stat rows on the same board (`denomYtd` only when `volumeStatId` is unset or the sibling join misses).
+Ballnet publishes one precomputed board per publishable group at `leaderboards/{season}/w{week}/{group}.json`, built from Stage E `ytd_*_pct.parquet`. Rows still include `denomYtd` for ramp–hold parity and fallback. Knowball loads that artifact (Storage → local fallback) and sorts client-side; percentiles are already oriented so Best = high percentile. Min-volume slider defaults to ramp–hold `minNBase × min(asOfWeek, 5)` and filters on catalog `volumeStatId` joined from the sibling counting-stat rows on the same board (`denomYtd` only when `volumeStatId` is unset or the sibling join misses).
 
 ## Consequences
 

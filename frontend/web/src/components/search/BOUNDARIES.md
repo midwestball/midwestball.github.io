@@ -6,7 +6,7 @@
 - Ranked Best/Worst lists load `leaderboards/{season}/w{week}/{group}.json` via the search server action — never N player-page fetches.
 - Sort on oriented percentile (100 = good); Best = descending, Worst = ascending; null percentiles last.
 - Filter row sits under the search input; Stat and Best/Worst stay visible but disabled (gray) until prerequisites are set.
-- Min-volume slider sits on the same row, right-aligned (`ml-auto`). Floor and default = ramp–hold `minNBase × min(asOfWeek, 4)`.
+- Min-volume slider sits on the same row, right-aligned (`ml-auto`). Floor and default = ramp–hold `minNBase × min(asOfWeek, 5)`.
 - Resolve volume as `board.stats[volumeStatId].value` joined by `playerId` when the catalog sets `volumeStatId`; else fall back to the rate row’s `denomYtd`. If neither yields any values, filter with `qualified` and keep the slider disabled.
 - Label the slider from the volume sibling’s catalog `label` (e.g. “Min Field Goal Attempts”), not the rate row’s display `denom`.
 - Keep square chrome (`rounded-none`, no pills/shadows) on Filter controls.

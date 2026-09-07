@@ -38,12 +38,12 @@ type PlayerSearchProps = {
   asOfWeek: number;
 };
 
-/** Mirror Ballnet ramp–hold: min_n = n_base × min(w, 4). */
+/** Mirror Ballnet ramp–hold: min_n = n_base × min(w, 5). */
 function rampHoldMin(stat: StatDefinition, asOfWeek: number): number | null {
   if (stat.minNBase == null) return null;
   const week = Number(asOfWeek);
   if (!Number.isFinite(week) || week < 1) return null;
-  return stat.minNBase * Math.min(week, 4);
+  return stat.minNBase * Math.min(week, 5);
 }
 
 function sortLeaderboardRows(

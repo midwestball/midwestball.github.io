@@ -51,7 +51,7 @@ player_stat_values
   unavailable_reason null | insufficient_sample | missing_source | not_in_nflverse
 ```
 
-`as_of_week` is the NFL week being viewed. Ramp–hold uses `min_n = n_base × min(w, 4)` in Ballnet, then sets `qualified`.
+`as_of_week` is the NFL week being viewed. Ramp–hold uses `min_n = n_base × min(w, 5)` in Ballnet, then sets `qualified`.
 
 Publish path: Storage (or local `data/`) serves **scalar** `PlayerPageJson` plus **shared** `league/*.json`. Knowball merges at fetch time — still not a runtime SQL client. Weekly home boards are separate Stage H objects under `highlights/{season}/w{week}.json`. Expand charts load allowlist single-game KDEs from `dists/league_weekly/{season}/w{week}/{group}.json` (`scope: "league_weekly"`) — never the YTD `league/` curves.
 
@@ -70,7 +70,7 @@ stats: { [statId]: [{
 }] }
 ```
 
-Built from Stage E `ytd_*_pct.parquet`. Knowball search Filter sorts Best/Worst on `percentile` without fetching player pages. Min-volume slider defaults to ramp–hold `minNBase × min(asOfWeek, 4)` and prefers catalog `volumeStatId` → `board.stats[volumeStatId].value` joined by `playerId`; `denomYtd` is fallback only. Rows may include unqualified players (`percentile: null`); UI keeps nulls last.
+Built from Stage E `ytd_*_pct.parquet`. Knowball search Filter sorts Best/Worst on `percentile` without fetching player pages. Min-volume slider defaults to ramp–hold `minNBase × min(asOfWeek, 5)` and prefers catalog `volumeStatId` → `board.stats[volumeStatId].value` joined by `playerId`; `denomYtd` is fallback only. Rows may include unqualified players (`percentile: null`); UI keeps nulls last.
 
 ## Do not
 
