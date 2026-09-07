@@ -71,6 +71,8 @@ export type LeaderboardRow = {
   value: number | null;
   /** Oriented inclusive CDF — 100 is the good end for every catalog stat. */
   percentile: number | null;
+  /** Season-to-date denominator used in ramp–hold (attempts, targets, …). */
+  denomYtd: number | null;
   qualified: boolean;
 };
 

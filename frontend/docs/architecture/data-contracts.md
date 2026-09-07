@@ -65,11 +65,12 @@ season, asOfWeek, positionGroup
 stats: { [statId]: [{
   playerId, name, position, team,
   value, percentile,  # percentile already oriented (100 = good)
+  denomYtd,        # season-to-date denom for ramp–hold / min-volume slider
   qualified
 }] }
 ```
 
-Built from Stage E `ytd_*_pct.parquet`. Knowball search Filter sorts Best/Worst on `percentile` without fetching player pages. Rows may include unqualified players (`percentile: null`); UI keeps nulls last.
+Built from Stage E `ytd_*_pct.parquet`. Knowball search Filter sorts Best/Worst on `percentile` without fetching player pages. Min-volume slider defaults to ramp–hold `minNBase × min(asOfWeek, 4)` and filters on `denomYtd`. Rows may include unqualified players (`percentile: null`); UI keeps nulls last.
 
 ## Do not
 

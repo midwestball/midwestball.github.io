@@ -7,6 +7,7 @@ import {
   STATS_BY_GROUP,
   formatStatValue,
   type PositionGroup,
+  type StatDefinition,
 } from "@/lib/catalog";
 import type { LeaderboardJson, LeaderboardRow, PlayerBio } from "@/lib/payload";
 import {
@@ -34,6 +35,12 @@ type PlayerSearchProps = {
   season: number;
   asOfWeek: number;
 };
+
+/** Mirror Ballnet ramp–hold: min_n = n_base × min(w, 4). */
+function rampHoldMin(stat: StatDefinition, asOfWeek: number): number | null {
+  if (stat.minNBase == null) return null;
+  return stat.minNBase * Math.min(Math.max(asOfWeek, 1), 4);
+}
 
 function sortLeaderboardRows(
   rows: LeaderboardRow[],
@@ -80,6 +87,7 @@ export function PlayerSearch({
   const [group, setGroup] = useState<PositionGroup | null>(null);
   const [statId, setStatId] = useState<string | null>(null);
   const [sortMode, setSortMode] = useState<SortMode>("best");
+  const [minVolume, setMinVolume] = useState<number | null>(null);
   const [board, setBoard] = useState<LeaderboardJson | null>(null);
   const [boardError, setBoardError] = useState(false);
   const [pending, startTransition] = useTransition();
@@ -96,6 +104,22 @@ export function PlayerSearch({
     () => statOptions.find((s) => s.id === statId) ?? null,
     [statOptions, statId],
   );
+
+  const floor = useMemo(() => {
+    if (!selectedStat) return null;
+    return rampHoldMin(selectedStat, asOfWeek);
+  }, [selectedStat, asOfWeek]);
+
+  const volumeEnabled = sortEnabled && floor != null;
+
+  const volumeMax = useMemo(() => {
+    if (!statId || !board || floor == null) return floor ?? 0;
+    let max = floor;
+    for (const row of board.stats[statId] ?? []) {
+      if (row.denomYtd != null && row.denomYtd > max) max = row.denomYtd;
+    }
+    return Math.max(max, floor);
+  }, [board, statId, floor]);
 
   useEffect(() => {
     if (!group || !statId) {
@@ -115,6 +139,14 @@ export function PlayerSearch({
       cancelled = true;
     };
   }, [group, statId, season, asOfWeek]);
+
+  useEffect(() => {
+    if (floor == null) {
+      setMinVolume(null);
+      return;
+    }
+    setMinVolume(floor);
+  }, [floor, statId]);
 
   function onSelectGroup(next: PositionGroup | "") {
     if (!next) {
@@ -139,6 +171,7 @@ export function PlayerSearch({
   }
 
   const needle = query.trim().toLowerCase();
+  const effectiveMin = minVolume ?? floor ?? 0;
 
   const bioResults = useMemo(() => {
     const scoped = group ? filterPlayersByGroup(players, group) : players;
@@ -148,11 +181,16 @@ export function PlayerSearch({
   const rankedRows = useMemo(() => {
     if (!statId || !board) return null;
     const rows = board.stats[statId] ?? [];
-    const filtered = rows.filter((row) => matchesQuery(row, needle));
+    const filtered = rows.filter((row) => {
+      if (!matchesQuery(row, needle)) return false;
+      if (row.denomYtd == null || row.denomYtd < effectiveMin) return false;
+      return true;
+    });
     return sortLeaderboardRows(filtered, sortMode);
-  }, [board, statId, needle, sortMode]);
+  }, [board, statId, needle, sortMode, effectiveMin]);
 
   const showRanked = Boolean(group && statId);
+  const denomLabel = selectedStat?.denom ?? "volume";
 
   return (
     <div className="space-y-2">
@@ -226,6 +264,38 @@ export function PlayerSearch({
           >
             Worst
           </button>
+        </div>
+
+        <div
+          className={`ml-auto flex min-w-[12rem] max-w-xs flex-1 items-center gap-2 ${
+            volumeEnabled ? "" : "opacity-40"
+          }`}
+        >
+          <label
+            htmlFor="min-volume"
+            className="shrink-0 text-xs text-zinc-500 whitespace-nowrap"
+          >
+            Min {denomLabel}
+          </label>
+          <input
+            id="min-volume"
+            type="range"
+            min={floor ?? 0}
+            max={volumeMax}
+            step={1}
+            value={volumeEnabled ? effectiveMin : (floor ?? 0)}
+            disabled={!volumeEnabled}
+            onChange={(event) => setMinVolume(Number(event.target.value))}
+            className="h-9 min-w-0 flex-1 cursor-pointer accent-zinc-900 disabled:cursor-not-allowed"
+            aria-label={`Minimum ${denomLabel}`}
+          />
+          <span
+            className={`w-8 shrink-0 text-right text-sm tabular-nums ${
+              volumeEnabled ? "text-zinc-900" : "text-zinc-400"
+            }`}
+          >
+            {volumeEnabled ? Math.round(effectiveMin) : "—"}
+          </span>
         </div>
       </div>
 
