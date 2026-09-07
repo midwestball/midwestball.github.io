@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import {
   GROUP_LABEL,
@@ -29,6 +29,7 @@ const FILTER_GROUPS: PositionGroup[] = [
 ];
 
 type SortMode = "best" | "worst";
+type BoardStatus = "idle" | "loading" | "ready" | "error";
 
 type PlayerSearchProps = {
   players: PlayerBio[];
@@ -39,7 +40,9 @@ type PlayerSearchProps = {
 /** Mirror Ballnet ramp–hold: min_n = n_base × min(w, 4). */
 function rampHoldMin(stat: StatDefinition, asOfWeek: number): number | null {
   if (stat.minNBase == null) return null;
-  return stat.minNBase * Math.min(Math.max(asOfWeek, 1), 4);
+  const week = Number(asOfWeek);
+  if (!Number.isFinite(week) || week < 1) return null;
+  return stat.minNBase * Math.min(week, 4);
 }
 
 function sortLeaderboardRows(
@@ -73,6 +76,10 @@ function matchesQuery(row: LeaderboardRow, needle: string): boolean {
   );
 }
 
+function boardHasVolume(rows: LeaderboardRow[]): boolean {
+  return rows.some((row) => row.denomYtd != null);
+}
+
 const controlBase =
   "h-9 border border-zinc-200 bg-white px-2 text-sm outline-none rounded-none";
 const controlEnabled = `${controlBase} text-zinc-900 focus:border-zinc-400`;
@@ -89,8 +96,7 @@ export function PlayerSearch({
   const [sortMode, setSortMode] = useState<SortMode>("best");
   const [minVolume, setMinVolume] = useState<number | null>(null);
   const [board, setBoard] = useState<LeaderboardJson | null>(null);
-  const [boardError, setBoardError] = useState(false);
-  const [pending, startTransition] = useTransition();
+  const [boardStatus, setBoardStatus] = useState<BoardStatus>("idle");
 
   const statEnabled = group != null;
   const sortEnabled = group != null && statId != null;
@@ -110,31 +116,55 @@ export function PlayerSearch({
     return rampHoldMin(selectedStat, asOfWeek);
   }, [selectedStat, asOfWeek]);
 
-  const volumeEnabled = sortEnabled && floor != null;
+  const statRows = useMemo(() => {
+    if (!statId || !board) return [];
+    return board.stats[statId] ?? [];
+  }, [board, statId]);
+
+  const hasVolumeData = useMemo(
+    () => boardHasVolume(statRows),
+    [statRows],
+  );
 
   const volumeMax = useMemo(() => {
-    if (!statId || !board || floor == null) return floor ?? 0;
+    if (floor == null || !hasVolumeData) return floor ?? 0;
     let max = floor;
-    for (const row of board.stats[statId] ?? []) {
+    for (const row of statRows) {
       if (row.denomYtd != null && row.denomYtd > max) max = row.denomYtd;
     }
     return Math.max(max, floor);
-  }, [board, statId, floor]);
+  }, [statRows, floor, hasVolumeData]);
+
+  /** Slider is interactive only when denoms exist and there is room above the floor. */
+  const volumeInteractive =
+    sortEnabled &&
+    floor != null &&
+    boardStatus === "ready" &&
+    hasVolumeData &&
+    volumeMax > floor;
+
+  const volumeVisible = sortEnabled && floor != null;
 
   useEffect(() => {
     if (!group || !statId) {
       setBoard(null);
-      setBoardError(false);
+      setBoardStatus("idle");
       return;
     }
     let cancelled = false;
-    startTransition(() => {
-      void fetchLeaderboard(group, season, asOfWeek).then((payload) => {
+    setBoard(null);
+    setBoardStatus("loading");
+    void fetchLeaderboard(group, season, asOfWeek)
+      .then((payload) => {
         if (cancelled) return;
         setBoard(payload);
-        setBoardError(!payload);
+        setBoardStatus(payload ? "ready" : "error");
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setBoard(null);
+        setBoardStatus("error");
       });
-    });
     return () => {
       cancelled = true;
     };
@@ -181,16 +211,26 @@ export function PlayerSearch({
   const rankedRows = useMemo(() => {
     if (!statId || !board) return null;
     const rows = board.stats[statId] ?? [];
+    const useVolume = boardHasVolume(rows);
     const filtered = rows.filter((row) => {
       if (!matchesQuery(row, needle)) return false;
-      if (row.denomYtd == null || row.denomYtd < effectiveMin) return false;
-      return true;
+      if (useVolume) {
+        // Prefer denom when the board published it; missing denom → drop.
+        if (row.denomYtd == null || row.denomYtd < effectiveMin) return false;
+        return true;
+      }
+      // Legacy / missing-source boards: fall back to Ballnet ramp–hold flag.
+      return row.qualified;
     });
     return sortLeaderboardRows(filtered, sortMode);
   }, [board, statId, needle, sortMode, effectiveMin]);
 
   const showRanked = Boolean(group && statId);
   const denomLabel = selectedStat?.denom ?? "volume";
+  const sliderValue = Math.min(
+    Math.max(effectiveMin, floor ?? 0),
+    Math.max(volumeMax, floor ?? 0),
+  );
 
   return (
     <div className="space-y-2">
@@ -267,9 +307,18 @@ export function PlayerSearch({
         </div>
 
         <div
-          className={`ml-auto flex min-w-[12rem] max-w-xs flex-1 items-center gap-2 ${
-            volumeEnabled ? "" : "opacity-40"
+          className={`ml-auto flex min-w-[14rem] max-w-sm flex-1 items-center gap-2 ${
+            volumeInteractive ? "" : "opacity-40"
           }`}
+          title={
+            !volumeVisible
+              ? undefined
+              : !hasVolumeData && boardStatus === "ready"
+                ? "Volume not available for this stat"
+                : volumeMax <= (floor ?? 0)
+                  ? "No players above the ramp–hold minimum"
+                  : undefined
+          }
         >
           <label
             htmlFor="min-volume"
@@ -281,28 +330,28 @@ export function PlayerSearch({
             id="min-volume"
             type="range"
             min={floor ?? 0}
-            max={volumeMax}
+            max={Math.max(volumeMax, (floor ?? 0) + 1)}
             step={1}
-            value={volumeEnabled ? effectiveMin : (floor ?? 0)}
-            disabled={!volumeEnabled}
+            value={volumeVisible ? sliderValue : 0}
+            disabled={!volumeInteractive}
             onChange={(event) => setMinVolume(Number(event.target.value))}
             className="h-9 min-w-0 flex-1 cursor-pointer accent-zinc-900 disabled:cursor-not-allowed"
             aria-label={`Minimum ${denomLabel}`}
           />
           <span
-            className={`w-8 shrink-0 text-right text-sm tabular-nums ${
-              volumeEnabled ? "text-zinc-900" : "text-zinc-400"
+            className={`min-w-[2rem] shrink-0 text-right text-sm tabular-nums ${
+              volumeInteractive ? "text-zinc-900" : "text-zinc-400"
             }`}
           >
-            {volumeEnabled ? Math.round(effectiveMin) : "—"}
+            {volumeVisible && floor != null ? Math.round(sliderValue) : "—"}
           </span>
         </div>
       </div>
 
       {showRanked ? (
-        pending && !board ? (
+        boardStatus === "loading" ? (
           <p className="text-sm text-zinc-500">Loading rankings…</p>
-        ) : boardError ? (
+        ) : boardStatus === "error" ? (
           <p className="text-sm text-zinc-500">
             Rankings not published for this slice yet.
           </p>
@@ -337,7 +386,11 @@ export function PlayerSearch({
             ))}
           </ul>
         ) : (
-          <p className="text-sm text-zinc-500">No matching players.</p>
+          <p className="text-sm text-zinc-500">
+            {!hasVolumeData && boardStatus === "ready"
+              ? "No volume data for this stat yet."
+              : "No matching players."}
+          </p>
         )
       ) : (
         <>
