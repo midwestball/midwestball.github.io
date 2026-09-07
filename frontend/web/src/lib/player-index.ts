@@ -1,4 +1,9 @@
 import type { PlayerBio } from "@/lib/payload";
+import {
+  isPositionCode,
+  positionGroupOf,
+  type PositionGroup,
+} from "@/lib/catalog";
 
 /** Lab-only placeholders (layout experiments). Not part of Ballnet publish. */
 export const DEMO_PLAYERS: PlayerBio[] = [
@@ -93,5 +98,15 @@ export function searchPlayers(
       player.position.toLowerCase().includes(needle) ||
       player.team.toLowerCase().includes(needle)
     );
+  });
+}
+
+export function filterPlayersByGroup(
+  players: PlayerBio[],
+  group: PositionGroup,
+): PlayerBio[] {
+  return players.filter((player) => {
+    if (!isPositionCode(player.position)) return false;
+    return positionGroupOf(player.position) === group;
   });
 }

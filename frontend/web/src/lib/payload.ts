@@ -61,3 +61,23 @@ export type HighlightsBoardJson = {
   top: HighlightRow[];
   byGroup: Record<string, HighlightRow[]>;
 };
+
+/** One row on a search leaderboard (`leaderboards/{season}/w{week}/{group}.json`). */
+export type LeaderboardRow = {
+  playerId: string;
+  name: string;
+  position: string;
+  team: string;
+  value: number | null;
+  /** Oriented inclusive CDF — 100 is the good end for every catalog stat. */
+  percentile: number | null;
+  qualified: boolean;
+};
+
+export type LeaderboardJson = {
+  schemaVersion: 1;
+  season: number;
+  asOfWeek: number;
+  positionGroup: string;
+  stats: Record<string, LeaderboardRow[]>;
+};

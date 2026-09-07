@@ -8,6 +8,7 @@ import type {
   PlayerBio,
   PlayerPageJson,
   HighlightsBoardJson,
+  LeaderboardJson,
 } from "@/lib/payload";
 import type { Point } from "@/lib/distribution";
 import type { PositionGroup } from "@/lib/catalog/types";
@@ -355,6 +356,34 @@ export const loadHighlightsBoard = cache(
     }
 
     return tryReadLocalJson<HighlightsBoardJson>(
+      path.join(ballnetDataRoot(), rel),
+    );
+  },
+);
+
+/** Search sort board (`leaderboards/{season}/w{week}/{group}.json`). */
+export const loadLeaderboard = cache(
+  async (
+    positionGroup: PositionGroup | string,
+    opts?: { season?: number; asOfWeek?: number },
+  ): Promise<LeaderboardJson | null> => {
+    let season = opts?.season;
+    let asOfWeek = opts?.asOfWeek;
+    if (season == null || asOfWeek == null) {
+      const current = await resolveCurrentPointer();
+      if (!current) return null;
+      season = season ?? current.season;
+      asOfWeek = asOfWeek ?? current.week;
+    }
+    const rel = `leaderboards/${season}/w${asOfWeek}/${positionGroup}.json`;
+
+    const base = vizStorageBase();
+    if (base) {
+      const remote = await tryFetchRemoteJson<LeaderboardJson>(`${base}/${rel}`);
+      if (remote) return remote;
+    }
+
+    return tryReadLocalJson<LeaderboardJson>(
       path.join(ballnetDataRoot(), rel),
     );
   },

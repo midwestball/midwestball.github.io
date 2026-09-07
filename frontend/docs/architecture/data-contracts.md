@@ -55,9 +55,26 @@ player_stat_values
 
 Publish path: Storage (or local `data/`) serves **scalar** `PlayerPageJson` plus **shared** `league/*.json`. Knowball merges at fetch time — still not a runtime SQL client. Weekly home boards are separate Stage H objects under `highlights/{season}/w{week}.json`. Expand charts load allowlist single-game KDEs from `dists/league_weekly/{season}/w{week}/{group}.json` (`scope: "league_weekly"`) — never the YTD `league/` curves.
 
+## Search leaderboard payload
+
+`leaderboards/{season}/w{week}/{positionGroup}.json` — one file per publishable group (not returner):
+
+```text
+schemaVersion: 1
+season, asOfWeek, positionGroup
+stats: { [statId]: [{
+  playerId, name, position, team,
+  value, percentile,  # percentile already oriented (100 = good)
+  qualified
+}] }
+```
+
+Built from Stage E `ytd_*_pct.parquet`. Knowball search Filter sorts Best/Worst on `percentile` without fetching player pages. Rows may include unqualified players (`percentile: null`); UI keeps nulls last.
+
 ## Do not
 
 - Store raw weekly box scores in Knowball.
 - Duplicate the KDE onto every player page JSON (or every player row in Postgres).
 - Impute 0 when NGS/PFR is missing (`missing_source`).
 - Reuse `league_ytd` curves for home highlight expand charts.
+- Stuff every percentile into `index/players.json` for search sort.
