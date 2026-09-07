@@ -29,7 +29,7 @@
 
 ## Silent Failures & Gotchas
 
-- Position only (no stat) still uses the bio index scoped to that group — no values shown until a stat is chosen.
+- Position only (no stat) still uses the bio index scoped to that group — no values shown until a stat is chosen. Season team/position on bio rows is overlaid from that season’s leaderboard artifact(s) when available; `index/players.json` team is latest-only and used only as fallback (players missing from boards, demos).
 - Demo players in the index have no leaderboard rows.
 - NGS-week / games / snaps / dropbacks / air-yards / tackle_chances denoms leave `volumeStatId` unset — slider uses `denomYtd` when published, otherwise stays gray (“Volume not available for this stat”) rather than a false “Min Carries”.
 - Stats with no spine source yet (`red_zone_*`, `route_pct`, …) publish null volume and `qualified: false` → empty ranked list + disabled slider (“No volume data for this stat yet”).

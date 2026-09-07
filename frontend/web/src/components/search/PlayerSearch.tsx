@@ -117,6 +117,21 @@ function boardHasResolvedVolume(
   return rows.some((row) => resolveVolume(row, byPlayer) != null);
 }
 
+/** Index bios are latest-only; season boards carry team/position as-of that year. */
+function affiliationFromBoard(
+  board: LeaderboardJson,
+): Map<string, { team: string; position: string }> {
+  const map = new Map<string, { team: string; position: string }>();
+  for (const rows of Object.values(board.stats)) {
+    for (const row of rows) {
+      if (!map.has(row.playerId)) {
+        map.set(row.playerId, { team: row.team, position: row.position });
+      }
+    }
+  }
+  return map;
+}
+
 const controlBase =
   "h-9 border border-zinc-200 bg-white px-2 text-sm outline-none rounded-none";
 const controlEnabled = `${controlBase} text-zinc-900 focus:border-zinc-400`;
@@ -136,6 +151,9 @@ export function PlayerSearch({
   const [volumeDraft, setVolumeDraft] = useState("");
   const [board, setBoard] = useState<LeaderboardJson | null>(null);
   const [boardStatus, setBoardStatus] = useState<BoardStatus>("idle");
+  const [seasonAffiliation, setSeasonAffiliation] = useState(
+    () => new Map<string, { team: string; position: string }>(),
+  );
 
   const seasonOptions = useMemo(() => {
     if (seasons.some((s) => s.season === initialSeason)) return seasons;
@@ -235,6 +253,37 @@ export function PlayerSearch({
     };
   }, [group, statId, season, asOfWeek]);
 
+  // Bio list has no ranked board; overlay team/position from season leaderboards.
+  useEffect(() => {
+    if (statId) {
+      setSeasonAffiliation(new Map());
+      return;
+    }
+    let cancelled = false;
+    const groups = group ? [group] : FILTER_GROUPS;
+    void Promise.all(
+      groups.map((g) => fetchLeaderboard(g, season, asOfWeek)),
+    )
+      .then((boards) => {
+        if (cancelled) return;
+        const map = new Map<string, { team: string; position: string }>();
+        for (const payload of boards) {
+          if (!payload) continue;
+          for (const [id, aff] of affiliationFromBoard(payload)) {
+            map.set(id, aff);
+          }
+        }
+        setSeasonAffiliation(map);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setSeasonAffiliation(new Map());
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [group, statId, season, asOfWeek]);
+
   useEffect(() => {
     if (floor == null) {
       setMinVolume(null);
@@ -304,8 +353,13 @@ export function PlayerSearch({
   const bioResults = useMemo(() => {
     const inSeason = players.filter((player) => player.seasons.includes(season));
     const scoped = group ? filterPlayersByGroup(inSeason, group) : inSeason;
-    return searchPlayers(scoped, query);
-  }, [players, group, query, season]);
+    const forSeason = scoped.map((player) => {
+      const aff = seasonAffiliation.get(player.id);
+      if (!aff) return player;
+      return { ...player, team: aff.team, position: aff.position };
+    });
+    return searchPlayers(forSeason, query);
+  }, [players, group, query, season, seasonAffiliation]);
 
   const rankedRows = useMemo(() => {
     if (!statId || !board) return null;

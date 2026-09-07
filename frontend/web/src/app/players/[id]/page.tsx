@@ -52,6 +52,8 @@ export default async function PlayerPage({
   const stats = hydratePlayerStats(player.position, snapshots);
   const groupLabel = GROUP_LABEL[positionGroup];
   const hasSnapshot = Boolean(pageJson);
+  const displayPosition = pageJson?.player.position ?? player.position;
+  const displayTeam = pageJson?.player.team ?? player.team;
 
   return (
     <div>
@@ -85,7 +87,7 @@ export default async function PlayerPage({
           <div className="rounded-none border border-zinc-200 bg-zinc-50 px-3 py-2">
             <p className="text-lg font-semibold">{player.name}</p>
             <p className="text-sm text-zinc-500">
-              {player.position} · {player.team} · {season}
+              {displayPosition} · {displayTeam} · {season}
             </p>
             <p className="mt-1 text-xs text-zinc-400">
               {hasSnapshot && pageJson
