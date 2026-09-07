@@ -66,19 +66,26 @@ function matchesQuery(row: LeaderboardRow, needle: string): boolean {
   );
 }
 
+const controlBase =
+  "h-9 border border-zinc-200 bg-white px-2 text-sm outline-none rounded-none";
+const controlEnabled = `${controlBase} text-zinc-900 focus:border-zinc-400`;
+const controlDisabled = `${controlBase} cursor-not-allowed border-zinc-100 bg-zinc-50 text-zinc-400`;
+
 export function PlayerSearch({
   players,
   season,
   asOfWeek,
 }: PlayerSearchProps) {
   const [query, setQuery] = useState("");
-  const [filterOpen, setFilterOpen] = useState(false);
   const [group, setGroup] = useState<PositionGroup | null>(null);
   const [statId, setStatId] = useState<string | null>(null);
   const [sortMode, setSortMode] = useState<SortMode>("best");
   const [board, setBoard] = useState<LeaderboardJson | null>(null);
   const [boardError, setBoardError] = useState(false);
   const [pending, startTransition] = useTransition();
+
+  const statEnabled = group != null;
+  const sortEnabled = group != null && statId != null;
 
   const statOptions = useMemo(() => {
     if (!group) return [];
@@ -108,23 +115,6 @@ export function PlayerSearch({
       cancelled = true;
     };
   }, [group, statId, season, asOfWeek]);
-
-  function clearFilter() {
-    setFilterOpen(false);
-    setGroup(null);
-    setStatId(null);
-    setSortMode("best");
-    setBoard(null);
-    setBoardError(false);
-  }
-
-  function onToggleFilter() {
-    if (filterOpen) {
-      clearFilter();
-      return;
-    }
-    setFilterOpen(true);
-  }
 
   function onSelectGroup(next: PositionGroup | "") {
     if (!next) {
@@ -166,86 +156,77 @@ export function PlayerSearch({
 
   return (
     <div className="space-y-2">
-      <div className="flex flex-wrap items-stretch gap-0 border border-zinc-200 bg-white">
-        <input
-          type="search"
-          value={query}
-          onChange={(event) => setQuery(event.target.value)}
-          placeholder="Search players, positions, teams"
-          className="h-9 min-w-[12rem] flex-1 border-0 border-r border-zinc-200 bg-transparent px-2 text-sm text-zinc-900 outline-none placeholder:text-zinc-400 focus:bg-zinc-50"
-        />
-        <button
-          type="button"
-          onClick={onToggleFilter}
-          aria-expanded={filterOpen}
-          className={`h-9 shrink-0 border-0 px-3 text-sm ${
-            filterOpen
-              ? "bg-zinc-900 text-white"
-              : "bg-white text-zinc-700 hover:bg-zinc-50"
-          }`}
-        >
+      <input
+        type="search"
+        value={query}
+        onChange={(event) => setQuery(event.target.value)}
+        placeholder="Search players, positions, teams"
+        className="h-9 w-full rounded-none border border-zinc-200 bg-white px-2 text-sm text-zinc-900 outline-none placeholder:text-zinc-400 focus:border-zinc-400"
+      />
+
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="text-xs font-semibold tracking-[0.15em] text-zinc-500 uppercase">
           Filter
-        </button>
-        {filterOpen ? (
-          <>
-            <select
-              value={group ?? ""}
-              onChange={(event) =>
-                onSelectGroup(event.target.value as PositionGroup | "")
-              }
-              aria-label="Position group"
-              className="h-9 max-w-[11rem] border-0 border-l border-zinc-200 bg-white px-2 text-sm text-zinc-900 outline-none focus:bg-zinc-50"
-            >
-              <option value="">Position</option>
-              {FILTER_GROUPS.map((g) => (
-                <option key={g} value={g}>
-                  {GROUP_LABEL[g]}
-                </option>
-              ))}
-            </select>
-            {group ? (
-              <select
-                value={statId ?? ""}
-                onChange={(event) => onSelectStat(event.target.value)}
-                aria-label="Stat"
-                className="h-9 max-w-[14rem] border-0 border-l border-zinc-200 bg-white px-2 text-sm text-zinc-900 outline-none focus:bg-zinc-50"
-              >
-                <option value="">Stat</option>
-                {statOptions.map((stat) => (
-                  <option key={stat.id} value={stat.id}>
-                    {stat.label}
-                  </option>
-                ))}
-              </select>
-            ) : null}
-            {group && statId ? (
-              <div className="flex h-9 border-l border-zinc-200">
-                <button
-                  type="button"
-                  onClick={() => setSortMode("best")}
-                  className={`h-9 px-3 text-sm ${
-                    sortMode === "best"
-                      ? "bg-zinc-900 text-white"
-                      : "bg-white text-zinc-700 hover:bg-zinc-50"
-                  }`}
-                >
-                  Best
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setSortMode("worst")}
-                  className={`h-9 border-l border-zinc-200 px-3 text-sm ${
-                    sortMode === "worst"
-                      ? "bg-zinc-900 text-white"
-                      : "bg-white text-zinc-700 hover:bg-zinc-50"
-                  }`}
-                >
-                  Worst
-                </button>
-              </div>
-            ) : null}
-          </>
-        ) : null}
+        </span>
+        <select
+          value={group ?? ""}
+          onChange={(event) =>
+            onSelectGroup(event.target.value as PositionGroup | "")
+          }
+          aria-label="Position group"
+          className={controlEnabled}
+        >
+          <option value="">Position</option>
+          {FILTER_GROUPS.map((g) => (
+            <option key={g} value={g}>
+              {GROUP_LABEL[g]}
+            </option>
+          ))}
+        </select>
+        <select
+          value={statId ?? ""}
+          onChange={(event) => onSelectStat(event.target.value)}
+          aria-label="Stat"
+          disabled={!statEnabled}
+          className={statEnabled ? controlEnabled : controlDisabled}
+        >
+          <option value="">Stat</option>
+          {statOptions.map((stat) => (
+            <option key={stat.id} value={stat.id}>
+              {stat.label}
+            </option>
+          ))}
+        </select>
+        <div className="flex">
+          <button
+            type="button"
+            disabled={!sortEnabled}
+            onClick={() => setSortMode("best")}
+            className={`h-9 border px-3 text-sm rounded-none ${
+              !sortEnabled
+                ? "cursor-not-allowed border-zinc-100 bg-zinc-50 text-zinc-400"
+                : sortMode === "best"
+                  ? "border-zinc-900 bg-zinc-900 text-white"
+                  : "border-zinc-200 bg-white text-zinc-700 hover:bg-zinc-50"
+            }`}
+          >
+            Best
+          </button>
+          <button
+            type="button"
+            disabled={!sortEnabled}
+            onClick={() => setSortMode("worst")}
+            className={`h-9 border border-l-0 px-3 text-sm rounded-none ${
+              !sortEnabled
+                ? "cursor-not-allowed border-zinc-100 bg-zinc-50 text-zinc-400"
+                : sortMode === "worst"
+                  ? "border-zinc-900 bg-zinc-900 text-white"
+                  : "border-zinc-200 bg-white text-zinc-700 hover:bg-zinc-50"
+            }`}
+          >
+            Worst
+          </button>
+        </div>
       </div>
 
       {showRanked ? (

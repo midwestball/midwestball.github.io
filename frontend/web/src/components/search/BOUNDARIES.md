@@ -5,7 +5,8 @@
 - Position filter options are publishable **groups** (`GROUP_LABEL`), not raw NFL codes; stats come from `STATS_BY_GROUP` (skip `alwaysUnavailable`).
 - Ranked Best/Worst lists load `leaderboards/{season}/w{week}/{group}.json` via the search server action — never N player-page fetches.
 - Sort on oriented percentile (100 = good); Best = descending, Worst = ascending; null percentiles last.
-- Keep square chrome (`rounded-none`, no pills/shadows) on the Filter cascade.
+- Filter row sits under the search input; Stat and Best/Worst stay visible but disabled (gray) until prerequisites are set.
+- Keep square chrome (`rounded-none`, no pills/shadows) on Filter controls.
 
 ## Ask First
 
@@ -20,6 +21,7 @@
 
 ## Silent Failures & Gotchas
 
-- Filter open + position only (no stat) still uses the bio index scoped to that group — no values shown until a stat is chosen.
-- Missing leaderboard → “Rankings not published…” while bio search still works when Filter is cleared or only position is set.
+- Position only (no stat) still uses the bio index scoped to that group — no values shown until a stat is chosen.
+- Missing leaderboard → “Rankings not published…” while bio search still works when only position is set or filters are cleared.
 - Demo players in the index have no leaderboard rows.
+- Leaderboard rows omit `denomYtd`; a user-facing min-volume slider needs a Ballnet republish that includes it.
