@@ -5,8 +5,8 @@
 | `/` | Weekly highlights from `highlights/{season}/w{week}.json` (Stage H), offense-first then defense. Expand loads `dists/league_weekly/...` single-game KDEs. Resolves week via `index/current.json`. |
 | `/search` | Client filter over the player index, plus Filter cascade (position group → catalog stat → Best/Worst) backed by `leaderboards/{season}/w{week}/{group}.json`. Default context is current season. |
 | `/players/[id]?season=` | Position catalog stack + season `<select>` at the bottom. Changing season reloads the same page. Do not add last-10 / all-time windows unless a human asks. |
-| `/ballnet` | Public Ballnet destination: DS writeups / research narrative (not the pipeline repo itself). |
-| `/ffoptim` | Public stub for the draft-optimizer UI. Modeling lives in the private **ffoptim** repo; this page will later host Sleeper-linked draft help. |
+| `/ballnet` | **Projections** — analyze player performance projections for the upcoming week. |
+| `/ffoptim` | **Compare** — compare players side by side. |
 
 Player pages call `loadHydratedPlayerSnapshots`: scalar `pages/{season}/w{week}/{id}.json` plus shared `league/{season}/w{week}/{group}.json` (merged before `hydratePlayerStats`).
 

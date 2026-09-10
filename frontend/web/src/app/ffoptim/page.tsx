@@ -1,15 +1,14 @@
-export default function FfoptimPage() {
+export default function ComparePage() {
   return (
     <div>
       <div className="border-b border-zinc-200 bg-white">
         <div className="mx-auto max-w-3xl px-4 py-5">
           <p className="text-xs font-semibold tracking-[0.2em] text-zinc-500 uppercase">
-            Draft optimizer
+            Players
           </p>
-          <h1 className="mt-0.5 text-3xl font-semibold tracking-tight">ffoptim</h1>
+          <h1 className="mt-0.5 text-3xl font-semibold tracking-tight">Compare</h1>
           <p className="mt-1 max-w-xl text-sm leading-5 text-zinc-600">
-            Snake-draft help powered by a private modeling engine. Link a Sleeper
-            account when this ships — modeling does not live in this frontend repo.
+            Compare players side by side.
           </p>
         </div>
       </div>

@@ -21,7 +21,7 @@ Before modifying or creating new features, locate the relevant domain in the tab
 | **UI & Components** | Locked UX rules for `ExpandableStatRow`, percentiles, tooltips, Recharts, and square/flat chrome. | `docs/architecture/ui-components.md` |
 | **Visual chrome** | Square corners, no shadows, tight spacing. | `docs/adr/2026-08-19-flat-square-chrome.md` |
 | **Data Contracts** | JSON schemas, catalog hydration, and the Ballnet visualization store. | `docs/architecture/data-contracts.md` |
-| **Routing & Pages** | Home, Search, Player, Ballnet writeups, ffoptim stub. | `docs/architecture/routing.md` |
+| **Routing & Pages** | Home, Search, Player, Projections, Compare. | `docs/architecture/routing.md` |
 | **Visualization store** | Why Knowball reads JSON only and how Ballnet should table curves vs player values. | `docs/adr/2026-08-19-visualization-json-store.md` |
 | **Split league JSON** | Player pages are scalars; league curves are one file per group/season/week. | `docs/adr/2026-08-20-split-league-distributions.md` |
 | **KDE-only league shape** | Every catalog id publishes reflected KDE `curve[]`; histograms and rug `samples` retired. | `docs/adr/2026-08-24-kde-only-league-shape.md` |
@@ -49,8 +49,8 @@ The accepted UI lives under **`web/`**. Run with `cd web && npm install && npm r
 | Highlight list | `web/src/components/highlights/HighlightList.tsx` |
 | Search | `web/src/app/search/page.tsx` |
 | Player page | `web/src/app/players/[id]/page.tsx` |
-| Ballnet page | `web/src/app/ballnet/page.tsx` |
-| ffoptim stub | `web/src/app/ffoptim/page.tsx` |
+| Projections (`/ballnet`) | `web/src/app/ballnet/page.tsx` |
+| Compare (`/ffoptim`) | `web/src/app/ffoptim/page.tsx` |
 | Position catalog | `web/src/lib/catalog/` |
 | JSON contract | `web/src/lib/payload.ts` |
 | Expandable row | `web/src/components/stat-row/ExpandableStatRow.tsx` |
