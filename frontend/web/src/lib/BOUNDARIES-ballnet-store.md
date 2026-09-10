@@ -2,7 +2,7 @@
 
 ## Always
 
-- Prefer Storage public URLs when configured (`NEXT_PUBLIC_SUPABASE_URL` or `VIZ_STORAGE_BASE_URL`); fall back to sibling `ballnet/data` or synced `src/data/ballnet/` copies.
+- Prefer Storage public URLs when configured (`NEXT_PUBLIC_SUPABASE_URL` or `VIZ_STORAGE_BASE_URL`); fall back to sibling `ballnet/data` (or `BALLNET_DATA_DIR`). Do not bundle Ballnet JSON in the Knowball git repo.
 - Load `index/{players,current,seasons}.json`, `highlights/{season}/w{week}.json`, `leaderboards/{season}/w{week}/{group}.json`, and `dists/league_weekly/{season}/w{week}/{group}.json` at runtime — do not statically import large boards into the Next bundle.
 - Merge `league/{season}/w{week}/{group}.json` into player snapshots before hydration so `ready` rows have `curve[]`.
 - Keep Knowball free of Supabase clients / service keys — public object fetches only.
@@ -17,13 +17,14 @@
 - Import full page, league, or leaderboard JSON into the Next bundle.
 - Invent league curves in the UI when the league or league_weekly file is missing.
 - Use YTD `league/` shapes for home highlight expand charts.
+- Commit Ballnet publish artifacts under `web/src/data/ballnet/` or `web/public/viz/`.
 
 ## Silent Failures & Gotchas
 
 - With `VIZ_PREFER_LOCAL=1` or `BALLNET_DATA_DIR` set, remote Storage is skipped even when `NEXT_PUBLIC_SUPABASE_URL` is present (local smoke testing).
 - Legacy league files without `curve[]` keep rows pending until `league/` is re-uploaded.
 - Production (Vercel) requires `NEXT_PUBLIC_SUPABASE_URL`; there is no sibling `ballnet/data` on serverless.
-- Missing Storage env: search can still populate from bundled `src/data/ballnet/players.json` while `pages/` / `league/` / `leaderboards/` fail → “Current season · no snapshot yet” / pending rows / empty rankings.
+- Missing Storage env + no local ballnet data → empty search / “no snapshot yet” (expected — configure Storage or point at sibling ballnet).
 - Index + page fetches use `revalidate: 3600` — expect up to one hour before a Ballnet republish shows live.
 - Highlight expand needs a separate `loadLeagueWeeklyGroupJson` fetch; a published board without weekly dists still ranks but charts stay pending.
 - Search Filter Best/Worst needs `loadLeaderboard`; bio-only filter still works when the board is absent.

@@ -21,10 +21,6 @@ function ballnetDataRoot(): string {
   return path.resolve(process.cwd(), "../../ballnet/data");
 }
 
-function knowballBundledIndexDir(): string {
-  return path.join(process.cwd(), "src/data/ballnet");
-}
-
 export type SeasonsEnvelope = {
   schemaVersion: 1;
   seasons: Array<{ season: number; asOfWeek: number }>;
@@ -83,7 +79,7 @@ async function tryFetchRemoteJson<T>(url: string): Promise<T | null> {
 
 async function loadIndexArtifact<T>(
   storagePath: string,
-  localNames: string[],
+  localName: string,
 ): Promise<T | null> {
   const base = vizStorageBase();
   if (base) {
@@ -91,30 +87,19 @@ async function loadIndexArtifact<T>(
     if (remote) return remote;
   }
 
-  for (const name of localNames) {
-    const ballnet = await tryReadLocalJson<T>(
-      path.join(ballnetDataRoot(), "index", name),
-    );
-    if (ballnet) return ballnet;
-    const bundled = await tryReadLocalJson<T>(
-      path.join(knowballBundledIndexDir(), name),
-    );
-    if (bundled) return bundled;
-  }
-
-  return null;
+  return tryReadLocalJson<T>(path.join(ballnetDataRoot(), "index", localName));
 }
 
 export const loadSeasonsMeta = cache(async (): Promise<SeasonsEnvelope | null> =>
-  loadIndexArtifact<SeasonsEnvelope>("index/seasons.json", ["seasons.json"]),
+  loadIndexArtifact<SeasonsEnvelope>("index/seasons.json", "seasons.json"),
 );
 
 export const loadCurrentMeta = cache(async (): Promise<CurrentEnvelope | null> =>
-  loadIndexArtifact<CurrentEnvelope>("index/current.json", ["current.json"]),
+  loadIndexArtifact<CurrentEnvelope>("index/current.json", "current.json"),
 );
 
 export const loadPlayersIndex = cache(async (): Promise<PlayersEnvelope | null> =>
-  loadIndexArtifact<PlayersEnvelope>("index/players.json", ["players.json"]),
+  loadIndexArtifact<PlayersEnvelope>("index/players.json", "players.json"),
 );
 
 /** Final published as-of week for a season, if Ballnet has published it. */

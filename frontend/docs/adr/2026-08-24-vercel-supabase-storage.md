@@ -6,6 +6,6 @@ Deploy the Next.js app from `web/` (via root `vercel.json`) and load all viz art
 
 ### Consequences
 - **Required:** Set `NEXT_PUBLIC_SUPABASE_URL` on Vercel before deploy (Production + Preview as needed), then redeploy. Optional `VIZ_STORAGE_BASE_URL` overrides the derived Storage prefix.
-- **Gotcha:** Bundled `web/src/data/ballnet/players.json` can make search look healthy while player pages stay empty (“no snapshot yet”) if Storage env is missing — index has a local fallback; `pages/` / `league/` do not.
-- **Deprecated:** Treating synced `web/src/data/ballnet/*.json` as the production source of truth — keep them only as local offline fallback after `ballnet publish-all --sync-knowball`.
+- **Gotcha:** Without Storage env and without a sibling `ballnet/data` checkout, search and pages are empty — configure Storage for normal local/prod use.
+- **Local only:** Optional `ballnet publish-all --sync-knowball ../knowball/web` writes a gitignored mirror under `web/public/viz/`; do not commit Ballnet artifacts into Knowball.
 - **Unchanged:** No PostgREST, no service role key, no mock KDE generation in the Next app.

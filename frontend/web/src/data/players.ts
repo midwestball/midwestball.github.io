@@ -24,7 +24,7 @@ export const loadCurrentSeasonContext = cache(async (): Promise<{
   if (current) {
     return { season: current.season, asOfWeek: current.asOfWeek };
   }
-  return { season: 2025, asOfWeek: 18 };
+  return { season: 2026, asOfWeek: 1 };
 });
 
 /** Published seasons for search year filter (newest first). */
