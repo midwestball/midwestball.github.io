@@ -7,6 +7,7 @@
 - Expanded rows use **one** `CompareOverlayChart` (shared league curve + per-player markers). Chart fill/focus color comes from `compareFillColor`. Slider thumbs stay Savant percentile colored.
 - Marker labels use `shortPlayerName` (`F. Last`) and stack by descending oriented percentile.
 - Keep square chrome (`rounded-none`, no pills/shadows).
+- On portrait-width screens (`max-md`), the board is full-bleed and the name column is exactly ⅓ of the row. Two players split the remaining ⅔ equally (⅓ + ⅓); three or four players share that ⅔ and compress.
 
 ## Ask First
 

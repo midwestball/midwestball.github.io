@@ -132,7 +132,7 @@ export default async function ComparePage({
             distributions.
           </div>
         ) : (
-          <div className="rounded-none border border-zinc-200 bg-white">
+          <div className="rounded-none border border-zinc-200 bg-white max-md:-mx-4 max-md:border-x-0">
             <CompareBoard columns={columns} />
           </div>
         )}

@@ -12,6 +12,7 @@ import { PercentileSlider } from "@/components/stat-row/PercentileSlider";
 import { TeamAbbr } from "@/components/TeamAbbr";
 import {
   CompareOverlayChart,
+  shortPlayerName,
   type OverlayMarker,
 } from "./CompareOverlayChart";
 
@@ -63,23 +64,23 @@ function CompareCell({
   const ready = isStatReady(stat);
 
   return (
-    <div className={cn(!ready && "opacity-70")}>
+    <div className={cn("h-full min-w-0", !ready && "opacity-70")}>
       <button
         type="button"
         aria-expanded={open}
         onClick={onToggle}
-        className="flex w-full items-center gap-2 px-2 py-1 text-left hover:bg-zinc-50/80"
+        className="flex h-full w-full min-w-0 flex-col items-stretch justify-center gap-0.5 px-1 py-1 text-left hover:bg-zinc-50/80 md:flex-row md:items-center md:gap-2 md:px-2"
       >
         <ChevronRight
           className={cn(
-            "size-4 shrink-0 transition-transform duration-300",
+            "hidden size-4 shrink-0 transition-transform duration-300 md:block",
             open && "rotate-90",
             !ready && "text-zinc-400",
           )}
         />
         <span
           className={cn(
-            "w-[4.75rem] shrink-0 truncate text-left text-sm font-semibold tabular-nums text-zinc-900",
+            "min-w-0 truncate text-left text-[11px] font-semibold tabular-nums text-zinc-900 md:w-[4.75rem] md:shrink-0 md:text-sm",
             !ready && "font-normal text-zinc-400",
           )}
         >
@@ -87,13 +88,14 @@ function CompareCell({
             ? "—"
             : formatStatValue(stat.format, stat.playerValue)}
         </span>
-        <div className="min-w-0 flex-1">
+        <div className="min-w-0 w-full flex-1">
           <PercentileSlider
             stat={stat}
             disabled={!ready}
             alignWithChart={false}
+            className="max-md:px-2"
             trackClassName="bg-zinc-200/60"
-            thumbClassName="border-white"
+            thumbClassName="border-white max-md:size-5 max-md:text-[9px]"
           />
         </div>
       </button>
@@ -156,25 +158,25 @@ export function CompareBoard({ columns }: { columns: CompareColumn[] }) {
   if (colCount === 0) return null;
 
   return (
-    <div className="overflow-x-auto">
+    <div className="md:overflow-x-auto">
       <div
-        className="min-w-[40rem]"
-        style={{
-          display: "grid",
-          gridTemplateColumns: `10.5rem repeat(${colCount}, minmax(11rem, 1fr))`,
-        }}
+        className="compare-board-grid grid w-full md:min-w-[40rem]"
+        style={
+          { "--compare-cols": String(colCount) } as React.CSSProperties
+        }
       >
-        <div className="border-b border-zinc-200 px-2 py-2" />
+        <div className="border-b border-zinc-200 px-1 py-2 md:px-2" />
         {columns.map((col) => (
           <div
             key={col.playerId}
-            className="border-b border-l border-zinc-200 px-2 py-2"
+            className="min-w-0 border-b border-l border-zinc-200 px-1 py-2 md:px-2"
           >
-            <div className="min-w-0 px-2 py-0">
-              <p className="truncate text-sm font-semibold text-zinc-900">
-                {col.name}
+            <div className="min-w-0 px-0 py-0 md:px-2">
+              <p className="truncate text-xs font-semibold text-zinc-900 md:text-sm">
+                <span className="md:hidden">{shortPlayerName(col.name)}</span>
+                <span className="hidden md:inline">{col.name}</span>
               </p>
-              <p className="flex flex-wrap items-center gap-x-1.5 truncate text-xs text-zinc-500">
+              <p className="flex flex-wrap items-center gap-x-1 truncate text-[10px] text-zinc-500 md:gap-x-1.5 md:text-xs">
                 <span>{col.position}</span>
                 <span aria-hidden>·</span>
                 <TeamAbbr team={col.team} />
@@ -185,7 +187,7 @@ export function CompareBoard({ columns }: { columns: CompareColumn[] }) {
 
         {sections.map((section) => (
           <div key={section.title} className="contents">
-            <div className="col-span-full px-2 pt-3 pb-1">
+            <div className="col-span-full px-1 pt-3 pb-1 md:px-2">
               <h2 className="text-xs font-semibold tracking-[0.2em] text-zinc-500 uppercase">
                 {section.title}
               </h2>
@@ -194,20 +196,23 @@ export function CompareBoard({ columns }: { columns: CompareColumn[] }) {
               const open = openStatId === templateStat.id;
               return (
                 <div key={templateStat.id} className="contents">
-                  <div className="flex items-start border-t border-zinc-100 px-2 py-1">
+                  <div className="flex min-w-0 items-start border-t border-zinc-100 px-1 py-1 md:px-2">
                     <button
                       type="button"
                       aria-expanded={open}
                       onClick={() => toggleStat(templateStat.id)}
-                      className="flex w-full items-start gap-1 py-1 text-left text-sm font-medium text-zinc-900 hover:bg-zinc-50/80"
+                      className="flex w-full min-w-0 items-start gap-0.5 py-1 text-left text-xs font-medium text-zinc-900 hover:bg-zinc-50/80 md:gap-1 md:text-sm"
                     >
                       <ChevronRight
                         className={cn(
-                          "mt-0.5 size-4 shrink-0 transition-transform duration-300",
+                          "mt-0.5 size-3.5 shrink-0 transition-transform duration-300 md:size-4",
                           open && "rotate-90",
                         )}
                       />
-                      <span className="leading-5" title={templateStat.label}>
+                      <span
+                        className="min-w-0 leading-4 break-words md:leading-5"
+                        title={templateStat.label}
+                      >
                         {templateStat.label}
                       </span>
                     </button>
@@ -219,7 +224,7 @@ export function CompareBoard({ columns }: { columns: CompareColumn[] }) {
                     return (
                       <div
                         key={`${col.playerId}-${templateStat.id}`}
-                        className="border-t border-l border-zinc-100"
+                        className="min-w-0 border-t border-l border-zinc-100"
                       >
                         <CompareCell
                           stat={stat}
@@ -242,7 +247,7 @@ export function CompareBoard({ columns }: { columns: CompareColumn[] }) {
                             ease: [0.32, 0.72, 0, 1],
                           }}
                         >
-                          <div className="px-3 py-3">
+                          <div className="px-2 py-3 md:px-3">
                             <CompareOverlayChart
                               markers={markersFor(
                                 templateStat.id,

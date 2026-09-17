@@ -18,8 +18,6 @@ type PercentileSliderProps = {
   thumbClassName?: string;
 };
 
-const THUMB_INSET = 12;
-
 export function PercentileSlider({
   stat,
   disabled = false,
@@ -36,11 +34,15 @@ export function PercentileSlider({
 
   return (
     <div
-      className={cn("relative", className)}
-      style={{
-        paddingLeft: alignWithChart ? CHART_PLOT.left : THUMB_INSET,
-        paddingRight: alignWithChart ? CHART_PLOT.right : THUMB_INSET,
-      }}
+      className={cn("relative", !alignWithChart && "px-3", className)}
+      style={
+        alignWithChart
+          ? {
+              paddingLeft: CHART_PLOT.left,
+              paddingRight: CHART_PLOT.right,
+            }
+          : undefined
+      }
     >
       <div
         className={cn(
