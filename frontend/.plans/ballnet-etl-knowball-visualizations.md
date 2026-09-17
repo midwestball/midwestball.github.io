@@ -115,7 +115,7 @@ Do **not** embed per-player weekly densities into every `PlayerPageJson` (payloa
 | `qualified` | boolean | `denom_ytd >= min_n` and source present. If false, Knowball maps to `insufficient_sample` unless `unavailableReason` is set. |
 | `denomYtd` | number? | Season-to-date denominator used in ramp–hold. |
 | `kind` | `"continuous"` \| `"discrete"` | Catalog metadata (formatting). Must match catalog `kind` for that id. Does **not** select histogram vs KDE. |
-| `xMin`, `xMax` | number | Prefer catalog domains so charts stay comparable. Override only if a season truly exceeds the locked domain; then expand both league curve and all players for that `(season, week, group, stat)`. |
+| `xMin`, `xMax` | number | Qualified sample **min/max** for that slice (empty sample → catalog). See `docs/adr/2026-09-17-season-max-plot-domain.md`. |
 | `yMax` | number | Max KDE density on the league curve (Knowball y-axis). |
 | `lowerBound`, `upperBound` | number? | Reflection walls. Copy from catalog when present. |
 | `curve` | `{x, y}[]` | Required for `ready`. Dense grid (recommend 256–512 points) spanning `[xMin, xMax]`. |

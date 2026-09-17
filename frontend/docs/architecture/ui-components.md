@@ -36,6 +36,6 @@ Never claim the player is "better than N% of the league".
 
 - Chart.js, Observable Plot, or warping the chart axis to match the slider.
 - Histogram bars in the chart layer — KDE only.
-- Mixing Ballnet writeups or ffoptim draft UI into the stat stack — those are their own routes (`/ballnet`, `/ffoptim`).
+- Mixing Ballnet writeups or Projections UI into the stat stack — those are their own routes (`/ballnet`, `/compare`). Compare owns multi-player chrome under `components/compare/`.
 - Rounded boxes, pills, or drop shadows on any UI chrome.
 - Labeling KDE density as a percent of the league.

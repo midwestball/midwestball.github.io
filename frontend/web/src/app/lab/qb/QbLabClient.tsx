@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { StatStack, type StatStackLayout } from "@/components/stat-row/variants";
+import { TeamAbbr } from "@/components/TeamAbbr";
 import type { PlayerBio } from "@/lib/payload";
 import type { StatPayload } from "@/lib/distribution";
 
@@ -125,8 +126,12 @@ export function QbLabClient({
           </div>
           <div className="rounded-none border border-zinc-200 bg-zinc-50 px-3 py-2">
             <p className="text-lg font-semibold">{player.name}</p>
-            <p className="text-sm text-zinc-500">
-              {player.position} · {player.team} · 2025
+            <p className="flex flex-wrap items-center gap-x-1.5 text-sm text-zinc-500">
+              <span>{player.position}</span>
+              <span aria-hidden>·</span>
+              <TeamAbbr team={player.team} />
+              <span aria-hidden>·</span>
+              <span>2025</span>
             </p>
             <p className="mt-1 text-xs text-zinc-400">Layout experiments only</p>
           </div>

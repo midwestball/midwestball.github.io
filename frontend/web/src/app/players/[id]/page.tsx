@@ -9,6 +9,7 @@ import {
 } from "@/data/players";
 import { TremorVariant } from "@/components/stat-row/variants";
 import { SeasonSelect } from "@/components/player/SeasonSelect";
+import { TeamAbbr } from "@/components/TeamAbbr";
 import { loadHydratedPlayerSnapshots } from "@/lib/ballnet-store";
 
 // Player pages are scalars; league curves load once per position group.
@@ -86,8 +87,12 @@ export default async function PlayerPage({
           </div>
           <div className="rounded-none border border-zinc-200 bg-zinc-50 px-3 py-2">
             <p className="text-lg font-semibold">{player.name}</p>
-            <p className="text-sm text-zinc-500">
-              {displayPosition} · {displayTeam} · {season}
+            <p className="flex flex-wrap items-center gap-x-1.5 text-sm text-zinc-500">
+              <span>{displayPosition}</span>
+              <span aria-hidden>·</span>
+              <TeamAbbr team={displayTeam} />
+              <span aria-hidden>·</span>
+              <span>{season}</span>
             </p>
             <p className="mt-1 text-xs text-zinc-400">
               {hasSnapshot && pageJson

@@ -3,8 +3,8 @@ import Link from "next/link";
 const NAV = [
   { href: "/", label: "Home" },
   { href: "/search", label: "Search" },
+  { href: "/compare", label: "Compare" },
   { href: "/ballnet", label: "Projections" },
-  { href: "/ffoptim", label: "Compare" },
 ] as const;
 
 export function SiteHeader() {

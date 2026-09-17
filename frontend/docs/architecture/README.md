@@ -35,7 +35,10 @@ Before modifying or creating new features, locate the relevant domain in the tab
 | **Highlight list** | Expandable home rows; σ color; no percentile slider. | `web/src/components/highlights/BOUNDARIES.md` |
 | **Search leaderboards** | Filter → group → stat → Best/Worst from `leaderboards/{season}/w{week}/{group}.json`. | `docs/adr/2026-09-06-search-leaderboards-json.md` |
 | **Search Filter UI** | Cascading Filter chrome; bio vs ranked list modes. | `web/src/components/search/BOUNDARIES.md` |
-| **Future features** | Ordered backlog: overall %, trajectories, compare (highlights weekly path shipped). | `docs/architecture/future-features.md` |
+| **Compare UI** | Side-by-side sliders; one overlay KDE per row; team-primary markers; max 4 same-group. | `web/src/components/compare/BOUNDARIES.md` |
+| **Compare colors** | Franchise primary + same-team brightness from mean ready %. | `docs/adr/2026-09-17-compare-side-by-side.md` |
+| **Plot domain** | League `xMax` = qualified season max (Ballnet `_expand_domain`). | `docs/adr/2026-09-17-season-max-plot-domain.md` |
+| **Future features** | Ordered backlog: overall %, trajectories, compare follow-ups. | `docs/architecture/future-features.md` |
 | **ETL contract** | Ballnet publish path for Knowball viz (Leg 1); reserved later stages. | `.plans/ballnet-etl-knowball-visualizations.md` |
 | **Weekly refresh** | Post-game ballnet recipe (lives in ballnet). | Sibling `ballnet/docs/WEEKLY_OPS.md` |
 
@@ -50,7 +53,7 @@ The accepted UI lives under **`web/`**. Run with `cd web && npm install && npm r
 | Search | `web/src/app/search/page.tsx` |
 | Player page | `web/src/app/players/[id]/page.tsx` |
 | Projections (`/ballnet`) | `web/src/app/ballnet/page.tsx` |
-| Compare (`/ffoptim`) | `web/src/app/ffoptim/page.tsx` |
+| Compare (`/compare`) | `web/src/app/compare/page.tsx`, `web/src/components/compare/` |
 | Position catalog | `web/src/lib/catalog/` |
 | JSON contract | `web/src/lib/payload.ts` |
 | Expandable row | `web/src/components/stat-row/ExpandableStatRow.tsx` |

@@ -18,6 +18,7 @@ import {
 } from "@/lib/distribution";
 import { cn } from "@/lib/utils";
 import { DistributionChart } from "@/components/stat-row/TremorDistribution";
+import { TeamAbbr } from "@/components/TeamAbbr";
 
 function catalogDef(row: HighlightRow) {
   const group = row.positionGroup as PositionGroup;
@@ -103,9 +104,18 @@ function HighlightRowExpandable({
               {row.name}
             </Link>
           </p>
-          <p className="truncate text-sm text-zinc-500">
-            {row.position} · {row.team}
-            {row.opponent ? ` vs ${row.opponent}` : ""} · {row.statLabel}
+          <p className="flex flex-wrap items-center gap-x-1.5 truncate text-sm text-zinc-500">
+            <span>{row.position}</span>
+            <span aria-hidden>·</span>
+            <TeamAbbr team={row.team} />
+            {row.opponent ? (
+              <>
+                <span aria-hidden>vs</span>
+                <TeamAbbr team={row.opponent} />
+              </>
+            ) : null}
+            <span aria-hidden>·</span>
+            <span className="truncate">{row.statLabel}</span>
           </p>
         </div>
         <div className="shrink-0 text-right">

@@ -16,6 +16,7 @@ import {
   searchPlayers,
 } from "@/lib/player-index";
 import { fetchLeaderboard } from "@/app/search/actions";
+import { TeamAbbr } from "@/components/TeamAbbr";
 
 /** Publishable groups only — returner has no Stage G spine. */
 const FILTER_GROUPS: PositionGroup[] = [
@@ -560,8 +561,10 @@ export function PlayerSearch({
                 >
                   <div>
                     <p className="font-medium text-zinc-900">{row.name}</p>
-                    <p className="text-sm text-zinc-500">
-                      {row.position} · {row.team}
+                    <p className="flex flex-wrap items-center gap-x-1.5 text-sm text-zinc-500">
+                      <span>{row.position}</span>
+                      <span aria-hidden>·</span>
+                      <TeamAbbr team={row.team} />
                     </p>
                   </div>
                   <div className="text-right">
@@ -598,8 +601,10 @@ export function PlayerSearch({
                 >
                   <div>
                     <p className="font-medium text-zinc-900">{player.name}</p>
-                    <p className="text-sm text-zinc-500">
-                      {player.position} · {player.team}
+                    <p className="flex flex-wrap items-center gap-x-1.5 text-sm text-zinc-500">
+                      <span>{player.position}</span>
+                      <span aria-hidden>·</span>
+                      <TeamAbbr team={player.team} />
                     </p>
                   </div>
                   <span className="text-xs text-zinc-400">{season}</span>

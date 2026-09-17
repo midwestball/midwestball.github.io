@@ -27,7 +27,12 @@ Find players whose **year-to-year** (or week-to-year) percentile / value paths l
 
 ## 4. Compare player distributions
 
-Overlay or side-by-side KDEs for two players on the same catalog ids. Requires `player_weekly` (or compare) density artifacts under `dists/players/…` — **not** stuffing weekly curves into every `PlayerPageJson`.
+**Shipped (YTD overlay):** `/compare` places up to four same-group players’ percentile sliders side by side and expands **one** league KDE with franchise-colored markers (`docs/adr/2026-09-17-compare-side-by-side.md`).
+
+| Follow-up | Intent |
+|---|---|
+| Player densities | Overlay or side-by-side **player-weekly** KDEs from `dists/players/…` — not stuffing weekly curves into every `PlayerPageJson` |
+| Published overall % | Prefer Ballnet overall percentile for same-team brightness instead of a client mean of ready rows |
 
 ## Ownership reminder
 
