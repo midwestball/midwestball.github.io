@@ -10,13 +10,14 @@ import {
   type PositionGroup,
   type StatDefinition,
 } from "@/lib/catalog";
-import type { LeaderboardJson, LeaderboardRow, PlayerBio } from "@/lib/payload";
+import type { FantasyPosRankKind, LeaderboardJson, LeaderboardRow, PlayerBio } from "@/lib/payload";
 import {
   filterPlayersByGroup,
   searchPlayers,
 } from "@/lib/player-index";
 import { fetchLeaderboard } from "@/app/search/actions";
 import { TeamAbbr } from "@/components/TeamAbbr";
+import { PositionRankLabel } from "@/components/PositionRankLabel";
 
 /** Publishable groups only — returner has no Stage G spine. */
 const FILTER_GROUPS: PositionGroup[] = [
@@ -118,15 +119,25 @@ function boardHasResolvedVolume(
   return rows.some((row) => resolveVolume(row, byPlayer) != null);
 }
 
-/** Index bios are latest-only; season boards carry team/position as-of that year. */
-function affiliationFromBoard(
-  board: LeaderboardJson,
-): Map<string, { team: string; position: string }> {
-  const map = new Map<string, { team: string; position: string }>();
+type SeasonAffiliation = {
+  team: string;
+  position: string;
+  fantasyPosRank?: number;
+  fantasyPosRankKind?: FantasyPosRankKind;
+};
+
+/** Index bios are latest-only; season boards carry team/position/rank as-of that year. */
+function affiliationFromBoard(board: LeaderboardJson): Map<string, SeasonAffiliation> {
+  const map = new Map<string, SeasonAffiliation>();
   for (const rows of Object.values(board.stats)) {
     for (const row of rows) {
       if (!map.has(row.playerId)) {
-        map.set(row.playerId, { team: row.team, position: row.position });
+        map.set(row.playerId, {
+          team: row.team,
+          position: row.position,
+          fantasyPosRank: row.fantasyPosRank,
+          fantasyPosRankKind: row.fantasyPosRankKind,
+        });
       }
     }
   }
@@ -153,7 +164,7 @@ export function PlayerSearch({
   const [board, setBoard] = useState<LeaderboardJson | null>(null);
   const [boardStatus, setBoardStatus] = useState<BoardStatus>("idle");
   const [seasonAffiliation, setSeasonAffiliation] = useState(
-    () => new Map<string, { team: string; position: string }>(),
+    () => new Map<string, SeasonAffiliation>(),
   );
 
   const seasonOptions = useMemo(() => {
@@ -267,7 +278,7 @@ export function PlayerSearch({
     )
       .then((boards) => {
         if (cancelled) return;
-        const map = new Map<string, { team: string; position: string }>();
+        const map = new Map<string, SeasonAffiliation>();
         for (const payload of boards) {
           if (!payload) continue;
           for (const [id, aff] of affiliationFromBoard(payload)) {
@@ -357,7 +368,13 @@ export function PlayerSearch({
     const forSeason = scoped.map((player) => {
       const aff = seasonAffiliation.get(player.id);
       if (!aff) return player;
-      return { ...player, team: aff.team, position: aff.position };
+      return {
+        ...player,
+        team: aff.team,
+        position: aff.position,
+        fantasyPosRank: aff.fantasyPosRank,
+        fantasyPosRankKind: aff.fantasyPosRankKind,
+      };
     });
     return searchPlayers(forSeason, query);
   }, [players, group, query, season, seasonAffiliation]);
@@ -562,7 +579,11 @@ export function PlayerSearch({
                   <div>
                     <p className="font-medium text-zinc-900">{row.name}</p>
                     <p className="flex flex-wrap items-center gap-x-1.5 text-sm text-zinc-500">
-                      <span>{row.position}</span>
+                      <PositionRankLabel
+                        position={row.position}
+                        rank={row.fantasyPosRank}
+                        kind={row.fantasyPosRankKind}
+                      />
                       <span aria-hidden>·</span>
                       <TeamAbbr team={row.team} />
                     </p>
@@ -602,7 +623,11 @@ export function PlayerSearch({
                   <div>
                     <p className="font-medium text-zinc-900">{player.name}</p>
                     <p className="flex flex-wrap items-center gap-x-1.5 text-sm text-zinc-500">
-                      <span>{player.position}</span>
+                      <PositionRankLabel
+                        position={player.position}
+                        rank={player.fantasyPosRank}
+                        kind={player.fantasyPosRankKind}
+                      />
                       <span aria-hidden>·</span>
                       <TeamAbbr team={player.team} />
                     </p>

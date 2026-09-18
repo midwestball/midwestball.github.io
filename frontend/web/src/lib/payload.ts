@@ -20,12 +20,17 @@ export type JsonStatSnapshot = {
   unavailableReason?: Exclude<StatAvailabilityStatus, "ready" | "pending">;
 };
 
+export type FantasyPosRankKind = "consensus" | "finish";
+
 export type PlayerBio = {
   id: string;
   name: string;
   position: string;
   team: string;
   seasons: number[];
+  /** Season-scoped; omitted on `index/players.json` (latest-only bios). */
+  fantasyPosRank?: number;
+  fantasyPosRankKind?: FantasyPosRankKind;
 };
 
 export type PlayerPageJson = {
@@ -51,6 +56,8 @@ export type HighlightRow = {
   peerN: number;
   oneInN: number | null;
   rank: number;
+  fantasyPosRank?: number;
+  fantasyPosRankKind?: FantasyPosRankKind;
 };
 
 export type HighlightsBoardJson = {
@@ -74,6 +81,8 @@ export type LeaderboardRow = {
   /** Season-to-date denominator used in ramp–hold (attempts, targets, …). */
   denomYtd: number | null;
   qualified: boolean;
+  fantasyPosRank?: number;
+  fantasyPosRankKind?: FantasyPosRankKind;
 };
 
 export type LeaderboardJson = {

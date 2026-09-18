@@ -21,7 +21,9 @@
 
 ## Never
 
-- Invent ranks when the leaderboard artifact is missing.
+- Invent ranks when the leaderboard artifact is missing, or invent `fantasyPosRank` when Ballnet omitted it.
+- Compute Expert Consensus Rank or PPR finish in the Next app — render published `fantasyPosRank` / `fantasyPosRankKind` only.
+- Change tooltip copy away from kind-specific sentences (`Rank according to fantasy consensus` / `PPR finish among {QBs|WRs|RBs|TEs} that season`).
 - Bundle leaderboard JSON into the Next client bundle.
 - Mix highlight z-score boards with YTD search sort.
 - Treat a rejected `fetchLeaderboard` as an empty result list — surface the error state.
@@ -29,7 +31,7 @@
 
 ## Silent Failures & Gotchas
 
-- Position only (no stat) still uses the bio index scoped to that group — no values shown until a stat is chosen. Season team/position on bio rows is overlaid from that season’s leaderboard artifact(s) when available; `index/players.json` team is latest-only and used only as fallback (players missing from boards, demos).
+- Position only (no stat) still uses the bio index scoped to that group — no values shown until a stat is chosen. Season team/position on bio rows is overlaid from that season’s leaderboard artifact(s) when available, including `fantasyPosRank` / `fantasyPosRankKind`; `index/players.json` team is latest-only and used only as fallback (players missing from boards, demos). Do not read ranks from the index.
 - Demo players in the index have no leaderboard rows.
 - NGS-week / games / snaps / dropbacks / air-yards / tackle_chances denoms leave `volumeStatId` unset — slider uses `denomYtd` when published, otherwise stays gray (“Volume not available for this stat”) rather than a false “Min Carries”.
 - Stats with no spine source yet (`red_zone_*`, `route_pct`, …) publish null volume and `qualified: false` → empty ranked list + disabled slider (“No volume data for this stat yet”).

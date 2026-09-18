@@ -9,6 +9,7 @@ import {
 } from "@/data/players";
 import { TremorVariant } from "@/components/stat-row/variants";
 import { SeasonSelect } from "@/components/player/SeasonSelect";
+import { PositionRankLabel } from "@/components/PositionRankLabel";
 import { TeamAbbr } from "@/components/TeamAbbr";
 import { loadHydratedPlayerSnapshots } from "@/lib/ballnet-store";
 
@@ -88,7 +89,11 @@ export default async function PlayerPage({
           <div className="rounded-none border border-zinc-200 bg-zinc-50 px-3 py-2">
             <p className="text-lg font-semibold">{player.name}</p>
             <p className="flex flex-wrap items-center gap-x-1.5 text-sm text-zinc-500">
-              <span>{displayPosition}</span>
+              <PositionRankLabel
+                position={displayPosition}
+                rank={pageJson?.player.fantasyPosRank}
+                kind={pageJson?.player.fantasyPosRankKind}
+              />
               <span aria-hidden>·</span>
               <TeamAbbr team={displayTeam} />
               <span aria-hidden>·</span>

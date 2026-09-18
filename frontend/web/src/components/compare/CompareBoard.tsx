@@ -5,11 +5,13 @@ import { AnimatePresence, motion } from "framer-motion";
 import { ChevronRight } from "lucide-react";
 import { formatStatValue } from "@/lib/catalog/format";
 import type { StatPayload } from "@/lib/distribution";
+import type { FantasyPosRankKind } from "@/lib/payload";
 import { isStatReady } from "@/lib/stat-status";
 import { compareFillColor } from "@/lib/team-colors";
 import { cn } from "@/lib/utils";
 import { PercentileSlider } from "@/components/stat-row/PercentileSlider";
 import { TeamAbbr } from "@/components/TeamAbbr";
+import { PositionRankLabel } from "@/components/PositionRankLabel";
 import {
   CompareOverlayChart,
   shortPlayerName,
@@ -21,6 +23,8 @@ export type CompareColumn = {
   name: string;
   position: string;
   team: string;
+  fantasyPosRank?: number;
+  fantasyPosRankKind?: FantasyPosRankKind;
   stats: StatPayload[];
 };
 
@@ -176,8 +180,12 @@ export function CompareBoard({ columns }: { columns: CompareColumn[] }) {
                 <span className="md:hidden">{shortPlayerName(col.name)}</span>
                 <span className="hidden md:inline">{col.name}</span>
               </p>
-              <p className="flex flex-wrap items-center gap-x-1 truncate text-[10px] text-zinc-500 md:gap-x-1.5 md:text-xs">
-                <span>{col.position}</span>
+              <p className="flex flex-wrap items-center gap-x-1 text-[10px] text-zinc-500 md:gap-x-1.5 md:text-xs">
+                <PositionRankLabel
+                  position={col.position}
+                  rank={col.fantasyPosRank}
+                  kind={col.fantasyPosRankKind}
+                />
                 <span aria-hidden>·</span>
                 <TeamAbbr team={col.team} />
               </p>

@@ -37,6 +37,7 @@ Before modifying or creating new features, locate the relevant domain in the tab
 | **Search Filter UI** | Cascading Filter chrome; bio vs ranked list modes. | `web/src/components/search/BOUNDARIES.md` |
 | **Compare UI** | Side-by-side sliders; one overlay KDE per row; team-primary markers; max 4 same-group. | `web/src/components/compare/BOUNDARIES.md` |
 | **Compare colors** | Franchise primary + same-team brightness from mean ready %. | `docs/adr/2026-09-17-compare-side-by-side.md` |
+| **Fantasy position rank** | Ballnet publishes `fantasyPosRank` + kind; Knowball subscripts position labels. Never invent ranks. | `docs/adr/2026-09-17-fantasy-pos-rank.md` |
 | **Plot domain** | League `xMax` = qualified season max (Ballnet `_expand_domain`). | `docs/adr/2026-09-17-season-max-plot-domain.md` |
 | **Future features** | Ordered backlog: overall %, trajectories, compare follow-ups. | `docs/architecture/future-features.md` |
 | **ETL contract** | Ballnet publish path for Knowball viz (Leg 1); reserved later stages. | `.plans/ballnet-etl-knowball-visualizations.md` |
@@ -56,6 +57,7 @@ The accepted UI lives under **`web/`**. Run with `cd web && npm install && npm r
 | Compare (`/compare`) | `web/src/app/compare/page.tsx`, `web/src/components/compare/` |
 | Position catalog | `web/src/lib/catalog/` |
 | JSON contract | `web/src/lib/payload.ts` |
+| Position rank label | `web/src/components/PositionRankLabel.tsx` |
 | Expandable row | `web/src/components/stat-row/ExpandableStatRow.tsx` |
 | Percentile slider | `web/src/components/stat-row/PercentileSlider.tsx` |
 | Distribution charts | `web/src/components/stat-row/TremorDistribution.tsx` |

@@ -7,6 +7,7 @@
 - Expanded rows use **one** `CompareOverlayChart` (shared league curve + per-player markers). Chart fill/focus color comes from `compareFillColor`. Slider thumbs stay Savant percentile colored.
 - Marker labels use `shortPlayerName` (`F. Last`) and stack by descending oriented percentile.
 - Keep square chrome (`rounded-none`, no pills/shadows).
+- Season-scoped position on column meta uses `PositionRankLabel` from the hydrated page (`fantasyPosRank` / kind). Picker chips stay index-only (no rank).
 - On portrait-width screens (`max-md`), the board is full-bleed and the name column is exactly ⅓ of the row. Two players split the remaining ⅔ equally (⅓ + ⅓); three or four players share that ⅔ and compress.
 
 ## Ask First
@@ -18,12 +19,13 @@
 ## Never
 
 - Invent league curves or team colors from player-page JSON — colors live in `team-colors.ts`; curves still come from Ballnet league merge.
+- Invent `fantasyPosRank` or compute PPR/ECR in the compare client. Tooltip copy stays kind-specific.
 - Embed draft-optimizer / ffoptim modeling here.
 - Render a separate expanded KDE per column for the same `stat.id`.
 
 ## Silent Failures & Gotchas
 
-- Index `team` / `position` are latest-only; display prefers season page bio when hydrated.
+- Index `team` / `position` are latest-only; display prefers season page bio when hydrated (including fantasy position rank).
 - Unknown team abbreviations fall back to zinc (`#52525b`).
 - Players missing from the index (stale `p=` ids) are dropped silently on load.
 - Demo / unpublished players show gray unavailable rows; overlay omits markers without a ready curve.

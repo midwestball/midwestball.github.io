@@ -19,6 +19,7 @@ import {
 import { cn } from "@/lib/utils";
 import { DistributionChart } from "@/components/stat-row/TremorDistribution";
 import { TeamAbbr } from "@/components/TeamAbbr";
+import { PositionRankLabel } from "@/components/PositionRankLabel";
 
 function catalogDef(row: HighlightRow) {
   const group = row.positionGroup as PositionGroup;
@@ -104,8 +105,12 @@ function HighlightRowExpandable({
               {row.name}
             </Link>
           </p>
-          <p className="flex flex-wrap items-center gap-x-1.5 truncate text-sm text-zinc-500">
-            <span>{row.position}</span>
+          <p className="flex flex-wrap items-center gap-x-1.5 text-sm text-zinc-500">
+            <PositionRankLabel
+              position={row.position}
+              rank={row.fantasyPosRank}
+              kind={row.fantasyPosRankKind}
+            />
             <span aria-hidden>·</span>
             <TeamAbbr team={row.team} />
             {row.opponent ? (

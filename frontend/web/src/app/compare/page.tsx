@@ -83,6 +83,8 @@ export default async function ComparePage({
           name: bio.name,
           position,
           team,
+          fantasyPosRank: page?.player.fantasyPosRank,
+          fantasyPosRankKind: page?.player.fantasyPosRankKind,
           stats: hydratePlayerStats(position, snapshots),
         } satisfies CompareColumn;
       }),

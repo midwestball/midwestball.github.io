@@ -10,6 +10,8 @@ Hydration (`hydratePlayerStats`) always walks the **full position catalog**. Mis
 
 Rate stats are stored **0–1**. Percentile is inclusive CDF \(P(X \le x)\), already oriented so the slider's 100 is "good".
 
+Optional `player.fantasyPosRank` + `player.fantasyPosRankKind` (`"consensus"` | `"finish"`) are season-scoped fantasy position ranks for **QB / WR / RB / TE** only. Live season is FantasyPros weekly ECR; closed seasons are PPR finish. Omit the fields rather than invent a rank. Not present on `index/players.json`.
+
 ## League payload
 
 `league/{season}/w{week}/{positionGroup}.json` — one file per group slice:
@@ -53,7 +55,7 @@ player_stat_values
 
 `as_of_week` is the NFL week being viewed. Ramp–hold uses `min_n = n_base × min(w, 5)` in Ballnet, then sets `qualified`.
 
-Publish path: Storage (or local `data/`) serves **scalar** `PlayerPageJson` plus **shared** `league/*.json`. Knowball merges at fetch time — still not a runtime SQL client. Weekly home boards are separate Stage H objects under `highlights/{season}/w{week}.json`. Expand charts load allowlist single-game KDEs from `dists/league_weekly/{season}/w{week}/{group}.json` (`scope: "league_weekly"`) — never the YTD `league/` curves.
+Publish path: Storage (or local `data/`) serves **scalar** `PlayerPageJson` plus **shared** `league/*.json`. Knowball merges at fetch time — still not a runtime SQL client. Weekly home boards are separate Stage H objects under `highlights/{season}/w{week}.json`. Highlight rows may include the same optional `fantasyPosRank` fields; `rank` on that board is z-score order, not fantasy position. Expand charts load allowlist single-game KDEs from `dists/league_weekly/{season}/w{week}/{group}.json` (`scope: "league_weekly"`) — never the YTD `league/` curves.
 
 ## Search leaderboard payload
 
@@ -66,7 +68,8 @@ stats: { [statId]: [{
   playerId, name, position, team,
   value, percentile,  # percentile already oriented (100 = good)
   denomYtd,        # season-to-date denom for ramp–hold (slider fallback)
-  qualified
+  qualified,
+  fantasyPosRank?, fantasyPosRankKind?  # QB/WR/RB/TE only; same as player pages
 }] }
 ```
 
@@ -79,3 +82,4 @@ Built from Stage E `ytd_*_pct.parquet`. Knowball search Filter sorts Best/Worst 
 - Impute 0 when NGS/PFR is missing (`missing_source`).
 - Reuse `league_ytd` curves for home highlight expand charts.
 - Stuff every percentile into `index/players.json` for search sort.
+- Invent `fantasyPosRank` in the Next app when Ballnet omitted it.
