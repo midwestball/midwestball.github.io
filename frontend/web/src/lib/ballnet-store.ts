@@ -14,13 +14,14 @@ import { vizStorageBase } from "@/lib/viz-config";
 
 export type SeasonsEnvelope = {
   schemaVersion: 1;
-  seasons: Array<{ season: number; asOfWeek: number }>;
+  seasons: Array<{ season: number; asOfWeek: number; completedWeek?: number }>;
 };
 
 export type CurrentEnvelope = {
   schemaVersion: 1;
   season: number;
   asOfWeek: number;
+  completedWeek?: number;
 };
 
 export type PlayersEnvelope = {
@@ -43,6 +44,7 @@ export type LeagueGroupJson = {
   schemaVersion: 1;
   season: number;
   asOfWeek: number;
+  completedWeek?: number;
   positionGroup: string;
   /** Present on Stage H game-level files; absent on YTD league shapes. */
   scope?: "league_weekly";

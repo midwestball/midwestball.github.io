@@ -27,3 +27,4 @@
 - Index + page fetches use `revalidate: 3600` — expect up to one hour before a Ballnet upload shows live (or redeploy).
 - Highlight expand needs a separate `loadLeagueWeeklyGroupJson` fetch; a published board without weekly dists still ranks but charts stay pending.
 - Search Filter Best/Worst needs `loadLeaderboard`; bio-only filter still works when the board is absent.
+- Search min-volume uses `completedWeek` from the board / seasons / current index. Missing field → `asOfWeek` (historical slices). Do not recompute schedule completeness in the Next app.

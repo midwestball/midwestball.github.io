@@ -40,6 +40,7 @@ Before modifying or creating new features, locate the relevant domain in the tab
 | **Compare colors** | Franchise primary + same-team brightness from mean ready %. | `docs/adr/2026-09-17-compare-side-by-side.md` |
 | **Fantasy position rank** | Ballnet publishes `fantasyPosRank` + kind; Knowball subscripts position labels. Never invent ranks. | `docs/adr/2026-09-17-fantasy-pos-rank.md` |
 | **Plot domain** | League `xMax` = qualified season max (Ballnet `_expand_domain`). | `docs/adr/2026-09-17-season-max-plot-domain.md` |
+| **Completed-week ramp–hold** | YTD `asOfWeek` may be a partial slate; `completedWeek` is the last fully scored week and drives min-n. | `docs/adr/2026-09-18-completed-week-ramp-hold.md` |
 | **Future features** | Ordered backlog: overall %, trajectories, compare follow-ups. | `docs/architecture/future-features.md` |
 | **ETL contract** | Ballnet publish path for Knowball viz (Leg 1); reserved later stages. | `.plans/ballnet-etl-knowball-visualizations.md` |
 | **Weekly refresh** | Post-game ballnet recipe (lives in ballnet). | Sibling `ballnet/docs/WEEKLY_OPS.md` |

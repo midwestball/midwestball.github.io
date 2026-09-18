@@ -38,6 +38,8 @@ export type PlayerPageJson = {
   player: PlayerBio;
   season: number;
   asOfWeek: number;
+  /** Last fully scored REG week used for ramp–hold. Falls back to asOfWeek. */
+  completedWeek?: number;
   stats: JsonStatSnapshot[];
 };
 
@@ -89,6 +91,8 @@ export type LeaderboardJson = {
   schemaVersion: 1;
   season: number;
   asOfWeek: number;
+  /** Last fully scored REG week used for ramp–hold. Falls back to asOfWeek. */
+  completedWeek?: number;
   positionGroup: string;
   stats: Record<string, LeaderboardRow[]>;
 };

@@ -31,3 +31,4 @@ Position catalogs are product configuration, not player data. Rows on a player p
 - `alwaysUnavailable` wins even if a snapshot is present — nflverse has no player-level OL sacks/pressures/win rate.
 - Percentile orientation is Ballnet's job: Knowball assumes high = good and does not invert again on the slider.
 - Search min-volume joins `board.stats[volumeStatId]`; leave unset for NGS / games / snaps / dropbacks / air-yards / tackle_chances so the UI does not mislabel those rates as “Min Carries”.
+- Search min-volume floor is `minNBase × min(completedWeek, 5)`, never `asOfWeek`, when Ballnet has published `completedWeek`.

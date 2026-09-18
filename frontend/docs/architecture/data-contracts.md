@@ -4,7 +4,7 @@ Knowball renders JSON. Ballnet computes it. Do not put a SQL/PostgREST client in
 
 ## Page payload
 
-`PlayerPageJson` in `web/src/lib/payload.ts`: player bio, `season`, `asOfWeek`, and `stats[]` **scalar** snapshots keyed by catalog `id` (value, percentile, qualified, reasons). Domain + `curve` come from the league file below (or legacy embeds).
+`PlayerPageJson` in `web/src/lib/payload.ts`: player bio, `season`, `asOfWeek`, optional `completedWeek`, and `stats[]` **scalar** snapshots keyed by catalog `id` (value, percentile, qualified, reasons). Domain + `curve` come from the league file below (or legacy embeds).
 
 Hydration (`hydratePlayerStats`) always walks the **full position catalog**. Missing snapshots stay `pending`. `alwaysUnavailable` catalog flags become `not_in_nflverse` even if Ballnet sends a row. Load path: `loadHydratedPlayerSnapshots` merges league shapes first.
 
@@ -18,7 +18,7 @@ Optional `player.fantasyPosRank` + `player.fantasyPosRankKind` (`"consensus"` | 
 
 ```text
 schemaVersion: 1
-season, asOfWeek, positionGroup
+season, asOfWeek, completedWeek, positionGroup
 stats: { [statId]: {
   kind, xMin, xMax, yMax,    # kind is catalog metadata (formatting)
   curve,                     # reflected KDE for every id
@@ -53,7 +53,7 @@ player_stat_values
   unavailable_reason null | insufficient_sample | missing_source | not_in_nflverse
 ```
 
-`as_of_week` is the NFL week being viewed. Ramp–hold uses `min_n = n_base × min(w, 5)` in Ballnet, then sets `qualified`.
+`as_of_week` is the latest REG week included in the YTD slice (partial slates allowed). Ramp–hold uses `min_n = n_base × min(completed_week, 5)` in Ballnet, then sets `qualified`. `completed_week` is the last consecutive REG week where every scheduled game has scores, floored at 1 and capped at `as_of_week`. Publish `completedWeek` on pages, league, leaderboards, and `index/{current,seasons}.json`. Legacy JSON without the field: treat `completedWeek = asOfWeek`.
 
 Publish path: Storage (or local `data/`) serves **scalar** `PlayerPageJson` plus **shared** `league/*.json`. Knowball merges at fetch time — still not a runtime SQL client. Weekly home boards are separate Stage H objects under `highlights/{season}/w{week}.json`. Highlight rows may include the same optional `fantasyPosRank` fields; `rank` on that board is z-score order, not fantasy position. Expand charts load allowlist single-game KDEs from `dists/league_weekly/{season}/w{week}/{group}.json` (`scope: "league_weekly"`) — never the YTD `league/` curves.
 
@@ -63,7 +63,7 @@ Publish path: Storage (or local `data/`) serves **scalar** `PlayerPageJson` plus
 
 ```text
 schemaVersion: 1
-season, asOfWeek, positionGroup
+season, asOfWeek, completedWeek, positionGroup
 stats: { [statId]: [{
   playerId, name, position, team,
   value, percentile,  # percentile already oriented (100 = good)
@@ -73,7 +73,7 @@ stats: { [statId]: [{
 }] }
 ```
 
-Built from Stage E `ytd_*_pct.parquet`. Knowball search Filter sorts Best/Worst on `percentile` without fetching player pages. Search-only **Fantasy Rank** sorts `fantasyPosRank` on the same board (not a catalog id). Min-volume slider defaults to ramp–hold `minNBase × min(asOfWeek, 5)` and prefers catalog `volumeStatId` → `board.stats[volumeStatId].value` joined by `playerId`; `denomYtd` is fallback only. Rows may include unqualified players (`percentile: null`); UI keeps nulls last.
+Built from Stage E `ytd_*_pct.parquet`. Knowball search Filter sorts Best/Worst on `percentile` without fetching player pages. Search-only **Fantasy Rank** sorts `fantasyPosRank` on the same board (not a catalog id). Min-volume slider defaults to ramp–hold `minNBase × min(completedWeek, 5)` and prefers catalog `volumeStatId` → `board.stats[volumeStatId].value` joined by `playerId`; `denomYtd` is fallback only. Rows may include unqualified players (`percentile: null`); UI keeps nulls last.
 
 ## Do not
 

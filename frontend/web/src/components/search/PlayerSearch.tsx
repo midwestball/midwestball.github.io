@@ -68,6 +68,7 @@ type BoardStatus = "idle" | "loading" | "ready" | "error";
 type PublishedSeason = {
   season: number;
   asOfWeek: number;
+  completedWeek?: number;
 };
 
 type PlayerSearchProps = {
@@ -76,10 +77,10 @@ type PlayerSearchProps = {
   initialSeason: number;
 };
 
-/** Mirror Ballnet ramp–hold: min_n = n_base × min(w, 5). */
-function rampHoldMin(stat: StatDefinition, asOfWeek: number): number | null {
+/** Mirror Ballnet ramp–hold: min_n = n_base × min(completedWeek, 5). */
+function rampHoldMin(stat: StatDefinition, completedWeek: number): number | null {
   if (stat.minNBase == null) return null;
-  const week = Number(asOfWeek);
+  const week = Number(completedWeek);
   if (!Number.isFinite(week) || week < 1) return null;
   return stat.minNBase * Math.min(week, 5);
 }
@@ -237,9 +238,10 @@ export function PlayerSearch({
 
   const seasonOptions = useMemo(() => {
     if (seasons.some((s) => s.season === initialSeason)) return seasons;
-    return [{ season: initialSeason, asOfWeek: 18 }, ...seasons].sort(
-      (a, b) => b.season - a.season,
-    );
+    return [
+      { season: initialSeason, asOfWeek: 18, completedWeek: 18 },
+      ...seasons,
+    ].sort((a, b) => b.season - a.season);
   }, [seasons, initialSeason]);
 
   const asOfWeek = useMemo(() => {
@@ -249,6 +251,11 @@ export function PlayerSearch({
       18
     );
   }, [seasonOptions, season]);
+
+  const completedWeek = useMemo(() => {
+    const row = seasonOptions.find((s) => s.season === season);
+    return row?.completedWeek ?? row?.asOfWeek ?? asOfWeek;
+  }, [seasonOptions, season, asOfWeek]);
 
   const boardGroup = group ? boardGroupOf(group) : null;
   const statEnabled = group != null;
@@ -272,8 +279,9 @@ export function PlayerSearch({
 
   const floor = useMemo(() => {
     if (!selectedStat) return null;
-    return rampHoldMin(selectedStat, asOfWeek);
-  }, [selectedStat, asOfWeek]);
+    const week = board?.completedWeek ?? completedWeek;
+    return rampHoldMin(selectedStat, week);
+  }, [selectedStat, board, completedWeek]);
 
   const volumeMap = useMemo(
     () => volumeByPlayer(board, selectedStat?.volumeStatId),

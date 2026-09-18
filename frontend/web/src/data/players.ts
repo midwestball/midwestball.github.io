@@ -19,29 +19,44 @@ export const loadPlayerIndex = cache(async (): Promise<PlayerBio[]> => {
 export const loadCurrentSeasonContext = cache(async (): Promise<{
   season: number;
   asOfWeek: number;
+  completedWeek: number;
 }> => {
   const current = await loadCurrentMeta();
   if (current) {
-    return { season: current.season, asOfWeek: current.asOfWeek };
+    return {
+      season: current.season,
+      asOfWeek: current.asOfWeek,
+      completedWeek: current.completedWeek ?? current.asOfWeek,
+    };
   }
-  return { season: 2026, asOfWeek: 1 };
+  return { season: 2026, asOfWeek: 1, completedWeek: 1 };
 });
 
 /** Published seasons for search year filter (newest first). */
 export const loadPublishedSeasons = cache(async (): Promise<
-  Array<{ season: number; asOfWeek: number }>
+  Array<{ season: number; asOfWeek: number; completedWeek: number }>
 > => {
   const [meta, current] = await Promise.all([
     loadSeasonsMeta(),
     loadCurrentSeasonContext(),
   ]);
-  const bySeason = new Map<number, number>();
+  const bySeason = new Map<number, { asOfWeek: number; completedWeek: number }>();
   for (const row of meta?.seasons ?? []) {
-    bySeason.set(row.season, row.asOfWeek);
+    bySeason.set(row.season, {
+      asOfWeek: row.asOfWeek,
+      completedWeek: row.completedWeek ?? row.asOfWeek,
+    });
   }
-  bySeason.set(current.season, current.asOfWeek);
+  bySeason.set(current.season, {
+    asOfWeek: current.asOfWeek,
+    completedWeek: current.completedWeek,
+  });
   return [...bySeason.entries()]
-    .map(([season, asOfWeek]) => ({ season, asOfWeek }))
+    .map(([season, weeks]) => ({
+      season,
+      asOfWeek: weeks.asOfWeek,
+      completedWeek: weeks.completedWeek,
+    }))
     .sort((a, b) => b.season - a.season);
 });
 

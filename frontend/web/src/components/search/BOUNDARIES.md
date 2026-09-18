@@ -3,14 +3,14 @@
 ## Always
 
 - Position filter options are publishable groups (`GROUP_LABEL`) except **WR / TE**, which split the `pass_catcher` leaderboard client-side. Stats still come from `STATS_BY_GROUP.pass_catcher` (skip `alwaysUnavailable`). Percentiles stay pass-catcher-wide.
-- Year select sits to the right of the search input; options come from Ballnet `index/seasons.json` (plus current). Bio list is scoped to players whose `seasons` include the selected year. Changing year also reloads `leaderboards/{season}/w{asOfWeek}/…` using that season’s published final week and recomputes the ramp–hold floor.
+- Year select sits to the right of the search input; options come from Ballnet `index/seasons.json` (plus current). Bio list is scoped to players whose `seasons` include the selected year. Changing year also reloads `leaderboards/{season}/w{asOfWeek}/…` using that season’s published data week and recomputes the ramp–hold floor from `completedWeek` (last fully scored week), not `asOfWeek`.
 - Ranked Best/Worst lists load `leaderboards/{season}/w{week}/{group}.json` via the search server action — never N player-page fetches.
 - Player result links include `?season=` for the selected search year.
 - Sort on oriented percentile (100 = good); Best = descending, Worst = ascending; null percentiles last.
 - Stat dropdown may include search-only **Fantasy Rank** (`fantasy_pos_rank`) for QB / backfield / WR / TE. Not a catalog `stat.id`. Best = rank 1 first; Worst = largest published rank first. Drop players Ballnet omitted. No min-volume slider.
 - Filter row sits under the search input; Stat and Best/Worst stay visible but disabled (gray) until prerequisites are set.
 - Filter controls and min-volume may wrap independently on narrow widths (`flex-wrap` on both the outer row and the filter group).
-- Min-volume control: label **Min Volume** (specific catalog volume name in the tooltip). On a shared row it `grow`s to fill from the filters to the right edge; `basis-[12rem]` lets it wrap on small screens, then grows to full width. The range track is `flex-1`; the number input stays fixed for precision. Default = ramp–hold `minNBase × min(asOfWeek, 5)`; range is **0…max(volume)**.
+- Min-volume control: label **Min Volume** (specific catalog volume name in the tooltip). On a shared row it `grow`s to fill from the filters to the right edge; `basis-[12rem]` lets it wrap on small screens, then grows to full width. The range track is `flex-1`; the number input stays fixed for precision. Default = ramp–hold `minNBase × min(completedWeek, 5)` (`board.completedWeek`, else seasons.json, else `asOfWeek`); range is **0…max(volume)**.
 - Resolve volume as `board.stats[volumeStatId].value` joined by `playerId` when the catalog sets `volumeStatId`; else fall back to the rate row’s `denomYtd`. If neither yields any values, filter with `qualified` and keep the slider disabled.
 - Label the control from the volume sibling’s catalog `label` (e.g. “Min Field Goal Attempts”), not the rate row’s display `denom`.
 - Keep square chrome (`rounded-none`, no pills/shadows) on Filter controls.
