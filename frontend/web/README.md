@@ -7,7 +7,7 @@ npm install
 npm run dev
 ```
 
-Set `NEXT_PUBLIC_SUPABASE_URL` (e.g. in `.env.local`) for Storage-backed pages.
+Set `NEXT_PUBLIC_SUPABASE_URL` (e.g. in `.env.local`). Required locally — Knowball reads Storage only, not sibling `ballnet/data`.
 
 Open [http://localhost:3000](http://localhost:3000).
 

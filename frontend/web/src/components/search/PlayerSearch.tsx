@@ -3,24 +3,22 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import {
-  GROUP_LABEL,
   STATS_BY_GROUP,
   formatStatValue,
+  isPositionCode,
+  positionGroupOf,
   volumeStatFor,
   type PositionGroup,
   type StatDefinition,
 } from "@/lib/catalog";
 import type { FantasyPosRankKind, LeaderboardJson, LeaderboardRow, PlayerBio } from "@/lib/payload";
-import {
-  filterPlayersByGroup,
-  searchPlayers,
-} from "@/lib/player-index";
+import { searchPlayers } from "@/lib/player-index";
 import { fetchLeaderboard } from "@/app/search/actions";
 import { TeamAbbr } from "@/components/TeamAbbr";
 import { PositionRankLabel } from "@/components/PositionRankLabel";
 
-/** Publishable groups only — returner has no Stage G spine. */
-const FILTER_GROUPS: PositionGroup[] = [
+/** Publishable groups for board fetches — returner has no Stage G spine. */
+const BOARD_GROUPS: PositionGroup[] = [
   "qb",
   "backfield",
   "pass_catcher",
@@ -30,6 +28,39 @@ const FILTER_GROUPS: PositionGroup[] = [
   "kicker",
   "punter",
 ];
+
+/** Search Position options. WR/TE split the pass_catcher board client-side only. */
+type SearchPositionFilter =
+  | Exclude<PositionGroup, "pass_catcher" | "returner">
+  | "wr"
+  | "te";
+
+const FILTER_OPTIONS: { id: SearchPositionFilter; label: string }[] = [
+  { id: "qb", label: "Quarterback" },
+  { id: "backfield", label: "Backfield" },
+  { id: "wr", label: "Wide receiver" },
+  { id: "te", label: "Tight end" },
+  { id: "ol", label: "Offensive line" },
+  { id: "def_front", label: "Defensive front" },
+  { id: "secondary", label: "Secondary" },
+  { id: "kicker", label: "Kicker" },
+  { id: "punter", label: "Punter" },
+];
+
+function boardGroupOf(filter: SearchPositionFilter): PositionGroup {
+  if (filter === "wr" || filter === "te") return "pass_catcher";
+  return filter;
+}
+
+function matchesPositionFilter(
+  position: string,
+  filter: SearchPositionFilter,
+): boolean {
+  if (filter === "wr") return position === "WR";
+  if (filter === "te") return position === "TE";
+  if (!isPositionCode(position)) return false;
+  return positionGroupOf(position) === filter;
+}
 
 type SortMode = "best" | "worst";
 type BoardStatus = "idle" | "loading" | "ready" | "error";
@@ -51,6 +82,43 @@ function rampHoldMin(stat: StatDefinition, asOfWeek: number): number | null {
   const week = Number(asOfWeek);
   if (!Number.isFinite(week) || week < 1) return null;
   return stat.minNBase * Math.min(week, 5);
+}
+
+/** Search-only sort key — not a catalog `stat.id` and not on player-page sliders. */
+const FANTASY_RANK_STAT_ID = "fantasy_pos_rank";
+const FANTASY_RANK_BOARD_GROUPS: PositionGroup[] = [
+  "qb",
+  "backfield",
+  "pass_catcher",
+];
+
+function uniqueBoardPlayers(board: LeaderboardJson): LeaderboardRow[] {
+  const map = new Map<string, LeaderboardRow>();
+  for (const rows of Object.values(board.stats)) {
+    for (const row of rows) {
+      if (!map.has(row.playerId)) map.set(row.playerId, row);
+    }
+  }
+  return [...map.values()];
+}
+
+function sortFantasyRankRows(
+  rows: LeaderboardRow[],
+  mode: SortMode,
+): LeaderboardRow[] {
+  const copy = [...rows];
+  copy.sort((a, b) => {
+    const aRank = a.fantasyPosRank;
+    const bRank = b.fantasyPosRank;
+    if (aRank == null || bRank == null) {
+      return a.playerId.localeCompare(b.playerId);
+    }
+    const diff =
+      mode === "best" ? aRank - bRank : bRank - aRank;
+    if (diff !== 0) return diff;
+    return a.playerId.localeCompare(b.playerId);
+  });
+  return copy;
 }
 
 function sortLeaderboardRows(
@@ -156,7 +224,7 @@ export function PlayerSearch({
 }: PlayerSearchProps) {
   const [query, setQuery] = useState("");
   const [season, setSeason] = useState(initialSeason);
-  const [group, setGroup] = useState<PositionGroup | null>(null);
+  const [group, setGroup] = useState<SearchPositionFilter | null>(null);
   const [statId, setStatId] = useState<string | null>(null);
   const [sortMode, setSortMode] = useState<SortMode>("best");
   const [minVolume, setMinVolume] = useState<number | null>(null);
@@ -182,23 +250,25 @@ export function PlayerSearch({
     );
   }, [seasonOptions, season]);
 
+  const boardGroup = group ? boardGroupOf(group) : null;
   const statEnabled = group != null;
   const sortEnabled = group != null && statId != null;
+  const isFantasyRank = statId === FANTASY_RANK_STAT_ID;
 
   const statOptions = useMemo(() => {
-    if (!group) return [];
-    return STATS_BY_GROUP[group].filter((s) => !s.alwaysUnavailable);
-  }, [group]);
+    if (!boardGroup) return [];
+    return STATS_BY_GROUP[boardGroup].filter((s) => !s.alwaysUnavailable);
+  }, [boardGroup]);
 
   const selectedStat = useMemo(
-    () => statOptions.find((s) => s.id === statId) ?? null,
-    [statOptions, statId],
+    () => (isFantasyRank ? null : statOptions.find((s) => s.id === statId) ?? null),
+    [statOptions, statId, isFantasyRank],
   );
 
   const volumeSibling = useMemo(() => {
-    if (!group || !selectedStat) return null;
-    return volumeStatFor(selectedStat, group);
-  }, [group, selectedStat]);
+    if (!boardGroup || !selectedStat) return null;
+    return volumeStatFor(selectedStat, boardGroup);
+  }, [boardGroup, selectedStat]);
 
   const floor = useMemo(() => {
     if (!selectedStat) return null;
@@ -211,9 +281,11 @@ export function PlayerSearch({
   );
 
   const statRows = useMemo(() => {
-    if (!statId || !board) return [];
-    return board.stats[statId] ?? [];
-  }, [board, statId]);
+    if (!statId || !board || isFantasyRank) return [];
+    const rows = board.stats[statId] ?? [];
+    if (!group) return rows;
+    return rows.filter((row) => matchesPositionFilter(row.position, group));
+  }, [board, statId, isFantasyRank, group]);
 
   const hasVolumeData = useMemo(
     () => boardHasResolvedVolume(statRows, volumeMap),
@@ -241,7 +313,7 @@ export function PlayerSearch({
   const volumeVisible = sortEnabled && floor != null;
 
   useEffect(() => {
-    if (!group || !statId) {
+    if (!boardGroup || !statId) {
       setBoard(null);
       setBoardStatus("idle");
       return;
@@ -249,7 +321,7 @@ export function PlayerSearch({
     let cancelled = false;
     setBoard(null);
     setBoardStatus("loading");
-    void fetchLeaderboard(group, season, asOfWeek)
+    void fetchLeaderboard(boardGroup, season, asOfWeek)
       .then((payload) => {
         if (cancelled) return;
         setBoard(payload);
@@ -263,7 +335,7 @@ export function PlayerSearch({
     return () => {
       cancelled = true;
     };
-  }, [group, statId, season, asOfWeek]);
+  }, [boardGroup, statId, season, asOfWeek]);
 
   // Bio list has no ranked board; overlay team/position from season leaderboards.
   useEffect(() => {
@@ -272,7 +344,7 @@ export function PlayerSearch({
       return;
     }
     let cancelled = false;
-    const groups = group ? [group] : FILTER_GROUPS;
+    const groups = boardGroup ? [boardGroup] : BOARD_GROUPS;
     void Promise.all(
       groups.map((g) => fetchLeaderboard(g, season, asOfWeek)),
     )
@@ -294,7 +366,7 @@ export function PlayerSearch({
     return () => {
       cancelled = true;
     };
-  }, [group, statId, season, asOfWeek]);
+  }, [boardGroup, statId, season, asOfWeek]);
 
   useEffect(() => {
     if (floor == null) {
@@ -337,7 +409,7 @@ export function PlayerSearch({
     setVolume(parsed);
   }
 
-  function onSelectGroup(next: PositionGroup | "") {
+  function onSelectGroup(next: SearchPositionFilter | "") {
     if (!next) {
       setGroup(null);
       setStatId(null);
@@ -364,8 +436,7 @@ export function PlayerSearch({
 
   const bioResults = useMemo(() => {
     const inSeason = players.filter((player) => player.seasons.includes(season));
-    const scoped = group ? filterPlayersByGroup(inSeason, group) : inSeason;
-    const forSeason = scoped.map((player) => {
+    const forSeason = inSeason.map((player) => {
       const aff = seasonAffiliation.get(player.id);
       if (!aff) return player;
       return {
@@ -376,14 +447,24 @@ export function PlayerSearch({
         fantasyPosRankKind: aff.fantasyPosRankKind,
       };
     });
-    return searchPlayers(forSeason, query);
+    const scoped = group
+      ? forSeason.filter((player) => matchesPositionFilter(player.position, group))
+      : forSeason;
+    return searchPlayers(scoped, query);
   }, [players, group, query, season, seasonAffiliation]);
 
   const rankedRows = useMemo(() => {
     if (!statId || !board) return null;
-    const rows = board.stats[statId] ?? [];
-    const useVolume = boardHasResolvedVolume(rows, volumeMap);
-    const filtered = rows.filter((row) => {
+    if (isFantasyRank) {
+      const rows = uniqueBoardPlayers(board).filter((row) => {
+        if (group && !matchesPositionFilter(row.position, group)) return false;
+        if (!matchesQuery(row, needle)) return false;
+        return row.fantasyPosRank != null && row.fantasyPosRank >= 1;
+      });
+      return sortFantasyRankRows(rows, sortMode);
+    }
+    const useVolume = boardHasResolvedVolume(statRows, volumeMap);
+    const filtered = statRows.filter((row) => {
       if (!matchesQuery(row, needle)) return false;
       if (useVolume) {
         const vol = resolveVolume(row, volumeMap);
@@ -395,7 +476,17 @@ export function PlayerSearch({
       return row.qualified;
     });
     return sortLeaderboardRows(filtered, sortMode);
-  }, [board, statId, needle, sortMode, effectiveMin, volumeMap]);
+  }, [
+    board,
+    statId,
+    isFantasyRank,
+    group,
+    needle,
+    sortMode,
+    effectiveMin,
+    volumeMap,
+    statRows,
+  ]);
 
   const showRanked = Boolean(group && statId);
   const volumeLabel =
@@ -438,15 +529,15 @@ export function PlayerSearch({
           <select
             value={group ?? ""}
             onChange={(event) =>
-              onSelectGroup(event.target.value as PositionGroup | "")
+              onSelectGroup(event.target.value as SearchPositionFilter | "")
             }
-            aria-label="Position group"
+            aria-label="Position"
             className={controlEnabled}
           >
             <option value="">Position</option>
-            {FILTER_GROUPS.map((g) => (
-              <option key={g} value={g}>
-                {GROUP_LABEL[g]}
+            {FILTER_OPTIONS.map((opt) => (
+              <option key={opt.id} value={opt.id}>
+                {opt.label}
               </option>
             ))}
           </select>
@@ -458,6 +549,9 @@ export function PlayerSearch({
             className={`min-w-0 max-w-[9rem] truncate ${statEnabled ? controlEnabled : controlDisabled}`}
           >
             <option value="">Stat</option>
+            {boardGroup && FANTASY_RANK_BOARD_GROUPS.includes(boardGroup) ? (
+              <option value={FANTASY_RANK_STAT_ID}>Fantasy Rank</option>
+            ) : null}
             {statOptions.map((stat) => (
               <option key={stat.id} value={stat.id}>
                 {stat.label}
@@ -589,16 +683,33 @@ export function PlayerSearch({
                     </p>
                   </div>
                   <div className="text-right">
-                    <p className="text-sm font-medium text-zinc-900">
-                      {row.value != null && selectedStat
-                        ? formatStatValue(selectedStat.format, row.value)
-                        : "—"}
-                    </p>
-                    <p className="text-xs text-zinc-400">
-                      {row.percentile != null
-                        ? `${Math.round(row.percentile)}%`
-                        : "—"}
-                    </p>
+                    {isFantasyRank ? (
+                      <>
+                        <p className="text-sm font-medium tabular-nums text-zinc-900">
+                          {row.fantasyPosRank ?? "—"}
+                        </p>
+                        <p className="text-xs text-zinc-400">
+                          {row.fantasyPosRankKind === "finish"
+                            ? "PPR finish"
+                            : row.fantasyPosRankKind === "consensus"
+                              ? "consensus"
+                              : "—"}
+                        </p>
+                      </>
+                    ) : (
+                      <>
+                        <p className="text-sm font-medium text-zinc-900">
+                          {row.value != null && selectedStat
+                            ? formatStatValue(selectedStat.format, row.value)
+                            : "—"}
+                        </p>
+                        <p className="text-xs text-zinc-400">
+                          {row.percentile != null
+                            ? `${Math.round(row.percentile)}%`
+                            : "—"}
+                        </p>
+                      </>
+                    )}
                   </div>
                 </Link>
               </li>
@@ -606,7 +717,7 @@ export function PlayerSearch({
           </ul>
         ) : (
           <p className="text-sm text-zinc-500">
-            {!hasVolumeData && boardStatus === "ready"
+            {!isFantasyRank && !hasVolumeData && boardStatus === "ready"
               ? "No volume data for this stat yet."
               : "No matching players."}
           </p>

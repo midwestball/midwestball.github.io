@@ -14,7 +14,7 @@ npm install
 npm run dev
 ```
 
-Set `NEXT_PUBLIC_SUPABASE_URL` to your Supabase project URL (e.g. in `.env.local`). Knowball reads the public `knowball-public` bucket—no service key required.
+Set `NEXT_PUBLIC_SUPABASE_URL` to your Supabase project URL (e.g. in `.env.local`). Required for local `npm run dev` as well as Vercel — Knowball never reads sibling `ballnet/data`. Public `knowball-public` bucket only; no service key.
 
 ## Deploy
 

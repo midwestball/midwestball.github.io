@@ -3,12 +3,8 @@
  * https://<ref>.supabase.co/storage/v1/object/public/knowball-public
  *
  * Knowball only fetches public objects — no Supabase client / service key.
+ * Local and prod both read Storage (`docs/adr/2026-09-18-storage-only-loader.md`).
  */
-export function vizPreferLocal(): boolean {
-  const flag = process.env.VIZ_PREFER_LOCAL?.trim().toLowerCase();
-  if (flag === "1" || flag === "true" || flag === "yes") return true;
-  return Boolean(process.env.BALLNET_DATA_DIR?.trim());
-}
 
 function supabaseProjectUrl(): string | null {
   const candidates = [
@@ -27,8 +23,7 @@ function supabaseProjectUrl(): string | null {
   return null;
 }
 
-/** Remote Storage base, or null when local-only mode is active. */
+/** Remote Storage base. Null when the Storage env is unset. */
 export function vizStorageBase(): string | null {
-  if (vizPreferLocal()) return null;
   return supabaseProjectUrl();
 }

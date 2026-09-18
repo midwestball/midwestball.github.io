@@ -8,4 +8,4 @@ Ballnet publishes scalar-only player pages under `pages/{season}/w{week}/{gsis}.
 - Do not re-embed `curve` on player pages for Storage size.
 - `ready` rows require `curve[]` after league merge (or legacy embedded curves).
 - Uploads must include `league/` alongside `pages/` and `index/`.
-- Prefer `VIZ_PREFER_LOCAL=1` + `BALLNET_DATA_DIR` for local smoke tests without Storage.
+- Local smoke tests use Storage after `upload-storage` (`docs/adr/2026-09-18-storage-only-loader.md`). Do not point Knowball at sibling `ballnet/data`.

@@ -1,8 +1,6 @@
 import "server-only";
 
 import { cache } from "react";
-import { readFile, readdir } from "node:fs/promises";
-import path from "node:path";
 import type {
   JsonStatSnapshot,
   PlayerBio,
@@ -13,13 +11,6 @@ import type {
 import type { Point } from "@/lib/distribution";
 import type { PositionGroup } from "@/lib/catalog/types";
 import { vizStorageBase } from "@/lib/viz-config";
-
-function ballnetDataRoot(): string {
-  if (process.env.BALLNET_DATA_DIR) {
-    return path.resolve(process.env.BALLNET_DATA_DIR);
-  }
-  return path.resolve(process.cwd(), "../../ballnet/data");
-}
 
 export type SeasonsEnvelope = {
   schemaVersion: 1;
@@ -58,15 +49,6 @@ export type LeagueGroupJson = {
   stats: Record<string, LeagueStatShape>;
 };
 
-async function tryReadLocalJson<T>(file: string): Promise<T | null> {
-  try {
-    const text = await readFile(file, "utf8");
-    return JSON.parse(text) as T;
-  } catch {
-    return null;
-  }
-}
-
 async function tryFetchRemoteJson<T>(url: string): Promise<T | null> {
   try {
     const res = await fetch(url, { next: { revalidate: 3600 } });
@@ -77,29 +59,22 @@ async function tryFetchRemoteJson<T>(url: string): Promise<T | null> {
   }
 }
 
-async function loadIndexArtifact<T>(
-  storagePath: string,
-  localName: string,
-): Promise<T | null> {
+async function loadStorageJson<T>(rel: string): Promise<T | null> {
   const base = vizStorageBase();
-  if (base) {
-    const remote = await tryFetchRemoteJson<T>(`${base}/${storagePath}`);
-    if (remote) return remote;
-  }
-
-  return tryReadLocalJson<T>(path.join(ballnetDataRoot(), "index", localName));
+  if (!base) return null;
+  return tryFetchRemoteJson<T>(`${base}/${rel}`);
 }
 
 export const loadSeasonsMeta = cache(async (): Promise<SeasonsEnvelope | null> =>
-  loadIndexArtifact<SeasonsEnvelope>("index/seasons.json", "seasons.json"),
+  loadStorageJson<SeasonsEnvelope>("index/seasons.json"),
 );
 
 export const loadCurrentMeta = cache(async (): Promise<CurrentEnvelope | null> =>
-  loadIndexArtifact<CurrentEnvelope>("index/current.json", "current.json"),
+  loadStorageJson<CurrentEnvelope>("index/current.json"),
 );
 
 export const loadPlayersIndex = cache(async (): Promise<PlayersEnvelope | null> =>
-  loadIndexArtifact<PlayersEnvelope>("index/players.json", "players.json"),
+  loadStorageJson<PlayersEnvelope>("index/players.json"),
 );
 
 /** Final published as-of week for a season, if Ballnet has published it. */
@@ -140,15 +115,9 @@ export async function loadLeagueGroupJson(
   const resolved = await resolveWeek(opts);
   if (!resolved) return null;
   const { season, week } = resolved;
-  const rel = `league/${season}/w${week}/${positionGroup}.json`;
-
-  const base = vizStorageBase();
-  if (base) {
-    const remote = await tryFetchRemoteJson<LeagueGroupJson>(`${base}/${rel}`);
-    if (remote) return remote;
-  }
-
-  return tryReadLocalJson<LeagueGroupJson>(path.join(ballnetDataRoot(), rel));
+  return loadStorageJson<LeagueGroupJson>(
+    `league/${season}/w${week}/${positionGroup}.json`,
+  );
 }
 
 /** Stage H single-game KDEs (`dists/league_weekly/...`). Not `league_ytd`. */
@@ -159,15 +128,9 @@ export async function loadLeagueWeeklyGroupJson(
   const resolved = await resolveWeek(opts);
   if (!resolved) return null;
   const { season, week } = resolved;
-  const rel = `dists/league_weekly/${season}/w${week}/${positionGroup}.json`;
-
-  const base = vizStorageBase();
-  if (base) {
-    const remote = await tryFetchRemoteJson<LeagueGroupJson>(`${base}/${rel}`);
-    if (remote) return remote;
-  }
-
-  return tryReadLocalJson<LeagueGroupJson>(path.join(ballnetDataRoot(), rel));
+  return loadStorageJson<LeagueGroupJson>(
+    `dists/league_weekly/${season}/w${week}/${positionGroup}.json`,
+  );
 }
 
 /**
@@ -203,98 +166,28 @@ export async function loadPlayerPageJson(
 ): Promise<PlayerPageJson | null> {
   const current = await resolveCurrentPointer();
   const base = vizStorageBase();
-  if (base) {
-    let week = opts?.asOfWeek;
-    if (opts?.season != null && week == null) {
-      week = await asOfWeekForSeason(opts.season);
-    }
-    const urls: string[] = [];
-    if (opts?.season != null && week != null) {
-      urls.push(`${base}/pages/${opts.season}/w${week}/${playerId}.json`);
-    } else if (opts?.season == null && current) {
-      urls.push(
-        `${base}/pages/${current.season}/w${current.week}/${playerId}.json`,
-      );
-    }
-    urls.push(`${base}/pages/current/${playerId}.json`);
+  if (!base) return null;
 
-    for (const url of urls) {
-      const page = await tryFetchRemoteJson<PlayerPageJson>(url);
-      if (!page) continue;
-      if (opts?.season != null && page.season !== opts.season) continue;
-      return page;
-    }
+  let week = opts?.asOfWeek;
+  if (opts?.season != null && week == null) {
+    week = await asOfWeekForSeason(opts.season);
   }
-
-  // Local fallback (sibling ballnet/data) for seasons not yet on Storage.
-  const root = ballnetDataRoot();
-  const candidates: string[] = [];
-
-  if (opts?.season != null && opts?.asOfWeek != null) {
-    candidates.push(
-      path.join(
-        root,
-        "pages",
-        String(opts.season),
-        `w${opts.asOfWeek}`,
-        `${playerId}.json`,
-      ),
+  const urls: string[] = [];
+  if (opts?.season != null && week != null) {
+    urls.push(`${base}/pages/${opts.season}/w${week}/${playerId}.json`);
+  } else if (opts?.season == null && current) {
+    urls.push(
+      `${base}/pages/${current.season}/w${current.week}/${playerId}.json`,
     );
-  } else if (opts?.season != null) {
-    const known = await asOfWeekForSeason(opts.season);
-    if (known != null) {
-      candidates.push(
-        path.join(
-          root,
-          "pages",
-          String(opts.season),
-          `w${known}`,
-          `${playerId}.json`,
-        ),
-      );
-    }
-    for (const week of [18, 17]) {
-      if (week === known) continue;
-      candidates.push(
-        path.join(
-          root,
-          "pages",
-          String(opts.season),
-          `w${week}`,
-          `${playerId}.json`,
-        ),
-      );
-    }
   }
+  urls.push(`${base}/pages/current/${playerId}.json`);
 
-  candidates.push(path.join(root, "pages", "current", `${playerId}.json`));
-
-  for (const file of candidates) {
-    const page = await tryReadLocalJson<PlayerPageJson>(file);
+  for (const url of urls) {
+    const page = await tryFetchRemoteJson<PlayerPageJson>(url);
     if (!page) continue;
     if (opts?.season != null && page.season !== opts.season) continue;
     return page;
   }
-
-  if (opts?.season != null) {
-    const seasonDir = path.join(root, "pages", String(opts.season));
-    try {
-      const weeks = (await readdir(seasonDir, { withFileTypes: true }))
-        .filter((d) => d.isDirectory() && /^w\d+$/.test(d.name))
-        .map((d) => d.name)
-        .sort()
-        .reverse();
-      for (const week of weeks) {
-        const page = await tryReadLocalJson<PlayerPageJson>(
-          path.join(seasonDir, week, `${playerId}.json`),
-        );
-        if (page && page.season === opts.season) return page;
-      }
-    } catch {
-      // no season dir
-    }
-  }
-
   return null;
 }
 
@@ -332,16 +225,8 @@ export const loadHighlightsBoard = cache(
       season = season ?? current.season;
       week = week ?? current.week;
     }
-    const rel = `highlights/${season}/w${week}.json`;
-
-    const base = vizStorageBase();
-    if (base) {
-      const remote = await tryFetchRemoteJson<HighlightsBoardJson>(`${base}/${rel}`);
-      if (remote) return remote;
-    }
-
-    return tryReadLocalJson<HighlightsBoardJson>(
-      path.join(ballnetDataRoot(), rel),
+    return loadStorageJson<HighlightsBoardJson>(
+      `highlights/${season}/w${week}.json`,
     );
   },
 );
@@ -360,16 +245,8 @@ export const loadLeaderboard = cache(
       season = season ?? current.season;
       asOfWeek = asOfWeek ?? current.week;
     }
-    const rel = `leaderboards/${season}/w${asOfWeek}/${positionGroup}.json`;
-
-    const base = vizStorageBase();
-    if (base) {
-      const remote = await tryFetchRemoteJson<LeaderboardJson>(`${base}/${rel}`);
-      if (remote) return remote;
-    }
-
-    return tryReadLocalJson<LeaderboardJson>(
-      path.join(ballnetDataRoot(), rel),
+    return loadStorageJson<LeaderboardJson>(
+      `leaderboards/${season}/w${asOfWeek}/${positionGroup}.json`,
     );
   },
 );

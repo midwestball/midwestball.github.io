@@ -6,6 +6,6 @@ Deploy the Next.js app from `web/` (via root `vercel.json`) and load all viz art
 
 ### Consequences
 - **Required:** Set `NEXT_PUBLIC_SUPABASE_URL` on Vercel before deploy (Production + Preview as needed), then redeploy. Optional `VIZ_STORAGE_BASE_URL` overrides the derived Storage prefix.
-- **Gotcha:** Without Storage env and without a sibling `ballnet/data` checkout, search and pages are empty — configure Storage for normal local/prod use.
-- **Local only:** Optional `ballnet publish-all --sync-knowball ../knowball/web` writes a gitignored mirror under `web/public/viz/`; do not commit Ballnet artifacts into Knowball.
+- **Gotcha:** Without Storage env, search and pages are empty — set `NEXT_PUBLIC_SUPABASE_URL` for local and prod. Sibling `ballnet/data` is not a Knowball read path (`docs/adr/2026-09-18-storage-only-loader.md`).
+- **Deprecated:** `ballnet publish-all --sync-knowball` / `web/public/viz/` as a local preview; upload Storage instead.
 - **Unchanged:** No PostgREST, no service role key, no mock KDE generation in the Next app.

@@ -1,6 +1,6 @@
 # Data contracts
 
-Knowball renders JSON. Ballnet computes it. Do not put a SQL/PostgREST client in this app — production reads public Supabase **Storage** objects with `fetch`.
+Knowball renders JSON. Ballnet computes it. Do not put a SQL/PostgREST client in this app — local and prod read public Supabase **Storage** objects with `fetch` (`docs/adr/2026-09-18-storage-only-loader.md`).
 
 ## Page payload
 
@@ -73,7 +73,7 @@ stats: { [statId]: [{
 }] }
 ```
 
-Built from Stage E `ytd_*_pct.parquet`. Knowball search Filter sorts Best/Worst on `percentile` without fetching player pages. Min-volume slider defaults to ramp–hold `minNBase × min(asOfWeek, 5)` and prefers catalog `volumeStatId` → `board.stats[volumeStatId].value` joined by `playerId`; `denomYtd` is fallback only. Rows may include unqualified players (`percentile: null`); UI keeps nulls last.
+Built from Stage E `ytd_*_pct.parquet`. Knowball search Filter sorts Best/Worst on `percentile` without fetching player pages. Search-only **Fantasy Rank** sorts `fantasyPosRank` on the same board (not a catalog id). Min-volume slider defaults to ramp–hold `minNBase × min(asOfWeek, 5)` and prefers catalog `volumeStatId` → `board.stats[volumeStatId].value` joined by `playerId`; `denomYtd` is fallback only. Rows may include unqualified players (`percentile: null`); UI keeps nulls last.
 
 ## Do not
 

@@ -11,8 +11,8 @@
 
 Player pages call `loadHydratedPlayerSnapshots`: scalar `pages/{season}/w{week}/{id}.json` plus shared `league/{season}/w{week}/{group}.json` (merged before `hydratePlayerStats`).
 
-Fetch order: Supabase Storage public URL when configured (`NEXT_PUBLIC_SUPABASE_URL` / `VIZ_STORAGE_BASE_URL`); else sibling `ballnet/data/` when `BALLNET_DATA_DIR` or default relative path is set. `VIZ_PREFER_LOCAL=1` forces local only. Ballnet JSON is not committed under Knowball.
+Knowball `fetch`es public Supabase Storage (`NEXT_PUBLIC_SUPABASE_URL` / `VIZ_STORAGE_BASE_URL`) in local and prod. No sibling `ballnet/data`. Ballnet JSON is not committed under Knowball (`docs/adr/2026-09-18-storage-only-loader.md`).
 
-`web/src/data/players.ts` loads Ballnet `index/players.json` at request time from Storage (or sibling ballnet) (+ lab `demo-*` placeholders).
+`web/src/data/players.ts` loads Ballnet `index/players.json` at request time from Storage (+ lab `demo-*` placeholders).
 
 Weekly / post-game ballnet refresh: sibling repo `ballnet/docs/WEEKLY_OPS.md`. After league-only schema changes, `ballnet upload-storage --season YEAR --league-only` is enough; weekly refreshes should upload pages + league + index together.

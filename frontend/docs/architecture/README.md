@@ -28,8 +28,9 @@ Before modifying or creating new features, locate the relevant domain in the tab
 | **Stat row / charts** | Expandable row invariants; KDE area chart in `TremorDistribution.tsx`. | `web/src/components/stat-row/BOUNDARIES.md` |
 | **Product split** | Public knowball + public ballnet + private ffoptim ownership. | `docs/adr/2026-08-20-three-product-split.md` |
 | **Stat catalog** | Position-group invariants and id stability. | `web/src/lib/catalog/BOUNDARIES.md` |
-| **Ballnet JSON loader** | Storage fetch + local fallback; league merge before hydrate. | `web/src/lib/BOUNDARIES-ballnet-store.md` |
+| **Ballnet JSON loader** | Storage-only fetch; league merge before hydrate. | `web/src/lib/BOUNDARIES-ballnet-store.md` |
 | **Vercel + Storage deploy** | Production loads index/pages/league from public Supabase Storage; no bundled player index. | `docs/adr/2026-08-24-vercel-supabase-storage.md` |
+| **Storage-only loader** | Local and prod both `fetch` `knowball-public`. No sibling `ballnet/data`. | `docs/adr/2026-09-18-storage-only-loader.md` |
 | **Weekly highlights** | Stage H z-score boards → `highlights/{season}/w{week}.json`; home renders only. | `docs/adr/2026-08-25-weekly-highlights-json.md` |
 | **Highlight game KDEs** | Season-of-games σ ranking + expandable home charts from `dists/league_weekly/`. | `docs/adr/2026-08-25-highlight-game-kde.md` |
 | **Highlight list** | Expandable home rows; σ color; no percentile slider. | `web/src/components/highlights/BOUNDARIES.md` |
@@ -71,7 +72,7 @@ The accepted UI lives under **`web/`**. Run with `cd web && npm install && npm r
 
 To prevent architectural drift, the following rules apply globally to this repository and supersede all other instructions:
 
-* **No Backend Logic:** Never introduce Python, database clients, or data ingestion scripts into this repository. Knowball only consumes and renders JSON (via public Storage `fetch`, not SQL).
+* **No Backend Logic:** Never introduce Python, database clients, or data ingestion scripts into this repository. Knowball only consumes and renders JSON (via public Storage `fetch`, not SQL or sibling `ballnet/data`).
 * **Strict Charting Stack:** All data visualization must use Recharts matching the established Tremor aesthetic. Chart.js, Observable Plot, and custom axis-bending are strictly forbidden.
 * **Precise Math Copy:** Percentile calculations represent the inclusive CDF ($P(X \le x)$). UI copy must strictly reflect relative frequency and never claim a player is "better than N% of players" due to discrete ties. KDE y-axis is density (∫y dx ≈ 1), not a percent of the league.
 * **Square chrome:** No rounded boxes, pills, or drop shadows. Radius is always `0`; elevation is 1px borders only.

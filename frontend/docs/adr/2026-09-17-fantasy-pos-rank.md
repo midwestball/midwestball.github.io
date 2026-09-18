@@ -8,4 +8,5 @@ Ballnet `fantasy_rank.py` attaches optional `fantasyPosRank` and `fantasyPosRank
 - **Required:** Omit the fields for FB/OL/defense/K/P and for null GSIS / zero-PPR players. Do not put ranks on `index/players.json`. Do not overload highlight `rank` (z-score board order).
 - **Required:** Tooltip copy is kind-specific: consensus → `Rank according to fantasy consensus`; finish → `PPR finish among {QBs|WRs|RBs|TEs} that season`.
 - **Required:** After `index/current.json` advances to `Y+1`, republish year `Y` at its final REG week so last year’s pages switch from consensus to finish.
+- **Required:** Search Stat may list **Fantasy Rank** for QB / backfield / WR / TE only. Sort published `fantasyPosRank`; do not add a catalog `stat.id` or player-page slider.
 - **Deprecated:** Computing fantasy ranks in the Next app, or showing dynasty / overall / superflex ECR as this subscript.

@@ -23,6 +23,7 @@ Position catalogs are product configuration, not player data. Rows on a player p
 - Impute 0 for missing NGS/PFR rows.
 - Put `formatValue` functions on JSON payloads (Server → Client serialization).
 - Point `volumeStatId` at an id that is not published on the same group board.
+- Put Fantasy Rank (search sort) on a position catalog — it is not a `stat.id`.
 
 ## Silent Failures & Gotchas
 
