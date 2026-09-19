@@ -158,7 +158,7 @@ def main(argv: list[str] | None = None) -> None:
         "--sync-knowball",
         type=Path,
         default=None,
-        help="Copy index JSON into Knowball web/public/viz/ (gitignored local mirror)",
+        help="Copy index JSON into frontend/public/viz/ (gitignored local mirror; pass ../frontend)",
     )
     p_all.add_argument(
         "--replace-index",
@@ -242,7 +242,7 @@ def main(argv: list[str] | None = None) -> None:
         "--sync-knowball",
         type=Path,
         default=None,
-        help="Copy index JSON into Knowball web/public/viz/ (gitignored local mirror)",
+        help="Copy index JSON into frontend/public/viz/ (gitignored local mirror; pass ../frontend)",
     )
 
     p_league = sub.add_parser(

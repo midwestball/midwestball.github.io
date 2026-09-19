@@ -1,0 +1,36 @@
+.DS_Store
+*.pem
+
+# Cursor / agent tooling — never commit
+.cursor/
+**/.cursor/
+.claude/
+**/.claude/
+.cursorrules
+.cursorignore
+AGENTS.md
+**/AGENTS.md
+CLAUDE.md
+**/CLAUDE.md
+
+# Frontend
+frontend/node_modules/
+frontend/.next/
+frontend/out/
+frontend/.vercel/
+frontend/*.tsbuildinfo
+frontend/next-env.d.ts
+frontend/public/viz/
+frontend/.env
+frontend/.env.*
+!frontend/.env.example
+
+# Backend
+backend/.venv/
+backend/venv/
+backend/data/
+backend/.env
+backend/__pycache__/
+backend/.pytest_cache/
+backend/archive/
+backend/local_ops/

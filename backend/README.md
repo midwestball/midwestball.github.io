@@ -1,10 +1,10 @@
-# Ballnet
+# Backend (Ballnet)
 
-Football data pipeline for [Knowball](https://github.com/ehfurgeson/knowball).
+Football data pipeline for the Midwest Ball frontend in this monorepo.
 
-Ballnet ingests [nflverse](https://github.com/nflverse) data, qualifies players, estimates league distributions with kernel density estimation, computes oriented percentiles, and publishes JSON that Knowball renders. Coverage spans the NGS era (2016–present).
+Ballnet ingests [nflverse](https://github.com/nflverse) data, qualifies players, estimates league distributions with kernel density estimation, computes oriented percentiles, and publishes JSON that the frontend renders. Coverage spans the NGS era (2016–present).
 
-**Stack:** Python · uv · Polars/pandas · scikit-learn · Supabase Storage
+**Stack:** Python · uv · Polars/pandas · scipy · Supabase Storage
 
 ## Setup
 
@@ -26,6 +26,9 @@ uv run ballnet publish-range --start 2016 --end 2025
 
 # Upload to Supabase Storage
 uv run ballnet upload-storage --index --season 2025
+
+# Optional local index mirror into the static site tree
+uv run ballnet publish-all --season 2025 --as-of-week 18 --sync-knowball ../frontend
 ```
 
 Artifacts land under gitignored `data/` (`raw/`, `spine/`, `ytd/`, `dists/`, `pages/`, `league/`, `index/`).
@@ -34,4 +37,5 @@ Weekly refresh notes: [`docs/WEEKLY_OPS.md`](docs/WEEKLY_OPS.md).
 
 ## Related
 
-- [knowball](https://github.com/ehfurgeson/knowball) — Next.js visualization site
+- [`../frontend`](../frontend) — static Next.js site (GitHub Pages)
+- Upstream history also lives at [ehfurgeson/ballnet](https://github.com/ehfurgeson/ballnet) (untouched)

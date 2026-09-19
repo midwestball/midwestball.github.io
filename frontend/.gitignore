@@ -4,10 +4,13 @@
 .venv/
 venv/
 
-web/node_modules/
-web/.next/
-web/out/
+node_modules/
+.next/
+out/
+.vercel/
+*.tsbuildinfo
+next-env.d.ts
 
-# Ballnet local mirrors (source of truth is Supabase Storage / sibling ballnet/data)
-web/public/viz/
-web/src/data/ballnet/
+# Ballnet local mirrors (source of truth is Supabase Storage)
+public/viz/
+src/data/ballnet/
