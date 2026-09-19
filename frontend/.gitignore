@@ -1,0 +1,13 @@
+.DS_Store
+.env
+.envrc
+.venv/
+venv/
+
+web/node_modules/
+web/.next/
+web/out/
+
+# Ballnet local mirrors (source of truth is Supabase Storage / sibling ballnet/data)
+web/public/viz/
+web/src/data/ballnet/
