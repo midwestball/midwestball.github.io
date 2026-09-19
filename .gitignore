@@ -1,20 +1,6 @@
 .DS_Store
 *.pem
 
-# Cursor / agent tooling — never commit
-.cursor/
-**/.cursor/
-.claude/
-**/.claude/
-.cursorrules
-.cursorignore
-AGENTS.md
-**/AGENTS.md
-CLAUDE.md
-**/CLAUDE.md
-backend/docs/HANDOFF.md
-docs/IMPORT_OMISSION_REPORT.md
-
 # Frontend
 frontend/node_modules/
 frontend/.next/
@@ -36,3 +22,17 @@ backend/__pycache__/
 backend/.pytest_cache/
 backend/archive/
 backend/local_ops/
+
+# agent tooling never commit
+.cursor/
+**/.cursor/
+.claude/
+**/.claude/
+.cursorrules
+.cursorignore
+AGENTS.md
+**/AGENTS.md
+CLAUDE.md
+**/CLAUDE.md
+backend/docs/HANDOFF.md
+docs/IMPORT_OMISSION_REPORT.md
