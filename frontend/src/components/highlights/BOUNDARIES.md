@@ -1,4 +1,4 @@
-# Boundaries: `web/src/components/highlights`
+# Boundaries: `frontend/src/components/highlights`
 
 ## Always
 
@@ -26,5 +26,5 @@
 
 - Missing board → empty top list + pending copy on home; do not fall back to player-index slice.
 - Missing `league_weekly` shape for a row → expand shows pending dashed box; row still ranks.
-- Stat formatting / `higherIsBetter` look up Knowball catalog by `positionGroup` + `statId`; unknown ids fall back to raw number and assume higher-is-better.
+- Stat formatting / `higherIsBetter` look up the frontend catalog by `positionGroup` + `statId`; unknown ids fall back to raw number and assume higher-is-better.
 - `peerN` / `zScore` on the board are season-of-games peers (`week <= W`), not same-week-only.

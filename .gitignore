@@ -12,6 +12,8 @@ AGENTS.md
 **/AGENTS.md
 CLAUDE.md
 **/CLAUDE.md
+backend/docs/HANDOFF.md
+docs/IMPORT_OMISSION_REPORT.md
 
 # Frontend
 frontend/node_modules/

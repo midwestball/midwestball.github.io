@@ -1,3 +1,5 @@
+> **Historical archive only.** Do not follow for current deploy. Midwest Ball is `frontend/` + `backend/` on GitHub Pages; see repo root README and `docs/adr/2026-09-19-monorepo-static-pages.md`.
+
 > **Superseded.** Do not follow this checklist.
 > Canonical architecture: `docs/architecture/README.md` and `docs/adr/2026-08-19-visualization-json-store.md`.
 > Leg 1 ETL contract: `.plans/ballnet-etl-knowball-visualizations.md`.
@@ -5,7 +7,7 @@
 
 ---
 
-## The Knowball & Ballnet Architecture
+## The frontend & Ballnet Architecture
 
 ### 1. The `ballnet` Backend (Private / Local)
 

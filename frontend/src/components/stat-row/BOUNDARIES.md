@@ -1,4 +1,4 @@
-# Boundaries: `web/src/components/stat-row`
+# Boundaries: `frontend/src/components/stat-row`
 
 ## Always
 

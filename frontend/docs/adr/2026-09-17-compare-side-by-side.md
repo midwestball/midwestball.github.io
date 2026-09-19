@@ -8,4 +8,4 @@ Route lives at `/compare` (`?p=` + `season=`); `/ffoptim` redirects and preserve
 - **Required:** Same position group only; unique shade gradient ids per overlay instance; do not invent league curves.
 - **Required:** Label stack order = oriented percentile high→low (ties break on `playerId`).
 - **Deprecated:** Per-column expanded `DistributionChart` copies on Compare; treating `/ffoptim` as the canonical Compare URL.
-- **Unchanged:** Player-page `TremorDistribution` percentile coloring; private ffoptim modeling stays out of Knowball.
+- **Unchanged:** Player-page `TremorDistribution` percentile coloring; private ffoptim modeling stays out of The frontend.

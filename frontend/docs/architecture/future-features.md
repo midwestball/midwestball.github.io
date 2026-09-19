@@ -4,7 +4,7 @@ Pre-compute in **ballnet** → publish JSON under reserved Storage prefixes → 
 
 ## 1. Home — best performances
 
-**Shipped (weekly):** Stage H → `highlights/{season}/w{week}.json` + expandable season-of-games KDEs from `dists/league_weekly/`; Knowball `/` renders `top` + `byGroup`. See `docs/adr/2026-08-25-weekly-highlights-json.md` and `docs/adr/2026-08-25-highlight-game-kde.md`.
+**Shipped (weekly):** Stage H → `highlights/{season}/w{week}.json` + expandable season-of-games KDEs from `dists/league_weekly/`; the frontend `/` renders `top` + `byGroup`. See `docs/adr/2026-08-25-weekly-highlights-json.md` and `docs/adr/2026-08-25-highlight-game-kde.md`.
 
 | Follow-up | Intent |
 |---|---|
@@ -19,11 +19,11 @@ Pre-compute in **ballnet** → publish JSON under reserved Storage prefixes → 
 | Player overall | Simple mean of that player’s ready-row percentiles (lock weighting later if needed) |
 | Team starters | Mean of starter overalls → rough roster strength signal |
 
-Publish on player page scalars and/or a thin `teams/` index — still not a SQL client in Knowball. Copy must stay relative-frequency honest (no “better than N% of the league” from a mean of means without care).
+Publish on player page scalars and/or a thin `teams/` index — still not a SQL client in The frontend. Copy must stay relative-frequency honest (no “better than N% of the league” from a mean of means without care).
 
 ## 3. Player trajectory similarity
 
-Find players whose **year-to-year** (or week-to-year) percentile / value paths look alike. Ballnet builds embeddings or distance features from the Stage B weekly panel + published YTD; Knowball renders a “similar trajectories” list from a small JSON neighbor file.
+Find players whose **year-to-year** (or week-to-year) percentile / value paths look alike. Ballnet builds embeddings or distance features from the Stage B weekly panel + published YTD; the frontend renders a “similar trajectories” list from a small JSON neighbor file.
 
 ## 4. Compare player distributions
 

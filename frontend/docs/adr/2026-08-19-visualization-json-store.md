@@ -1,8 +1,8 @@
 ### Context
-Knowball must render position-aware percentile rows without owning ingest, and the Next.js app is forbidden from talking to Postgres. Visualization data is a join of a stable per-position catalog and precomputed league curves plus player overlays.
+The frontend must render position-aware percentile rows without owning ingest, and the Next.js app is forbidden from talking to Postgres. Visualization data is a join of a stable per-position catalog and precomputed league curves plus player overlays.
 
 ### Decision
-Ballnet stores a normalized visualization store (league distributions once per season/week/position/stat, player values separately) and publishes denormalized `PlayerPageJson` files. Knowball hydrates the position catalog against that JSON — no `@supabase/supabase-js`, no mock KDE generation.
+Ballnet stores a normalized visualization store (league distributions once per season/week/position/stat, player values separately) and publishes denormalized `PlayerPageJson` files. The frontend hydrates the position catalog against that JSON — no `@supabase/supabase-js`, no mock KDE generation.
 
 ### Consequences
 - New stats are catalog ids first; Ballnet cannot invent slider rows the UI does not list.

@@ -1,8 +1,8 @@
 ### Context
-Knowball needs a season-scoped fantasy position rank on the position label, but the Next app must not compute Expert Consensus Rank or PPR standings — those belong in Ballnet’s published JSON.
+The frontend needs a season-scoped fantasy position rank on the position label, but the Next app must not compute Expert Consensus Rank or PPR standings — those belong in Ballnet’s published JSON.
 
 ### Decision
-Ballnet `fantasy_rank.py` attaches optional `fantasyPosRank` and `fantasyPosRankKind` (`"consensus"` | `"finish"`) on player pages, search leaderboards, and highlight rows for QB/WR/RB/TE only. Live season uses FantasyPros weekly ECR via `nfl.load_ff_rankings("week")`; closed seasons use REG PPR finish (competition rank). Knowball renders `PositionRankLabel` with locked tooltip copy and never invents a missing rank.
+Ballnet `fantasy_rank.py` attaches optional `fantasyPosRank` and `fantasyPosRankKind` (`"consensus"` | `"finish"`) on player pages, search leaderboards, and highlight rows for QB/WR/RB/TE only. Live season uses FantasyPros weekly ECR via `nfl.load_ff_rankings("week")`; closed seasons use REG PPR finish (competition rank). The frontend renders `PositionRankLabel` with locked tooltip copy and never invents a missing rank.
 
 ### Consequences
 - **Required:** Omit the fields for FB/OL/defense/K/P and for null GSIS / zero-PPR players. Do not put ranks on `index/players.json`. Do not overload highlight `rank` (z-score board order).

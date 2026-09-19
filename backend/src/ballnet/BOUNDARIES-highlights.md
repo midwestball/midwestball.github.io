@@ -18,12 +18,12 @@
 ## Never
 
 - Fold highlight math into Stage G `publish.py` or reuse `league/` YTD curves for home expand charts.
-- Invent Knowball catalog ids here.
+- Invent frontend catalog ids here.
 - Emit boards for `returner` / empty OL / punter without spine-backed columns.
 
 ## Silent Failures & Gotchas
 
-- Missing spine file raises; empty week after filters yields `top: []` (Knowball shows pending).
+- Missing spine file raises; empty week after filters yields `top: []` (the frontend shows pending).
 - `peerN` is the count of qualified player-weeks 1..W, not same-week peers — week 1 matches the old same-week z; later weeks diverge.
 - `oneInN` is Gaussian-tail of oriented z — for later copy, not home UI yet.
 - Discrete rare events still need `min_value` floors on the board; zeros/low counts stay in the KDE sample so the shape is honest.

@@ -1,6 +1,8 @@
 # Weekly / post-game ops plan
 
-Goal: after each NFL week (or after a slate finishes), refresh Knowball viz for the **current season** through the latest completed REG week, then upload Storage.
+Goal: after each NFL week (or after a slate finishes), refresh Midwest Ball viz for the **current season** through the latest completed REG week, then upload Storage.
+
+Run commands from **`backend/`** in this monorepo.
 
 ## Canonical one-command shape (target)
 
@@ -22,7 +24,7 @@ Until `refresh` exists, run that sequence manually (see below).
 ## Manual recipe (works today)
 
 ```bash
-cd ballnet
+cd backend
 uv sync
 
 YEAR=2026
@@ -37,7 +39,7 @@ uv run ballnet upload-storage --index --season $YEAR --as-of-week $W --highlight
 
 `publish-all` without `--skip-pipeline` already runs C–E then G for all groups. It **merges** into the multi-season players/seasons index by default (use `--replace-index` only when intentionally wiping history).
 
-Knowball reads index/pages from **Supabase Storage** only (local `npm run dev` included). `publish-all` is not enough — `upload-storage` is what the UI sees. Do not commit Ballnet JSON into the Knowball repo.
+The frontend reads index/pages from **Supabase Storage** only (local `npm run dev` included). `publish-all` is not enough — `upload-storage` is what the UI sees. Do not commit Ballnet JSON into `frontend/`.
 
 ## Automation options (pick later)
 
@@ -51,9 +53,9 @@ Recommendation for v1: **manual or local cron** calling the recipe above. Move t
 
 ### Secrets for upload
 
-- ballnet `.env`: `supabase_url`, `supabase_service_role_key`
-- Never put the service role in Knowball or the Next bundle
-- Knowball only needs public `VIZ_STORAGE_BASE_URL` / `supabase_url` (anon is unused for Storage public URLs)
+- `backend/.env`: `supabase_url`, `supabase_service_role_key`
+- Never put the service role in `frontend/` or the static bundle
+- Frontend only needs public `NEXT_PUBLIC_SUPABASE_URL` / `VIZ_STORAGE_BASE_URL` (anon is unused for Storage public URLs)
 
 ### Scheduling tip
 
@@ -85,14 +87,14 @@ uv run ballnet publish-range --start 2016 --end $Y --skip-pipeline --no-current
 
 - Full `publish-range --start 2016 --end …` — historical season-end slices are static unless you intentionally rebuild
 - `publish-league-range` alone — prefer full `publish-all` so pages + percentiles stay aligned with league curves
-- `--also-current` Storage upload — doubles quota; Knowball uses `index/current.json`
+- `--also-current` Storage upload — doubles quota; the frontend uses `index/current.json`
 
 ## Failure modes to watch
 
 - Empty/partial nflverse week → sparse YTD / wrong as-of-week — verify spine week max before publish
 - Mid-week TNF: `--as-of-week` is the latest played week so those boxes land in YTD; ramp–hold uses published `completedWeek` (last fully scored week) until the slate is final
 - Storage free-tier burst drops — retry `upload-storage --season YEAR` (upsert)
-- Index out of sync with Knowball search — re-run `upload-storage --index` (Knowball reads Storage, not a git-synced copy)
+- Index out of sync with search — re-run `upload-storage --index` (frontend reads Storage, not a git-synced copy)
 
 ## Follow-ups before automating
 
@@ -102,4 +104,4 @@ uv run ballnet publish-range --start 2016 --end $Y --skip-pipeline --no-current
 4. Only then wire cron or Actions.
 
 ## Recommendation
-Keep the manual/local-cron until a thin ballnet refresh wrapper exists; only then consider GitHub Actions. Prefer Tuesday AM (America/New_York) so nflverse weeklies have landed.
+Keep the manual/local-cron until a thin Ballnet refresh wrapper exists; only then consider GitHub Actions. Prefer Tuesday AM (America/New_York) so nflverse weeklies have landed.

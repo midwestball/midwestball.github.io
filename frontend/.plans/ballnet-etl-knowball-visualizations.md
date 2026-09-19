@@ -1,9 +1,11 @@
-# Ballnet ETL brief: Knowball visualization store
+> **Monorepo note (2026-09-19):** In `midwestball.github.io`, Knowball lives under `frontend/` and Ballnet under `backend/`. Replace historical `frontend/src/...` paths with `frontend/src/...`. The site hosts on GitHub Pages (static export), not Vercel. Upstream `ehfurgeson/knowball` / `ehfurgeson/ballnet` remain separate.
+
+# Ballnet ETL brief: the frontend visualization store
 
 **Audience:** an agent working in the **ballnet** (public Python pipeline / DS) repo.  
-**Companion file:** attach `.plans/NFL Stats Sliders.md` from knowball (ramp–hold, nflverse sources, min-n, plot type, zero mass). This brief is the **locked Knowball contract**. Where the two disagree on UI shape, **this brief wins**. Where they disagree on nflverse column names or min-n, **the sliders plan wins** for computation.
+**Companion file:** attach `.plans/NFL Stats Sliders.md` from knowball (ramp–hold, nflverse sources, min-n, plot type, zero mass). This brief is the **locked the frontend contract**. Where the two disagree on UI shape, **this brief wins**. Where they disagree on nflverse column names or min-n, **the sliders plan wins** for computation.
 
-Knowball is a public Next.js app that **only renders JSON**. It has no Python, no `@supabase/supabase-js`, and no mock KDE generation. Ballnet owns ingest, joins, ramp–hold, KDEs, percentiles, Supabase, and publishing. Fantasy draft optimization belongs in private **ffoptim**, not this pipeline.
+The frontend is a public Next.js app that **only renders JSON**. It has no Python, no `@supabase/supabase-js`, and no mock KDE generation. Ballnet owns ingest, joins, ramp–hold, KDEs, percentiles, Supabase, and publishing. Fantasy draft optimization belongs in private **ffoptim**, not this pipeline.
 
 ---
 
@@ -11,24 +13,24 @@ Knowball is a public Next.js app that **only renders JSON**. It has no Python, n
 
 | Repo | Owns | Must not own |
 |---|---|---|
-| **ballnet** | nflverse ingest, joins, qualification, densities, percentiles, Supabase viz store, published JSON | Knowball UI, Recharts, catalog labels |
+| **ballnet** | nflverse ingest, joins, qualification, densities, percentiles, Supabase viz store, published JSON | the frontend UI, Recharts, catalog labels |
 | **knowball** | Position catalog (`stat.id`, domains, `kind`, `higherIsBetter`, format), `ExpandableStatRow` | Database clients, ingest, inventing slider rows |
 
 **Publish path (required for v1):**
 
 1. Compute into a **normalized visualization store** in Supabase (tables below).
 2. Join into one **`PlayerPageJson` per player per season** (and `asOfWeek`) with `schemaVersion: 1`.
-3. Write that JSON to **Supabase Storage** (or equivalent static objects). Knowball will fetch the file. Search can later use a tiny **player index JSON** — still not a SQL client in the Next app.
+3. Write that JSON to **Supabase Storage** (or equivalent static objects). the frontend will fetch the file. Search can later use a tiny **player index JSON** — still not a SQL client in the Next app.
 
 Do **not** duplicate the league KDE onto every player row in Postgres. Curves live once in `league_distributions` (`league_ytd` scope). Page JSON **may** embed them for a single fetch.
 
 Build the pipeline as a **DAG** with a durable weekly panel spine so later products (highlights, player-own densities, similarity, teams) hang off Stages A–B without redesign — see §§10, 12, and 15. Do **not** implement those products in v1.
 
-Superseded ideas (ignore if you see them in old checklists): Knowball talking to Postgres; Observable Plot; frontend ramp–hold greying; storing raw weekly box scores in the **public** viz schema.
+Superseded ideas (ignore if you see them in old checklists): the frontend talking to Postgres; Observable Plot; frontend ramp–hold greying; storing raw weekly box scores in the **public** viz schema.
 
 ---
 
-## 2. What Knowball actually renders (skeleton today)
+## 2. What the frontend actually renders (skeleton today)
 
 Until Ballnet JSON exists, player pages call:
 
@@ -38,7 +40,7 @@ hydratePlayerStats(player.position, [])
 
 That walks the **full position catalog** and paints every row gray (`availability: "pending"`). Empty snapshots must still appear. Do not omit stats.
 
-When JSON exists, Knowball will:
+When JSON exists, the frontend will:
 
 1. Load `PlayerPageJson`.
 2. Call `hydratePlayerStats(position, json.stats)`.
@@ -47,7 +49,7 @@ When JSON exists, Knowball will:
 
 Locked UI math (Ballnet must match):
 
-- Percentile slider is **0–100**, already **oriented so 100 is good**. Knowball does **not** invert again.
+- Percentile slider is **0–100**, already **oriented so 100 is good**. the frontend does **not** invert again.
 - Inclusive CDF \(P(X \le x)\). Caption is “of the league has a STAT of VALUE or lower/higher”, never “better than N%”.
 - Rate stats in JSON are **0–1** when catalog `format === "percent"`. UI multiplies by 100 for display.
 - CPOE uses `percent_pts`: store as **percentage points** (e.g. `+2.4`), not `0.024`.
@@ -56,13 +58,13 @@ Locked UI math (Ballnet must match):
 - High zero-mass count stats still get a reflected KDE (no separate 0-bin histogram).
 - Missing NGS/PFR: `missing_source`. **Never impute 0**.
 
-Knowball `kind` is **either** `continuous` **or** `discrete` per `stat.id` for formatting. It does **not** select a chart shape. For catalog-continuous hurdle stats (passing/rushing/receiving/return yards), emit a **single reflected KDE** on the qualified sample (reflection at `lowerBound`, typically 0). Do not emit a second histogram for that id.
+The frontend `kind` is **either** `continuous` **or** `discrete` per `stat.id` for formatting. It does **not** select a chart shape. For catalog-continuous hurdle stats (passing/rushing/receiving/return yards), emit a **single reflected KDE** on the qualified sample (reflection at `lowerBound`, typically 0). Do not emit a second histogram for that id.
 
 ---
 
-## 3. JSON contracts (exact types Knowball already has)
+## 3. JSON contracts (exact types the frontend already has)
 
-Source of truth in knowball: `web/src/lib/payload.ts`, `web/src/lib/distribution.ts`, `web/src/lib/catalog/hydrate.ts`.
+Source of truth in knowball: `frontend/src/lib/payload.ts`, `frontend/src/lib/distribution.ts`, `frontend/src/lib/catalog/hydrate.ts`.
 
 ### 3.1 `PlayerPageJson`
 
@@ -79,13 +81,13 @@ Source of truth in knowball: `web/src/lib/payload.ts`, `web/src/lib/distribution
   season: number;
   asOfWeek: number;      // NFL week being viewed (REG week number)
   stats: JsonStatSnapshot[];
-  // Additive optional keys later (Knowball must ignore unknowns until wired):
+  // Additive optional keys later (the frontend must ignore unknowns until wired):
   // overallPercentile?: number;
   // highlightRefs?: …;
 }
 ```
 
-**Additive envelope rule:** Knowball ignores unknown top-level keys. Ballnet may add optional fields in a later schema minor bump without breaking v1 consumers. Do **not** remove or rename locked fields without bumping `schemaVersion` and coordinating a Knowball change.
+**Additive envelope rule:** the frontend ignores unknown top-level keys. Ballnet may add optional fields in a later schema minor bump without breaking v1 consumers. Do **not** remove or rename locked fields without bumping `schemaVersion` and coordinating a the frontend change.
 
 Storage object key convention (required):
 
@@ -112,11 +114,11 @@ Do **not** embed per-player weekly densities into every `PlayerPageJson` (payloa
 | `id` | string | **Must** match catalog id (section 8). |
 | `playerValue` | number | Raw stat in catalog units. Rates 0–1 for `percent`. |
 | `percentile` | number | 0–100, **already oriented** (`higherIsBetter` applied in Ballnet). |
-| `qualified` | boolean | `denom_ytd >= min_n` and source present. If false, Knowball maps to `insufficient_sample` unless `unavailableReason` is set. |
+| `qualified` | boolean | `denom_ytd >= min_n` and source present. If false, the frontend maps to `insufficient_sample` unless `unavailableReason` is set. |
 | `denomYtd` | number? | Season-to-date denominator used in ramp–hold. |
 | `kind` | `"continuous"` \| `"discrete"` | Catalog metadata (formatting). Must match catalog `kind` for that id. Does **not** select histogram vs KDE. |
 | `xMin`, `xMax` | number | Qualified sample **min/max** for that slice (empty sample → catalog). See `docs/adr/2026-09-17-season-max-plot-domain.md`. |
-| `yMax` | number | Max KDE density on the league curve (Knowball y-axis). |
+| `yMax` | number | Max KDE density on the league curve (the frontend y-axis). |
 | `lowerBound`, `upperBound` | number? | Reflection walls. Copy from catalog when present. |
 | `curve` | `{x, y}[]` | Required for `ready`. Dense grid (recommend 256–512 points) spanning `[xMin, xMax]`. |
 | `unavailableReason` | omit \| `insufficient_sample` \| `missing_source` \| `not_in_nflverse` | See section 6. Do not send `"ready"` or `"pending"` here. |
@@ -133,7 +135,7 @@ Qualified **ready** rows still must include the **league** curve (copied from `l
 
 ### 3.3 Player index JSON (search)
 
-Knowball search currently filters a fixture list. Publish:
+The frontend search currently filters a fixture list. Publish:
 
 ```
 index/players.json
@@ -153,9 +155,9 @@ index/players.json
 }
 ```
 
-If a transitional flat array is easier for a first cut, wrap it before Knowball goes live — prefer the envelope with `schemaVersion` from day one.
+If a transitional flat array is easier for a first cut, wrap it before the frontend goes live — prefer the envelope with `schemaVersion` from day one.
 
-### 3.4 Position codes Knowball accepts
+### 3.4 Position codes the frontend accepts
 
 Unknown codes throw in `positionGroupOf`. Map nflverse `position` into this set before publish.
 
@@ -233,7 +235,7 @@ Grain in the sliders plan is **player-week** for source rows; the **published Le
 
 ## 5. Joins (nflverse)
 
-Canonical player key in Knowball and viz tables: **GSIS** `player_id`.
+Canonical player key in the frontend and viz tables: **GSIS** `player_id`.
 
 | Source family | Join |
 |---|---|
@@ -247,7 +249,7 @@ If a join fails: `missing_source` for stats that need that source. Do not drop t
 
 ## 6. Availability state machine
 
-| Condition | `qualified` | `unavailable_reason` | Knowball `availability` |
+| Condition | `qualified` | `unavailable_reason` | the frontend `availability` |
 |---|---|---|---|
 | Catalog `alwaysUnavailable` | omit row or send anything | ignored | `not_in_nflverse` |
 | Season `< startYear` or source not ingested yet | false | `not_in_nflverse` or `missing_source` | that reason |
@@ -256,7 +258,7 @@ If a join fails: `missing_source` for stats that need that source. Do not drop t
 | Qualified, curve present | true | null | `ready` |
 | No row published for that id | — | — | `pending` |
 
-OL pass-protection ids (`sacks_allowed`, `pressures_allowed`, `block_win_rate`) must **not** be filled from guesswork. Either omit snapshots or send `not_in_nflverse`. Knowball will gray them anyway.
+OL pass-protection ids (`sacks_allowed`, `pressures_allowed`, `block_win_rate`) must **not** be filled from guesswork. Either omit snapshots or send `not_in_nflverse`. the frontend will gray them anyway.
 
 ---
 
@@ -280,7 +282,7 @@ v1 writes only `viz.league_distributions` (= `league_ytd`). Sketch for later: `v
 - **Reflect** at `lowerBound` / `upperBound` when the catalog sets them (percents 0–1, rating 0–158.3, seconds floors, etc.). Discrete count ids usually have no catalog walls; still evaluate on `[xMin, xMax]` and normalize.
 - Evaluate on a uniform grid on `[xMin, xMax]`.
 - Normalize so \(\int y\,dx \approx 1\).
-- `yMax` = max grid `y` (Knowball sets the chart domain from this).
+- `yMax` = max grid `y` (the frontend sets the chart domain from this).
 - `zeroMass: "none"` NGS stats: do not invent zeros; only players with NGS rows enter the sample.
 - Catalog `kind` / `binWidth` do **not** select a histogram. Do not emit `bins` or `samples`.
 
@@ -288,11 +290,11 @@ v1 writes only `viz.league_distributions` (= `league_ytd`). Sketch for later: `v
 
 For player value \(x\):
 
-1. Inclusive CDF on the **same** league curve Knowball will plot: \(p = P(X \le x)\) (knowball `kdeCdf` trapezoid).
+1. Inclusive CDF on the **same** league curve the frontend will plot: \(p = P(X \le x)\) (knowball `kdeCdf` trapezoid).
 2. If catalog `higherIsBetter === false`, store `percentile = 100 * (1 - p)`, else `percentile = 100 * p`.
 3. Clamp to `[0, 100]`.
 
-Knowball hover **recomputes** CDF from the embedded curve, then orients with `higherIsBetter` from the **catalog**, not from the JSON. Ballnet must use the same `higherIsBetter` as the catalog or slider vs tooltip will disagree.
+The frontend hover **recomputes** CDF from the embedded curve, then orients with `higherIsBetter` from the **catalog**, not from the JSON. Ballnet must use the same `higherIsBetter` as the catalog or slider vs tooltip will disagree.
 
 ### Shared scoring primitives (implement once; reuse later)
 
@@ -302,7 +304,7 @@ Keep these as library functions in Ballnet — highlights, rarity copy, and comp
 |---|---|
 | Oriented percentile / inclusive CDF | Already required for Leg 1 |
 | Z-score vs a peer sample | Weekly “best games” / breakouts (later) |
-| Tail → `one_in_n` | “1 in a thousand”-style framing from CDF/tail (later); Knowball/Mason only present the number |
+| Tail → `one_in_n` | “1 in a thousand”-style framing from CDF/tail (later); the frontend/Mason only present the number |
 
 ### Value aggregation (YTD)
 
@@ -465,7 +467,7 @@ Do not invent OL sacks/pressures/win rate from team-level data.
 | `xp_attempts` | discrete | count | true | 0–10, bw 1 | 1 | XPA | 1999 | `pat_att` |
 | `xp_made` | discrete | count | true | 0–10, bw 1 | 1 | XPA | 1999 | `pat_made` |
 
-Sliders plan also mentions other FG buckets (`fg_made_50_59`, etc.). Knowball **only** has `fg_40_49`. Do not publish extra FG-bucket ids until the catalog adds them.
+Sliders plan also mentions other FG buckets (`fg_made_50_59`, etc.). the frontend **only** has `fg_40_49`. Do not publish extra FG-bucket ids until the catalog adds them.
 
 ### 8.8 Punter (`punter`) — 6 ids
 
@@ -502,7 +504,7 @@ Two layers. **Do not** put raw nflverse weeklies in the public viz schema.
 | **Schema `viz`** (this section) | Normalized visualization store | Ballnet service role |
 | **Storage buckets** | Denormalized `PlayerPageJson` + `players.json` | Public read (anon); Ballnet write |
 
-Knowball will **not** use the Postgres REST API. RLS on `viz` should **deny anon**. Storage objects for pages/index should be **public read** (or signed URLs if you later want to hide them).
+The frontend will **not** use the Postgres REST API. RLS on `viz` should **deny anon**. Storage objects for pages/index should be **public read** (or signed URLs if you later want to hide them).
 
 Recommended schemas:
 
@@ -545,7 +547,7 @@ One row per GSIS player that may appear in search or player routes.
 | Column | Type | Notes |
 |---|---|---|
 | `season` | int | |
-| `as_of_week` | int | REG week 1–18 (or 22 if you include postseason later; **Knowball default is season YTD REG only** — do not mix POST into REG densities) |
+| `as_of_week` | int | REG week 1–18 (or 22 if you include postseason later; **the frontend default is season YTD REG only** — do not mix POST into REG densities) |
 | `position_group` | text | `qb` \| `backfield` \| `pass_catcher` \| `ol` \| `def_front` \| `secondary` \| `kicker` \| `punter` \| `returner` |
 | `stat_id` | text | Catalog id |
 | `kind` | text | catalog metadata `continuous` \| `discrete` |
@@ -722,7 +724,7 @@ Public read; write with service role.
 
 ### 9.5 Optional `raw` tables (only if landing in Postgres)
 
-If you keep nflverse in files, skip this. If you land in Supabase for ops, use a **private** schema and **never** expose it to Knowball.
+If you keep nflverse in files, skip this. If you land in Supabase for ops, use a **private** schema and **never** expose it to the frontend.
 
 Minimum internal facts (column names can follow nflverse; these are Ballnet-private):
 
@@ -741,7 +743,7 @@ Minimum internal facts (column names can follow nflverse; these are Ballnet-priv
 | `raw.ftn_week` | player-week | drops / routes if used |
 | `raw.ff_opportunity_week` | player-week | xFP |
 
-These are **ETL inputs**, not Knowball contracts. Do not copy them into `viz`.
+These are **ETL inputs**, not the frontend contracts. Do not copy them into `viz`.
 
 ---
 
@@ -806,7 +808,7 @@ For each player-season-week:
 
 ```text
 stats[] = for each catalog id in statsForPosition(position):
-  if alwaysUnavailable: omit (Knowball will gray)
+  if alwaysUnavailable: omit (the frontend will gray)
   else join player_stat_values + league_distributions
        copy curve/xMin/xMax/yMax/kind/bounds onto snapshot
        (prefer shared `league/*.json` merge — do not embed curve on every page)
@@ -836,7 +838,7 @@ Season dropdown on the player page reloads the **same player** for another `seas
 8. Week 1 passer with 9 attempts on a rate stat with `minNBase=10`: unqualified (`min_n=10`).
 9. Week 5 passer with 32 attempts on volume stats with `minNBase=8`: qualified (`min_n=32`).
 10. OL `sacks_allowed` never `ready`.
-11. Knowball hydrate: fixture player + one real JSON → ready rows chart; missing ids still listed.
+11. the frontend hydrate: fixture player + one real JSON → ready rows chart; missing ids still listed.
 
 ---
 
@@ -844,21 +846,21 @@ Season dropdown on the player page reloads the **same player** for another `seas
 
 **Do not implement these in the first ETL ship.** Do structure Stages A–B and Storage prefixes so they plug in without redesign.
 
-| Product | v1 | Later publish (JSON-first; still no Knowball Postgres) |
+| Product | v1 | Later publish (JSON-first; still no the frontend Postgres) |
 |---|---|---|
 | Home best-of-week (z-scores, breakouts) | skip | `highlights/{season}/w{week}.json` from weekly panel + z-score / rarity primitives |
 | Best of season / all-time boards | skip | `highlights/{season}/season.json`, `highlights/all-time/…` |
 | “1 in N” rarity framing | skip | Fields on highlight (or tooltip) payloads from shared tail → `one_in_n` |
 | Overall player percentile | skip | Additive `overallPercentile` on page/index JSON (recipe defined in Ballnet) |
 | Team starting average percentile | skip | `teams/{season}/w{week}.json` after roster/starter definition |
-| Compare **individual** player distributions | skip | `dists/players/{id}/{season}/w{week}.json` (`player_weekly` scope) or a thin compare object; Knowball fetches A+B |
+| Compare **individual** player distributions | skip | `dists/players/{id}/{season}/w{week}.json` (`player_weekly` scope) or a thin compare object; the frontend fetches A+B |
 | Trajectory similarity | skip | `similarity/{id}.json` neighbors; embeddings stay in Ballnet |
 | Draft matrices / Clerk / Stripe / premium RLS | skip | Old checklist Leg 2 — unrelated to Leg 1 viz |
 | Last-10 / all-time **player page** windows | skip | Unless a human asks; default remains season YTD |
-| Knowball PostgREST / `@supabase/supabase-js` | **never for Leg 1** | Publish more JSON instead |
+| the frontend PostgREST / `@supabase/supabase-js` | **never for Leg 1** | Publish more JSON instead |
 | Inventing catalog ids (extra FG buckets, OL win rate, 40+ deep) | skip | Catalog change in knowball first |
 
-Still forbidden forever for this architecture: embedding Knowball with a Postgres client “just for compare,” or folding highlight/similarity logic into Stage G.
+Still forbidden forever for this architecture: embedding the frontend with a Postgres client “just for compare,” or folding highlight/similarity logic into Stage G.
 
 ---
 
@@ -867,11 +869,11 @@ Still forbidden forever for this architecture: embedding Knowball with a Postgre
 | File (in knowball) | Why |
 |---|---|
 | `.plans/NFL Stats Sliders.md` | Sources, min-n, zero mass, joins |
-| `web/src/lib/payload.ts` | JSON types |
-| `web/src/lib/distribution.ts` | curve shapes, CDF used in UI |
-| `web/src/lib/catalog/*.ts` | ids, domains, `higherIsBetter`, format |
-| `web/src/lib/catalog/hydrate.ts` | overlay rules |
-| `web/src/lib/stat-status.ts` | gray-row copy / ready predicate |
+| `frontend/src/lib/payload.ts` | JSON types |
+| `frontend/src/lib/distribution.ts` | curve shapes, CDF used in UI |
+| `frontend/src/lib/catalog/*.ts` | ids, domains, `higherIsBetter`, format |
+| `frontend/src/lib/catalog/hydrate.ts` | overlay rules |
+| `frontend/src/lib/stat-status.ts` | gray-row copy / ready predicate |
 | `docs/architecture/data-contracts.md` | store vs JSON |
 | `docs/adr/2026-08-19-visualization-json-store.md` | why two tables + files |
 
@@ -883,7 +885,7 @@ Ballnet can, for a chosen `season` + `as_of_week`:
 
 1. Fill `viz.players`, `viz.player_seasons`, `viz.league_distributions`, `viz.player_stat_values`.
 2. Persist the Stage B weekly panel so a later job could recompute without a new nflverse join design.
-3. Upload `index/players.json` and at least one real GSIS `PlayerPageJson` (`schemaVersion: 1`) that hydrates a QB (and one other group) in Knowball without code changes except pointing the fetch URL at Storage.
+3. Upload `index/players.json` and at least one real GSIS `PlayerPageJson` (`schemaVersion: 1`) that hydrates a QB (and one other group) in the frontend without code changes except pointing the fetch URL at Storage.
 4. Gray rows behave: NGS-missing, sample-short, and OL-unavailable are distinguishable via `unavailableReason` / omitted snapshots / `alwaysUnavailable`.
 5. Storage only uses reserved prefixes (`pages/`, `index/` for v1). No highlight/team/dist/similarity objects required yet.
 
@@ -893,10 +895,10 @@ Ballnet can, for a chosen `season` + `as_of_week`:
 
 ## 15. Extensibility invariants (do not violate)
 
-1. **JSON-first forever for Knowball Leg 1.** Ballnet may use Postgres/parquet freely; Knowball only fetches Storage (or static) JSON.
+1. **JSON-first forever for the frontend Leg 1.** Ballnet may use Postgres/parquet freely; the frontend only fetches Storage (or static) JSON.
 2. **Weekly panel is the spine.** All future scoring products read Stage B (or a thin derivative), not one-off nflverse scrapes.
 3. **Do not overload `league_distributions`.** Player-own and peer-week densities use `distribution_scope` / separate tables or paths (`player_weekly`, `league_weekly`).
-4. **Additive publish envelopes.** Every object carries `schemaVersion`. Unknown keys are allowed for forward compatibility; breaking renames require a version bump + Knowball change.
+4. **Additive publish envelopes.** Every object carries `schemaVersion`. Unknown keys are allowed for forward compatibility; breaking renames require a version bump + the frontend change.
 5. **Reserved Storage prefixes.** New products get new prefixes from the table in §9.4 — never dump ad-hoc files at the bucket root.
 6. **Shared scoring library.** Percentile/CDF, z-score, and `one_in_n` live once in Ballnet.
 7. **No payload bloat on player pages.** Do not ship every player’s weekly KDE inside `PlayerPageJson`; publish `dists/` (or compare JSON) when that UI exists.

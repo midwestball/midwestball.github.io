@@ -1,4 +1,4 @@
-# Boundaries: `web/src/components/compare`
+# Boundaries: `frontend/src/components/compare`
 
 ## Always
 

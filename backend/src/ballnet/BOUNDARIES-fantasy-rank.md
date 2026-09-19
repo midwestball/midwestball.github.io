@@ -18,7 +18,7 @@
 - Invent a rank when ECR, GSIS, or PPR is missing.
 - Put these fields on `index/players.json` (latest-only bios).
 - Overload highlight board `rank` (that is z-score order).
-- Compute ranks in Knowball.
+- Compute ranks in the frontend.
 
 ## Silent Failures & Gotchas
 
