@@ -17,6 +17,9 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
+    # Same environment as deploy so Environment variables on `github-pages` are visible here.
+    # Repository Actions variables (Settings → Secrets and variables → Actions → Variables) also work via vars.*.
+    environment: github-pages
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -31,6 +34,19 @@ jobs:
       - name: Install
         working-directory: frontend
         run: npm ci
+
+      - name: Require Supabase URL
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: ${{ vars.NEXT_PUBLIC_SUPABASE_URL }}
+        run: |
+          if [ -z "${NEXT_PUBLIC_SUPABASE_URL}" ]; then
+            echo "::error::NEXT_PUBLIC_SUPABASE_URL is empty at build time."
+            echo "Set a repository variable OR a github-pages Environment variable named NEXT_PUBLIC_SUPABASE_URL"
+            echo "to https://<project-ref>.supabase.co (no key, no /storage path)."
+            echo "Secrets will not work — the workflow reads vars.*, not secrets.*."
+            exit 1
+          fi
+          echo "NEXT_PUBLIC_SUPABASE_URL is set (${#NEXT_PUBLIC_SUPABASE_URL} chars)"
 
       - name: Build static export
         working-directory: frontend
