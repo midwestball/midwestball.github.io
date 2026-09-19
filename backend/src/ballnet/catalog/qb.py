@@ -1,4 +1,4 @@
-"""QB catalog ids — must match knowball `web/src/lib/catalog/qb.ts`."""
+"""QB catalog ids — must match midwestball `frontend/src/lib/catalog/qb.ts`."""
 
 from __future__ import annotations
 

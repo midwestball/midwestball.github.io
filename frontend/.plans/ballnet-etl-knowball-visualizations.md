@@ -1,4 +1,4 @@
-> **Monorepo note (2026-09-19):** In `midwestball.github.io`, Knowball lives under `frontend/` and Ballnet under `backend/`. Replace historical `frontend/src/...` paths with `frontend/src/...`. The site hosts on GitHub Pages (static export), not Vercel. Upstream `ehfurgeson/knowball` / `ehfurgeson/ballnet` remain separate.
+> **Monorepo note (2026-09-19):** In `midwestball.github.io`, midwestball lives under `frontend/` and Ballnet under `backend/`. Replace historical `frontend/src/...` paths with `frontend/src/...`. The site hosts on GitHub Pages (static export), not Vercel. Upstream `ehfurgeson/knowball` / `ehfurgeson/ballnet` remain separate.
 
 # Ballnet ETL brief: the frontend visualization store
 
@@ -14,7 +14,7 @@ The frontend is a public Next.js app that **only renders JSON**. It has no Pytho
 | Repo | Owns | Must not own |
 |---|---|---|
 | **ballnet** | nflverse ingest, joins, qualification, densities, percentiles, Supabase viz store, published JSON | the frontend UI, Recharts, catalog labels |
-| **knowball** | Position catalog (`stat.id`, domains, `kind`, `higherIsBetter`, format), `ExpandableStatRow` | Database clients, ingest, inventing slider rows |
+| **midwestball** | Position catalog (`stat.id`, domains, `kind`, `higherIsBetter`, format), `ExpandableStatRow` | Database clients, ingest, inventing slider rows |
 
 **Publish path (required for v1):**
 
@@ -64,7 +64,7 @@ The frontend `kind` is **either** `continuous` **or** `discrete` per `stat.id` f
 
 ## 3. JSON contracts (exact types the frontend already has)
 
-Source of truth in knowball: `frontend/src/lib/payload.ts`, `frontend/src/lib/distribution.ts`, `frontend/src/lib/catalog/hydrate.ts`.
+Source of truth in midwestball: `frontend/src/lib/payload.ts`, `frontend/src/lib/distribution.ts`, `frontend/src/lib/catalog/hydrate.ts`.
 
 ### 3.1 `PlayerPageJson`
 
@@ -290,7 +290,7 @@ v1 writes only `viz.league_distributions` (= `league_ytd`). Sketch for later: `v
 
 For player value \(x\):
 
-1. Inclusive CDF on the **same** league curve the frontend will plot: \(p = P(X \le x)\) (knowball `kdeCdf` trapezoid).
+1. Inclusive CDF on the **same** league curve the frontend will plot: \(p = P(X \le x)\) (midwestball `kdeCdf` trapezoid).
 2. If catalog `higherIsBetter === false`, store `percentile = 100 * (1 - p)`, else `percentile = 100 * p`.
 3. Clamp to `[0, 100]`.
 
@@ -608,7 +608,7 @@ Tracks which Storage objects are current.
 | `as_of_week` | int | latest completed REG week you have computed |
 | `updated_at` | timestamptz | |
 
-### 9.3 DDL (run in Ballnet migrations; not in knowball)
+### 9.3 DDL (run in Ballnet migrations; not in midwestball)
 
 ```sql
 create schema if not exists viz;
@@ -858,7 +858,7 @@ Season dropdown on the player page reloads the **same player** for another `seas
 | Draft matrices / Clerk / Stripe / premium RLS | skip | Old checklist Leg 2 — unrelated to Leg 1 viz |
 | Last-10 / all-time **player page** windows | skip | Unless a human asks; default remains season YTD |
 | the frontend PostgREST / `@supabase/supabase-js` | **never for Leg 1** | Publish more JSON instead |
-| Inventing catalog ids (extra FG buckets, OL win rate, 40+ deep) | skip | Catalog change in knowball first |
+| Inventing catalog ids (extra FG buckets, OL win rate, 40+ deep) | skip | Catalog change in midwestball first |
 
 Still forbidden forever for this architecture: embedding the frontend with a Postgres client “just for compare,” or folding highlight/similarity logic into Stage G.
 
@@ -866,7 +866,7 @@ Still forbidden forever for this architecture: embedding the frontend with a Pos
 
 ## 13. Files to keep open while implementing
 
-| File (in knowball) | Why |
+| File (in midwestball) | Why |
 |---|---|
 | `.plans/NFL Stats Sliders.md` | Sources, min-n, zero mass, joins |
 | `frontend/src/lib/payload.ts` | JSON types |
@@ -902,4 +902,4 @@ Ballnet can, for a chosen `season` + `as_of_week`:
 5. **Reserved Storage prefixes.** New products get new prefixes from the table in §9.4 — never dump ad-hoc files at the bucket root.
 6. **Shared scoring library.** Percentile/CDF, z-score, and `one_in_n` live once in Ballnet.
 7. **No payload bloat on player pages.** Do not ship every player’s weekly KDE inside `PlayerPageJson`; publish `dists/` (or compare JSON) when that UI exists.
-8. **Catalog remains the id authority.** Ballnet does not invent slider rows; new stats start as knowball catalog ids.
+8. **Catalog remains the id authority.** Ballnet does not invent slider rows; new stats start as midwestball catalog ids.

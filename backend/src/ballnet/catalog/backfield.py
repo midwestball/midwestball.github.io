@@ -1,4 +1,4 @@
-"""Backfield catalog ids — must match knowball `web/src/lib/catalog/backfield.ts`."""
+"""Backfield catalog ids — must match midwestball `frontend/src/lib/catalog/backfield.ts`."""
 
 from __future__ import annotations
 

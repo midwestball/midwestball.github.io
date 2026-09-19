@@ -14,7 +14,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Knowball",
+  title: "midwestball",
   description: "Position-aware NFL player stats versus the league.",
 };
 

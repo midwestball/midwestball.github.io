@@ -13,7 +13,7 @@ export function SiteHeader() {
       <div className="mx-auto flex max-w-3xl items-center justify-between gap-3 px-4 py-2.5">
         <Link href="/" className="min-w-0">
           <p className="text-xs font-semibold tracking-[0.2em] text-zinc-500 uppercase">
-            Knowball
+            midwestball
           </p>
           <p className="text-sm font-semibold tracking-tight text-zinc-900">
             Player stats

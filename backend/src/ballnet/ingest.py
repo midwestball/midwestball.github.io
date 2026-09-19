@@ -123,7 +123,7 @@ def _drop_ngs_week0(df: pl.DataFrame) -> pl.DataFrame:
 
 
 def fetch_season(season: int, *, force: bool = False) -> list[FetchResult]:
-    """Download every source family needed for the Knowball viz spine."""
+    """Download every source family needed for the midwestball viz spine."""
     ensure_data_dirs()
     results: list[FetchResult] = []
 

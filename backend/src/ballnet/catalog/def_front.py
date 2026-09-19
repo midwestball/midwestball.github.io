@@ -1,4 +1,4 @@
-"""Defensive-front catalog ids — must match knowball `web/src/lib/catalog/def-front.ts`."""
+"""Defensive-front catalog ids — must match midwestball `frontend/src/lib/catalog/def-front.ts`."""
 
 from __future__ import annotations
 

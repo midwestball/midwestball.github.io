@@ -12,13 +12,13 @@ YTD_DIR = DATA_DIR / "ytd"
 DIST_DIR = DATA_DIR / "dists"
 PAGES_DIR = DATA_DIR / "pages"
 INDEX_DIR = DATA_DIR / "index"
-# Knowball-facing league shapes (camelCase). Distinct from Stage D `dists/league_ytd_*`.
+# midwestball-facing league shapes (camelCase). Distinct from Stage D `dists/league_ytd_*`.
 LEAGUE_DIR = DATA_DIR / "league"
 # Stage H weekly boards (not Stage G).
 HIGHLIGHTS_DIR = DATA_DIR / "highlights"
 # Stage H single-game KDEs (league_weekly scope). Not league_ytd.
 LEAGUE_WEEKLY_DIR = DIST_DIR / "league_weekly"
-# Knowball search sort boards (YTD percentiles by group/stat).
+# midwestball search sort boards (YTD percentiles by group/stat).
 LEADERBOARDS_DIR = DATA_DIR / "leaderboards"
 
 

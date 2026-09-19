@@ -151,7 +151,7 @@ def _page_dict(
 
 
 def _league_stat_payload(dens: dict[str, Any]) -> dict[str, Any]:
-    """Stage D snake_case → Knowball camelCase KDE shape (no player overlay)."""
+    """Stage D snake_case → midwestball camelCase KDE shape (no player overlay)."""
     out: dict[str, Any] = {
         "kind": dens["kind"],
         "xMin": dens["x_min"],
@@ -200,7 +200,7 @@ def publish_league_slice(
     *,
     groups: Iterable[str] | None = None,
 ) -> list[Path]:
-    """Publish Knowball league JSON for every group in a season slice."""
+    """Publish midwestball league JSON for every group in a season slice."""
     selected = list(groups) if groups is not None else list(PUBLISHABLE_GROUPS)
     return [publish_league_group(season, as_of_week, g) for g in selected]
 
@@ -615,14 +615,14 @@ def publish_range(
     )
 
 
-def sync_index_to_knowball(knowball_web: Path) -> dict[str, str]:
-    """Copy search/current/seasons index into Knowball gitignored `public/viz/index/`.
+def sync_index_to_midwestball(midwestball_web: Path) -> dict[str, str]:
+    """Copy search/current/seasons index into midwestball gitignored `public/viz/index/`.
 
     Does not write into `src/data/ballnet/` — Storage is the source of truth.
-    Knowball does not read this public/viz mirror.
+    midwestball does not read this public/viz mirror.
     """
     ensure_data_dirs()
-    dest = knowball_web / "public" / "viz" / "index"
+    dest = midwestball_web / "public" / "viz" / "index"
     dest.mkdir(parents=True, exist_ok=True)
     copied: dict[str, str] = {}
     names = ("players.json", "current.json", "seasons.json")
@@ -638,10 +638,10 @@ def sync_index_to_knowball(knowball_web: Path) -> dict[str, str]:
     return copied
 
 
-def copy_page_to_knowball(
+def copy_page_to_midwestball(
     page_path: Path,
-    knowball_fixture: Path,
+    midwestball_fixture: Path,
 ) -> None:
-    """Copy published JSON into Knowball for a temporary visual fixture."""
-    knowball_fixture.parent.mkdir(parents=True, exist_ok=True)
-    knowball_fixture.write_text(page_path.read_text())
+    """Copy published JSON into midwestball for a temporary visual fixture."""
+    midwestball_fixture.parent.mkdir(parents=True, exist_ok=True)
+    midwestball_fixture.write_text(page_path.read_text())

@@ -28,7 +28,7 @@ cd backend
 uv sync
 uv run ballnet --help
 # Weekly recipe: see backend/docs/WEEKLY_OPS.md
-# Optional local index mirror: --sync-knowball ../frontend
+# Optional local index mirror: --sync-midwestball ../frontend
 ```
 
 Pipeline artifacts stay in gitignored `backend/data/`; production handoff is `upload-storage` to the public `knowball-public` bucket.

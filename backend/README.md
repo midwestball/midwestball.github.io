@@ -28,7 +28,7 @@ uv run ballnet publish-range --start 2016 --end 2025
 uv run ballnet upload-storage --index --season 2025
 
 # Optional local index mirror into the static site tree
-uv run ballnet publish-all --season 2025 --as-of-week 18 --sync-knowball ../frontend
+uv run ballnet publish-all --season 2025 --as-of-week 18 --sync-midwestball ../frontend
 ```
 
 Artifacts land under gitignored `data/` (`raw/`, `spine/`, `ytd/`, `dists/`, `pages/`, `league/`, `index/`).

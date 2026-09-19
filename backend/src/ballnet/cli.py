@@ -22,7 +22,7 @@ from ballnet.publish import (
     publish_player_page,
     publish_range,
     rebuild_index_from_pages,
-    sync_index_to_knowball,
+    sync_index_to_midwestball,
 )
 from ballnet.storage_upload import (
     upload_index,
@@ -74,7 +74,7 @@ def _add_season_args(p: argparse.ArgumentParser, *, require_one: bool = True) ->
 
 
 def main(argv: list[str] | None = None) -> None:
-    parser = argparse.ArgumentParser(prog="ballnet", description="Knowball viz data pipeline")
+    parser = argparse.ArgumentParser(prog="ballnet", description="midwestball viz data pipeline")
     sub = parser.add_subparsers(dest="cmd", required=True)
 
     p_fetch = sub.add_parser("fetch", help="Stage A: download nflverse sources")
@@ -155,7 +155,7 @@ def main(argv: list[str] | None = None) -> None:
         help="Skip writing pages/current/{player_id}.json",
     )
     p_all.add_argument(
-        "--sync-knowball",
+        "--sync-midwestball",
         type=Path,
         default=None,
         help="Copy index JSON into frontend/public/viz/ (gitignored local mirror; pass ../frontend)",
@@ -239,7 +239,7 @@ def main(argv: list[str] | None = None) -> None:
         help="Skip writing pages/current/ and leave index/current.json unchanged",
     )
     p_range.add_argument(
-        "--sync-knowball",
+        "--sync-midwestball",
         type=Path,
         default=None,
         help="Copy index JSON into frontend/public/viz/ (gitignored local mirror; pass ../frontend)",
@@ -609,8 +609,8 @@ def main(argv: list[str] | None = None) -> None:
             merge_index=not args.replace_index,
         )
         sync_paths: dict[str, str] | None = None
-        if args.sync_knowball is not None:
-            sync_paths = sync_index_to_knowball(args.sync_knowball.resolve())
+        if args.sync_midwestball is not None:
+            sync_paths = sync_index_to_midwestball(args.sync_midwestball.resolve())
 
         print(
             json.dumps(
@@ -631,7 +631,7 @@ def main(argv: list[str] | None = None) -> None:
                         }
                         for g in batch.groups
                     ],
-                    "sync_knowball": sync_paths,
+                    "sync_midwestball": sync_paths,
                 },
                 indent=2,
             )
@@ -752,8 +752,8 @@ def main(argv: list[str] | None = None) -> None:
             also_current_latest=not args.no_current,
         )
         sync_paths = None
-        if args.sync_knowball is not None:
-            sync_paths = sync_index_to_knowball(args.sync_knowball.resolve())
+        if args.sync_midwestball is not None:
+            sync_paths = sync_index_to_midwestball(args.sync_midwestball.resolve())
 
         print(
             json.dumps(
@@ -783,7 +783,7 @@ def main(argv: list[str] | None = None) -> None:
                         }
                         for s in range_result.seasons
                     ],
-                    "sync_knowball": sync_paths,
+                    "sync_midwestball": sync_paths,
                 },
                 indent=2,
             )

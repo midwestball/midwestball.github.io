@@ -1,4 +1,4 @@
-"""Special-teams catalog ids — must match knowball `web/src/lib/catalog/special-teams.ts`."""
+"""Special-teams catalog ids — must match midwestball `frontend/src/lib/catalog/special-teams.ts`."""
 
 from __future__ import annotations
 

@@ -1,4 +1,4 @@
-"""Fantasy position ranks for Knowball subscripts (QB/WR/RB/TE only)."""
+"""Fantasy position ranks for midwestball subscripts (QB/WR/RB/TE only)."""
 
 from __future__ import annotations
 

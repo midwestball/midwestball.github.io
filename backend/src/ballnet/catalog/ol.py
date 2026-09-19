@@ -1,4 +1,4 @@
-"""OL catalog ids — must match knowball `web/src/lib/catalog/ol.ts`."""
+"""OL catalog ids — must match midwestball `frontend/src/lib/catalog/ol.ts`."""
 
 from __future__ import annotations
 

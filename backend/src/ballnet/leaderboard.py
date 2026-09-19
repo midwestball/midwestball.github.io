@@ -1,4 +1,4 @@
-"""Publish Knowball search leaderboards from Stage E percentile panels."""
+"""Publish midwestball search leaderboards from Stage E percentile panels."""
 
 from __future__ import annotations
 
@@ -77,7 +77,7 @@ def build_leaderboard_payload(
         }
     )
     if missing_volume:
-        # Dev-time signal: Knowball joins board.stats[volume_stat_id] for the slider.
+        # Dev-time signal: midwestball joins board.stats[volume_stat_id] for the slider.
         print(
             f"leaderboard {position_group}: volume_stat_id missing from stats keys: "
             + ", ".join(missing_volume)

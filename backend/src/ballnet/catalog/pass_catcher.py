@@ -1,4 +1,4 @@
-"""Pass-catcher catalog ids — must match knowball `web/src/lib/catalog/pass-catcher.ts`."""
+"""Pass-catcher catalog ids — must match midwestball `frontend/src/lib/catalog/pass-catcher.ts`."""
 
 from __future__ import annotations
 

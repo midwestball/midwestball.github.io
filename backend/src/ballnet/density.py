@@ -26,7 +26,7 @@ class DensityResult:
 
 
 def _kde_cdf(curve: list[dict[str, float]], value: float) -> float:
-    """Inclusive CDF matching knowball `kdeCdf` (trapezoid / total mass)."""
+    """Inclusive CDF matching midwestball `kdeCdf` (trapezoid / total mass)."""
     if len(curve) < 2:
         return 0.0
     mass = 0.0

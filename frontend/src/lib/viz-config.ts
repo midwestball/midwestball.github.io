@@ -2,7 +2,7 @@
  * Public Supabase Storage prefix for Ballnet JSON, e.g.
  * https://<ref>.supabase.co/storage/v1/object/public/knowball-public
  *
- * Knowball only fetches public objects — no Supabase client / service key.
+ * midwestball only fetches public objects — no Supabase client / service key.
  * Local and prod both read Storage (`docs/adr/2026-09-18-storage-only-loader.md`).
  */
 

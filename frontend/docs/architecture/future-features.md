@@ -1,6 +1,6 @@
 # Future product backlog (ordered)
 
-Pre-compute in **ballnet** → publish JSON under reserved Storage prefixes → **knowball** only renders. Do not invent formulas or mock curves in the Next app. Detailed stage / path contracts: `.plans/ballnet-etl-knowball-visualizations.md` (§§10, 12, 15). Shared math (percentile CDF, z-score, `one_in_n`) stays a Ballnet library.
+Pre-compute in **ballnet** → publish JSON under reserved Storage prefixes → **midwestball** only renders. Do not invent formulas or mock curves in the Next app. Detailed stage / path contracts: `.plans/ballnet-etl-knowball-visualizations.md` (§§10, 12, 15). Shared math (percentile CDF, z-score, `one_in_n`) stays a Ballnet library.
 
 ## 1. Home — best performances
 
@@ -39,7 +39,7 @@ Find players whose **year-to-year** (or week-to-year) percentile / value paths l
 | Layer | Owns |
 |---|---|
 | ballnet | Weekly panel, z-scores, rarity, overall %, team rolls, similarity, player densities, Storage upload |
-| knowball | Routes, boards UI, compare chrome, copy |
+| midwestball | Routes, boards UI, compare chrome, copy |
 | ffoptim | Draft optimization only — do not hang these products there |
 
 Ship in the numbered order unless a human reprioritizes. Write an ADR when the first highlight or compare payload shape is locked.

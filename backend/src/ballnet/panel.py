@@ -141,7 +141,7 @@ def build_spine(season: int) -> SpineResult:
     t0 = time.perf_counter()
 
     box = pl.read_parquet(RAW_DIR / f"player_stats_{season}.parquet")
-    # Normalize interception / sack names used in Knowball catalog notes
+    # Normalize interception / sack names used in midwestball catalog notes
     if "passing_interceptions" in box.columns and "interceptions" not in box.columns:
         box = box.rename({"passing_interceptions": "interceptions"})
     if "sacks_suffered" in box.columns and "sacks_taken" not in box.columns:

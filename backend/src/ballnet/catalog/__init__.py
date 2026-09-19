@@ -1,4 +1,4 @@
-"""Catalog package — Knowball stat.id definitions for Ballnet Stage C+."""
+"""Catalog package — midwestball stat.id definitions for Ballnet Stage C+."""
 
 from ballnet.catalog.registry import (
     POSITION_GROUPS,

@@ -1,7 +1,7 @@
 [project]
 name = "ballnet"
 version = "0.1.0"
-description = "Public NFL data pipeline and DS engine for Knowball visualizations"
+description = "Public NFL data pipeline and DS engine for midwestball visualizations"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [

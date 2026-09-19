@@ -1,8 +1,8 @@
-"""Map nflverse position strings to Knowball PositionCode / position_group."""
+"""Map nflverse position strings to midwestball PositionCode / position_group."""
 
 from __future__ import annotations
 
-# Knowball catalog groups (docs/architecture + ETL brief §3.4)
+# midwestball catalog groups (docs/architecture + ETL brief §3.4)
 POSITION_TO_CODE: dict[str, str] = {
     "QB": "QB",
     "RB": "RB",

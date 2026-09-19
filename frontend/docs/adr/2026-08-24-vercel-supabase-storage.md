@@ -9,4 +9,4 @@ The site must serve 2016–present player pages from Ballnet without bundling mu
 ### Consequences
 - **Required:** Set `NEXT_PUBLIC_SUPABASE_URL` as a GitHub Actions repository variable (and in local `.env.local`) before Pages builds succeed. Optional `VIZ_STORAGE_BASE_URL` overrides the derived Storage prefix.
 - **Gotcha:** Without Storage env, search and pages are empty. Sibling `backend/data` is not a frontend read path (`docs/adr/2026-09-18-storage-only-loader.md`).
-- **Deprecated:** Vercel as the Midwest Ball host; `ballnet publish-all --sync-knowball` / `frontend/public/viz/` as a local preview — prefer `upload-storage`.
+- **Deprecated:** Vercel as the Midwest Ball host; `ballnet publish-all --sync-midwestball` / `frontend/public/viz/` as a local preview — prefer `upload-storage`.

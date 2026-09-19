@@ -14,7 +14,7 @@ from ballnet.paths import SPINE_DIR, YTD_DIR, ensure_data_dirs
 from ballnet.ramp_hold import completed_week_from_schedule, min_n
 from ballnet.rating import passer_rating
 
-# NGS weekly averages often arrive 0–100; Knowball percent format is 0–1.
+# NGS weekly averages often arrive 0–100; midwestball percent format is 0–1.
 _NGS_PERCENT_COLS = (
     "ngs_pass_aggressiveness",
     "ngs_pass_expected_completion_percentage",
@@ -782,7 +782,7 @@ def wide_to_long(
     for row in wide.to_dicts():
         for stat in stat_list:
             if stat.always_unavailable:
-                # Omit always-unavailable ids from the panel (Knowball grays via catalog).
+                # Omit always-unavailable ids from the panel (midwestball grays via catalog).
                 continue
             qualified, value, denom, reason = _qualify(
                 stat, season, row, position_group, ramp_week=ramp

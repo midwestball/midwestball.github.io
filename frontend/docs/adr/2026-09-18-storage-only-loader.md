@@ -7,4 +7,4 @@ The frontend loads every viz artifact from the public Supabase Storage bucket `k
 ### Consequences
 - **Required:** `NEXT_PUBLIC_SUPABASE_URL` (or `VIZ_STORAGE_BASE_URL`) for both local and Pages builds.
 - **Gotcha:** Unpublished local JSON is invisible to the UI until `upload-storage`.
-- **Deprecated:** Sibling `backend/data` reads, `VIZ_PREFER_LOCAL`, `BALLNET_DATA_DIR`, and `--sync-knowball` as a way to preview unpublished JSON in the frontend.
+- **Deprecated:** Sibling `backend/data` reads, `VIZ_PREFER_LOCAL`, `BALLNET_DATA_DIR`, and `--sync-midwestball` as a way to preview unpublished JSON in the frontend.
