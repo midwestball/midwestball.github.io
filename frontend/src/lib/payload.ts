@@ -57,9 +57,13 @@ export type HighlightRow = {
   zScore: number;
   peerN: number;
   oneInN: number | null;
+  /** Geometric snap of oneInN onto 10^k (10, 100, 1000, …). */
+  rarityTier?: number | null;
   rank: number;
   fantasyPosRank?: number;
   fantasyPosRankKind?: FantasyPosRankKind;
+  /** Same-player secondary performances this week (omit on nested rows). */
+  also?: HighlightRow[];
 };
 
 export type HighlightsBoardJson = {

@@ -235,6 +235,37 @@ def upload_season_highlights(
     return upload_files(pairs, bucket=bucket, **kwargs)
 
 
+def upload_all_highlights_for_season(
+    season: int,
+    *,
+    bucket: str = DEFAULT_BUCKET,
+    **kwargs,
+) -> UploadResult:
+    """Upload every local `highlights/{season}/w*.json` + matching league_weekly curves."""
+    season_dir = HIGHLIGHTS_DIR / str(season)
+    if not season_dir.is_dir():
+        raise FileNotFoundError(f"missing highlights dir {season_dir}")
+    boards = sorted(season_dir.glob("w*.json"))
+    if not boards:
+        raise FileNotFoundError(f"no highlight boards under {season_dir}")
+    pairs: list[tuple[str, Path]] = []
+    for board in boards:
+        week_token = board.stem  # w12
+        if not week_token.startswith("w") or not week_token[1:].isdigit():
+            continue
+        week = int(week_token[1:])
+        pairs.append((f"highlights/{season}/w{week}.json", board))
+        for group in HIGHLIGHT_GROUPS:
+            local = LEAGUE_WEEKLY_DIR / str(season) / f"w{week}" / f"{group}.json"
+            if local.is_file():
+                pairs.append(
+                    (f"dists/league_weekly/{season}/w{week}/{group}.json", local),
+                )
+    if not pairs:
+        raise FileNotFoundError(f"no uploadable highlight files for {season}")
+    return upload_files(pairs, bucket=bucket, **kwargs)
+
+
 def upload_season_leaderboards(
     season: int,
     as_of_week: int | None = None,

@@ -16,13 +16,15 @@ from ballnet.catalog.types import StatDefinition
 from ballnet.density import build_league_density
 from ballnet.fantasy_rank import FantasyPosRank, attach_fantasy_pos_rank, fantasy_pos_ranks
 from ballnet.paths import HIGHLIGHTS_DIR, LEAGUE_WEEKLY_DIR, SPINE_DIR, ensure_data_dirs
-from ballnet.publish import PUBLISHABLE_GROUPS
-from ballnet.scoring import MIN_PEER_N, gaussian_tail_one_in_n, oriented_z_score
+from ballnet.publish import PUBLISHABLE_GROUPS, default_as_of_week
+from ballnet.scoring import MIN_PEER_N, gaussian_tail_one_in_n, oriented_z_score, snap_one_in_n
 
 _JSON_DUMP_KW: dict[str, Any] = {"separators": (",", ":"), "ensure_ascii": False}
 
 TOP_N = 25
 PER_GROUP_N = 8
+# NGS-era spine coverage; all-time peers start here.
+HIGHLIGHTS_START_YEAR = 2016
 
 # OL / punter / returner: sparse or unusable weekly box columns for curated z-scores.
 HIGHLIGHT_GROUPS: tuple[str, ...] = tuple(
@@ -215,16 +217,16 @@ def _qualified_values(df: pl.DataFrame, spec: HighlightStat) -> pl.DataFrame:
 
 
 def _score_stat(
-    season_df: pl.DataFrame,
+    peer_df: pl.DataFrame,
     week_df: pl.DataFrame,
     group: str,
     spec: HighlightStat,
 ) -> list[dict[str, Any]]:
-    """Z vs all qualified player-weeks 1..W; board rows are this week's games only."""
-    season_vals = _qualified_values(season_df, spec)
-    if season_vals.height < MIN_PEER_N:
+    """Z vs all-time qualified player-weeks; board rows are this week's games only."""
+    peer_vals = _qualified_values(peer_df, spec)
+    if peer_vals.height < MIN_PEER_N:
         return []
-    peers = season_vals["_value"].to_list()
+    peers = peer_vals["_value"].to_list()
     week_vals = _qualified_values(week_df, spec)
     if week_vals.is_empty():
         return []
@@ -237,6 +239,7 @@ def _score_stat(
         z = oriented_z_score(val, peers, higher_is_better=spec.higher_is_better)
         if z is None:
             continue
+        one_in_n = gaussian_tail_one_in_n(z)
         rows.append(
             {
                 "playerId": rec["player_id"],
@@ -250,7 +253,8 @@ def _score_stat(
                 "value": val,
                 "zScore": round(z, 3),
                 "peerN": len(peers),
-                "oneInN": gaussian_tail_one_in_n(z),
+                "oneInN": one_in_n,
+                "rarityTier": snap_one_in_n(one_in_n),
             }
         )
     return rows
@@ -277,7 +281,7 @@ def _league_weekly_group_payload(
     season: int,
     week: int,
     group: str,
-    season_df: pl.DataFrame,
+    peer_df: pl.DataFrame,
     specs: list[HighlightStat],
 ) -> dict[str, Any]:
     stats: dict[str, Any] = {}
@@ -285,7 +289,7 @@ def _league_weekly_group_payload(
         cat = _catalog_stat(group, spec.stat_id)
         if cat is None:
             continue
-        sample_df = _qualified_values(season_df, spec)
+        sample_df = _qualified_values(peer_df, spec)
         if sample_df.is_empty():
             continue
         sample = sample_df["_value"].to_numpy().astype(float)
@@ -296,7 +300,7 @@ def _league_weekly_group_payload(
         "season": season,
         "asOfWeek": week,
         "positionGroup": group,
-        "scope": "league_weekly",
+        "scope": "league_game_all_time",
         "stats": stats,
     }
 
@@ -308,35 +312,84 @@ def _load_spine(season: int) -> pl.DataFrame:
     return pl.read_parquet(path)
 
 
-def _board_from_spine(
-    spine: pl.DataFrame,
+def _load_all_time_peers(season: int, week: int) -> pl.DataFrame:
+    """Prior full seasons (HIGHLIGHTS_START_YEAR..S-1) + current season weeks <= W."""
+    if season < HIGHLIGHTS_START_YEAR:
+        raise ValueError(f"season {season} is before highlights start {HIGHLIGHTS_START_YEAR}")
+    frames: list[pl.DataFrame] = []
+    for y in range(HIGHLIGHTS_START_YEAR, season):
+        frames.append(
+            _load_spine(y).filter(pl.col("position_group").is_not_null())
+        )
+    frames.append(
+        _load_spine(season).filter(
+            (pl.col("week") <= week) & pl.col("position_group").is_not_null()
+        )
+    )
+    if len(frames) == 1:
+        return frames[0]
+    return pl.concat(frames, how="diagonal_relaxed")
+
+
+def _collapse_by_player(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """One primary per player (highest zScore); nest the rest as `also`."""
+    # Caller must pass rows sorted by zScore desc so first sighting is the primary.
+    by_player: dict[str, list[dict[str, Any]]] = {}
+    order: list[str] = []
+    for row in rows:
+        pid = str(row["playerId"])
+        if pid not in by_player:
+            by_player[pid] = []
+            order.append(pid)
+        by_player[pid].append(row)
+
+    out: list[dict[str, Any]] = []
+    for pid in order:
+        group_rows = by_player[pid]
+        primary = dict(group_rows[0])
+        also: list[dict[str, Any]] = []
+        for secondary in group_rows[1:]:
+            entry = dict(secondary)
+            entry.pop("also", None)
+            entry.pop("rank", None)
+            also.append(entry)
+        if also:
+            primary["also"] = also
+        else:
+            primary.pop("also", None)
+        out.append(primary)
+    return out
+
+
+def _board_from_peers(
+    peers: pl.DataFrame,
     season: int,
     week: int,
     *,
     ranks: dict[str, FantasyPosRank] | None = None,
 ) -> dict[str, Any]:
-    through = spine.filter(
-        (pl.col("week") <= week) & pl.col("position_group").is_not_null()
+    this_week = peers.filter(
+        (pl.col("season") == season) & (pl.col("week") == week)
     )
-    this_week = through.filter(pl.col("week") == week)
 
     all_rows: list[dict[str, Any]] = []
     by_group: dict[str, list[dict[str, Any]]] = {g: [] for g in HIGHLIGHT_GROUPS}
 
     for group in HIGHLIGHT_GROUPS:
-        season_g = through.filter(pl.col("position_group") == group)
+        peer_g = peers.filter(pl.col("position_group") == group)
         week_g = this_week.filter(pl.col("position_group") == group)
         for spec in _allowlist_for_group(group):
             spec = _resolve_spec(group, spec)
-            all_rows.extend(_score_stat(season_g, week_g, group, spec))
+            all_rows.extend(_score_stat(peer_g, week_g, group, spec))
 
     all_rows.sort(key=lambda r: r["zScore"], reverse=True)
 
     # Cap per-group contribution so sparse defensive events cannot crowd out offense.
     balanced: list[dict[str, Any]] = []
     for group in HIGHLIGHT_GROUPS:
-        group_rows = [r for r in all_rows if r["positionGroup"] == group][:PER_GROUP_N]
-        balanced.extend(group_rows)
+        group_rows = [r for r in all_rows if r["positionGroup"] == group]
+        collapsed = _collapse_by_player(group_rows)[:PER_GROUP_N]
+        balanced.extend(collapsed)
     balanced.sort(key=lambda r: r["zScore"], reverse=True)
 
     top: list[dict[str, Any]] = []
@@ -347,8 +400,9 @@ def _board_from_spine(
         top.append(entry)
 
     for group in HIGHLIGHT_GROUPS:
-        group_rows = [r for r in all_rows if r["positionGroup"] == group][:PER_GROUP_N]
-        for i, row in enumerate(group_rows, start=1):
+        group_rows = [r for r in all_rows if r["positionGroup"] == group]
+        collapsed = _collapse_by_player(group_rows)[:PER_GROUP_N]
+        for i, row in enumerate(collapsed, start=1):
             entry = dict(row)
             entry["rank"] = i
             attach_fantasy_pos_rank(entry, entry["playerId"], ranks)
@@ -365,9 +419,10 @@ def _board_from_spine(
 
 
 def build_highlights_board(season: int, week: int) -> dict[str, Any]:
-    """Compute weekly board payload from spine (does not write)."""
+    """Compute weekly board payload from spines (does not write)."""
     ranks = fantasy_pos_ranks(season, week)
-    return _board_from_spine(_load_spine(season), season, week, ranks=ranks)
+    peers = _load_all_time_peers(season, week)
+    return _board_from_peers(peers, season, week, ranks=ranks)
 
 
 def _write_json(path: Path, payload: Any) -> None:
@@ -376,24 +431,56 @@ def _write_json(path: Path, payload: Any) -> None:
         json.dump(payload, f, **_JSON_DUMP_KW)
 
 
+def max_week_in_spine(season: int) -> int | None:
+    """Highest REG week present in the spine, or None if the file is missing."""
+    path = SPINE_DIR / f"player_week_{season}.parquet"
+    if not path.is_file():
+        return None
+    week = pl.read_parquet(path, columns=["week"]).select(pl.col("week").max()).item()
+    return int(week) if week is not None else None
+
+
+def weeks_to_publish(season: int) -> list[int]:
+    """Weeks 1..N for a season (spine max, capped at the season's REG length)."""
+    cap = default_as_of_week(season)
+    spine_max = max_week_in_spine(season)
+    if spine_max is None:
+        raise FileNotFoundError(
+            f"missing spine for {season}; run `ballnet spine --season {season}` first"
+        )
+    last = min(cap, spine_max)
+    return list(range(1, last + 1))
+
+
 def publish_highlights(season: int, week: int) -> HighlightsPublishResult:
-    """Write board + allowlist `league_weekly` KDEs for the same week."""
+    """Write board + allowlist all-time game KDEs for the same week."""
     ensure_data_dirs()
-    spine = _load_spine(season)
-    through = spine.filter(
-        (pl.col("week") <= week) & pl.col("position_group").is_not_null()
-    )
+    peers = _load_all_time_peers(season, week)
     ranks = fantasy_pos_ranks(season, week)
-    payload = _board_from_spine(spine, season, week, ranks=ranks)
+    payload = _board_from_peers(peers, season, week, ranks=ranks)
     board = HIGHLIGHTS_DIR / str(season) / f"w{week}.json"
     _write_json(board, payload)
 
     dist_paths: list[Path] = []
     for group in HIGHLIGHT_GROUPS:
-        season_g = through.filter(pl.col("position_group") == group)
+        peer_g = peers.filter(pl.col("position_group") == group)
         specs = [_resolve_spec(group, spec) for spec in _allowlist_for_group(group)]
-        dist = _league_weekly_group_payload(season, week, group, season_g, specs)
+        dist = _league_weekly_group_payload(season, week, group, peer_g, specs)
         out = LEAGUE_WEEKLY_DIR / str(season) / f"w{week}" / f"{group}.json"
         _write_json(out, dist)
         dist_paths.append(out)
     return HighlightsPublishResult(board=board, dist_paths=dist_paths)
+
+
+def publish_highlights_range(
+    start: int,
+    end: int,
+) -> list[HighlightsPublishResult]:
+    """Publish every available week for seasons start..end (inclusive), ascending."""
+    if end < start:
+        raise ValueError("--end must be >= --start")
+    results: list[HighlightsPublishResult] = []
+    for season in range(start, end + 1):
+        for week in weeks_to_publish(season):
+            results.append(publish_highlights(season, week))
+    return results

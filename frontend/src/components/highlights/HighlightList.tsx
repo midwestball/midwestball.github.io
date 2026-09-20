@@ -8,12 +8,15 @@ import type { LeagueGroupJson } from "@/lib/ballnet-store";
 import type { HighlightRow } from "@/lib/payload";
 import { STATS_BY_GROUP, type PositionGroup } from "@/lib/catalog";
 import { formatStatValue } from "@/lib/catalog/format";
+import { collapseHighlightsByPlayer } from "@/lib/highlights";
 import {
-  formatZScore,
-  hoverSigmaStandingCopy,
-  sigmaColor,
-  sigmaContrastText,
-  sigmaStandingParts,
+  formatOneInN,
+  hoverRarityStandingCopy,
+  rarityStandingParts,
+  rarityTierColor,
+  rarityTierContrastText,
+  rarityTierShimmer,
+  resolveRarityTier,
   type Point,
 } from "@/lib/distribution";
 import { cn } from "@/lib/utils";
@@ -47,6 +50,108 @@ function curveForRow(
   };
 }
 
+function RarityChip({
+  tier,
+  className,
+}: {
+  tier: number;
+  className?: string;
+}) {
+  const color = rarityTierColor(tier);
+  const labelColor = rarityTierContrastText(tier);
+  return (
+    <span
+      className={cn(
+        "inline-block rounded-none px-1 py-0.5 text-xs font-semibold tabular-nums",
+        rarityTierShimmer(tier) && "rarity-chip-shimmer",
+        className,
+      )}
+      style={{ backgroundColor: color, color: labelColor }}
+    >
+      {formatOneInN(tier)}
+    </span>
+  );
+}
+
+function PerformanceBlock({
+  row,
+  weeklyByGroup,
+  chartId,
+}: {
+  row: HighlightRow;
+  weeklyByGroup: Record<string, LeagueGroupJson | null>;
+  chartId: string;
+}) {
+  const def = catalogDef(row);
+  const higherIsBetter = def?.higherIsBetter ?? true;
+  const format = def?.format ?? "one_decimal";
+  const tier = resolveRarityTier(row);
+  const shape = curveForRow(row, weeklyByGroup);
+  const color = tier != null ? rarityTierColor(tier) : "rgb(161, 161, 170)";
+  const labelColor =
+    tier != null ? rarityTierContrastText(tier) : "#ffffff";
+  const standing =
+    tier != null
+      ? rarityStandingParts({
+          label: row.statLabel,
+          playerValue: row.value,
+          format,
+          higherIsBetter,
+          rarityTier: tier,
+        })
+      : null;
+
+  return (
+    <div className="space-y-1">
+      <p className="text-[11px] leading-4 text-zinc-400">
+        <span className="font-medium text-zinc-600">{row.statLabel}</span>
+        <span aria-hidden> · </span>
+        <span className="tabular-nums text-zinc-700">
+          {formatHighlightValue(row)}
+        </span>
+      </p>
+      {standing && tier != null ? (
+        <p className="text-[11px] leading-4 text-zinc-400">
+          {standing.prefix}
+          <span
+            className={cn(
+              "rounded-none px-1 py-0.5 font-semibold tabular-nums",
+              rarityTierShimmer(tier) && "rarity-chip-shimmer",
+            )}
+            style={{ backgroundColor: color, color: labelColor }}
+          >
+            {standing.rarityLabel}
+          </span>
+          {standing.rest}
+        </p>
+      ) : null}
+      {shape ? (
+        <DistributionChart
+          id={chartId}
+          label={row.statLabel}
+          playerValue={row.value}
+          higherIsBetter={higherIsBetter}
+          xMin={shape.xMin}
+          xMax={shape.xMax}
+          yMax={shape.yMax}
+          format={format}
+          curve={shape.curve}
+          color={color}
+          hoverStanding={() =>
+            tier != null
+              ? hoverRarityStandingCopy(row.statLabel, tier)
+              : `This ${row.statLabel} versus single-game peers all-time.`
+          }
+        />
+      ) : (
+        <div className="flex min-h-16 items-center justify-center rounded-none border border-dashed border-zinc-200 bg-zinc-50 px-3 py-3 text-center text-xs leading-4 text-zinc-500">
+          Waiting on a single-game league curve for this stat.
+        </div>
+      )}
+    </div>
+  );
+}
+
 function HighlightRowExpandable({
   row,
   season,
@@ -57,19 +162,8 @@ function HighlightRowExpandable({
   weeklyByGroup: Record<string, LeagueGroupJson | null>;
 }) {
   const [open, setOpen] = useState(false);
-  const def = catalogDef(row);
-  const higherIsBetter = def?.higherIsBetter ?? true;
-  const format = def?.format ?? "one_decimal";
-  const color = sigmaColor(row.zScore);
-  const labelColor = sigmaContrastText(row.zScore);
-  const shape = curveForRow(row, weeklyByGroup);
-  const standing = sigmaStandingParts({
-    label: row.statLabel,
-    playerValue: row.value,
-    format,
-    higherIsBetter,
-    zScore: row.zScore,
-  });
+  const tier = resolveRarityTier(row);
+  const also = row.also ?? [];
 
   return (
     <li className="rounded-none border border-zinc-200 bg-white">
@@ -121,18 +215,18 @@ function HighlightRowExpandable({
             ) : null}
             <span aria-hidden>·</span>
             <span className="truncate">{row.statLabel}</span>
+            {also.length > 0 ? (
+              <span className="text-zinc-400">
+                +{also.length} more
+              </span>
+            ) : null}
           </p>
         </div>
         <div className="shrink-0 text-right">
           <p className="text-sm font-semibold tabular-nums text-zinc-900">
             {formatHighlightValue(row)}
           </p>
-          <p
-            className="inline-block rounded-none px-1 py-0.5 text-xs font-semibold tabular-nums"
-            style={{ backgroundColor: color, color: labelColor }}
-          >
-            {formatZScore(row.zScore)}
-          </p>
+          {tier != null ? <RarityChip tier={tier} /> : null}
         </div>
       </div>
 
@@ -146,38 +240,27 @@ function HighlightRowExpandable({
             transition={{ duration: 0.38, ease: [0.32, 0.72, 0, 1] }}
             className="overflow-hidden"
           >
-            <div className="border-t border-zinc-100 px-3 pb-2 pt-2">
-              <p className="mb-1 text-[11px] leading-4 text-zinc-400">
-                {standing.prefix}
-                <span
-                  className="rounded-none px-1 py-0.5 font-semibold tabular-nums"
-                  style={{ backgroundColor: color, color: labelColor }}
-                >
-                  {standing.zLabel}
-                </span>
-                {standing.rest}
-              </p>
-              {shape ? (
-                <DistributionChart
-                  id={`hl-${row.rank}-${row.playerId}-${row.statId}`}
-                  label={row.statLabel}
-                  playerValue={row.value}
-                  higherIsBetter={higherIsBetter}
-                  xMin={shape.xMin}
-                  xMax={shape.xMax}
-                  yMax={shape.yMax}
-                  format={format}
-                  curve={shape.curve}
-                  color={color}
-                  hoverStanding={() =>
-                    hoverSigmaStandingCopy(row.statLabel, row.zScore)
-                  }
-                />
-              ) : (
-                <div className="flex min-h-16 items-center justify-center rounded-none border border-dashed border-zinc-200 bg-zinc-50 px-3 py-3 text-center text-xs leading-4 text-zinc-500">
-                  Waiting on a single-game league curve for this stat.
+            <div className="space-y-3 border-t border-zinc-100 px-3 pb-2 pt-2">
+              <PerformanceBlock
+                row={row}
+                weeklyByGroup={weeklyByGroup}
+                chartId={`hl-${row.rank}-${row.playerId}-${row.statId}`}
+              />
+              {also.length > 0 ? (
+                <div className="space-y-3 border-t border-zinc-100 pt-2">
+                  <p className="text-[11px] font-semibold tracking-[0.12em] text-zinc-500 uppercase">
+                    Also this week
+                  </p>
+                  {also.map((secondary) => (
+                    <PerformanceBlock
+                      key={`${secondary.playerId}-${secondary.statId}`}
+                      row={secondary}
+                      weeklyByGroup={weeklyByGroup}
+                      chartId={`hl-${row.rank}-${secondary.playerId}-${secondary.statId}-also`}
+                    />
+                  ))}
                 </div>
-              )}
+              ) : null}
             </div>
           </motion.div>
         ) : null}
@@ -199,13 +282,15 @@ export function HighlightList({
   weeklyByGroup = {},
   emptyLabel = "No highlights published for this week yet.",
 }: HighlightListProps) {
-  if (rows.length === 0) {
+  const collapsed = collapseHighlightsByPlayer(rows);
+
+  if (collapsed.length === 0) {
     return <p className="text-sm text-zinc-500">{emptyLabel}</p>;
   }
 
   return (
     <ul className="space-y-1">
-      {rows.map((row) => (
+      {collapsed.map((row) => (
         <HighlightRowExpandable
           key={`${row.rank}-${row.playerId}-${row.statId}`}
           row={row}

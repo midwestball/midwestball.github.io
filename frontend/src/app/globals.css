@@ -143,3 +143,56 @@
     );
   }
 }
+
+/* Highlight rarity chip shimmer (tiers ≥ 100).
+   Narrow sheen slides across, then goes fully invisible before
+   resetting — so the gap between passes has no stuck highlight. */
+@keyframes rarity-shimmer {
+  0%,
+  38% {
+    transform: translateX(-140%) skewX(-18deg);
+    opacity: 0;
+  }
+  42% {
+    opacity: 1;
+  }
+  90% {
+    transform: translateX(240%) skewX(-18deg);
+    opacity: 1;
+  }
+  94%,
+  100% {
+    transform: translateX(240%) skewX(-18deg);
+    opacity: 0;
+  }
+}
+
+.rarity-chip-shimmer {
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
+}
+
+.rarity-chip-shimmer::after {
+  content: "";
+  pointer-events: none;
+  position: absolute;
+  top: -20%;
+  bottom: -20%;
+  left: 0;
+  width: 55%;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgb(255 255 255 / 50%) 50%,
+    transparent 100%
+  );
+  animation: rarity-shimmer 7.5s linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rarity-chip-shimmer::after {
+    animation: none;
+    opacity: 0;
+  }
+}

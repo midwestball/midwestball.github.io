@@ -33,9 +33,9 @@ Before modifying or creating new features, locate the relevant domain in the tab
 | **Ballnet JSON loader** | Storage-only fetch; league merge before hydrate. | `src/lib/BOUNDARIES-ballnet-store.md` |
 | **Pages + Storage deploy** | Static export on GitHub Pages; loads index/pages/league from public Supabase Storage. | `docs/adr/2026-08-24-vercel-supabase-storage.md` (superseded host) + repo `docs/adr/2026-09-19-monorepo-static-pages.md` |
 | **Storage-only loader** | Local and prod both `fetch` `knowball-public`. No sibling `backend/data` reads in the UI. | `docs/adr/2026-09-18-storage-only-loader.md` |
-| **Weekly highlights** | Stage H z-score boards → `highlights/{season}/w{week}.json`; home renders only. | `docs/adr/2026-08-25-weekly-highlights-json.md` |
-| **Highlight game KDEs** | Season-of-games σ ranking + expandable home charts from `dists/league_weekly/`. | `docs/adr/2026-08-25-highlight-game-kde.md` |
-| **Highlight list** | Expandable home rows; σ color; no percentile slider. | `src/components/highlights/BOUNDARIES.md` |
+| **Weekly highlights** | Stage H z-score boards (all-time peers) → `highlights/{season}/w{week}.json`; home renders rarity tiers + per-player collapse. | `docs/adr/2026-08-25-weekly-highlights-json.md` |
+| **Highlight game KDEs** | All-time single-game KDEs + rarity-tier chrome from `dists/league_weekly/`. | `docs/adr/2026-08-25-highlight-game-kde.md` |
+| **Highlight list** | Expandable home rows; `1 in N` color; no percentile slider. | `src/components/highlights/BOUNDARIES.md` |
 | **Search leaderboards** | Filter → group → stat → Best/Worst from `leaderboards/{season}/w{week}/{group}.json`. | `docs/adr/2026-09-06-search-leaderboards-json.md` |
 | **Search Filter UI** | Cascading Filter chrome; bio vs ranked list modes. | `src/components/search/BOUNDARIES.md` |
 | **Compare UI** | Side-by-side sliders; one overlay KDE per row; team-primary markers; max 4 same-group. | `src/components/compare/BOUNDARIES.md` |

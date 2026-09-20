@@ -2,7 +2,7 @@
 
 | Route | Role |
 |---|---|
-| `/` | Weekly highlights from `highlights/{season}/w{week}.json` (Stage H), offense-first then defense. Expand loads `dists/league_weekly/...` single-game KDEs. Resolves week via `index/current.json`. |
+| `/` | Weekly highlights from `highlights/{season}/w{week}.json` (Stage H, all-time peers), offense-first then defense. Expand loads `dists/league_weekly/...` single-game KDEs. Resolves week via `index/current.json`. |
 | `/search` | Client filter over the player index, plus Filter cascade (position group → catalog stat → Best/Worst) backed by `leaderboards/{season}/w{week}/{group}.json`. Default context is current season. |
 | `/players/[id]/?season=` | Position catalog stack + season `<select>` at the bottom. Changing season updates the query string; **client** reloads snapshots from Storage (static export cannot re-run RSC for `searchParams`). |
 | `/ballnet` | **Projections** — analyze player performance projections for the upcoming week. |

@@ -24,14 +24,19 @@ from ballnet.publish import (
     rebuild_index_from_pages,
     sync_index_to_midwestball,
 )
+from ballnet.highlights import (
+    HIGHLIGHTS_START_YEAR,
+    publish_highlights,
+    weeks_to_publish,
+)
 from ballnet.storage_upload import (
+    upload_all_highlights_for_season,
     upload_index,
     upload_season_highlights,
     upload_season_leaderboards,
     upload_season_league,
     upload_season_pages,
 )
-from ballnet.highlights import publish_highlights
 import polars as pl
 
 # Demo players for local visual review (2024 REG through week 18).
@@ -277,6 +282,20 @@ def main(argv: list[str] | None = None) -> None:
         help="REG week (default: 17 before 2021, else 18)",
     )
 
+    p_hi_range = sub.add_parser(
+        "highlights-range",
+        help="Stage H for every available week in [start, end] (needs spines)",
+    )
+    p_hi_range.add_argument("--start", type=int, default=HIGHLIGHTS_START_YEAR)
+    p_hi_range.add_argument("--end", type=int, required=True)
+    p_hi_range.add_argument(
+        "--upload",
+        action="store_true",
+        help="After each season, upload all local highlight boards for that year",
+    )
+    p_hi_range.add_argument("--bucket", default="knowball-public")
+    p_hi_range.add_argument("--workers", type=int, default=4)
+
     p_up = sub.add_parser(
         "upload-storage",
         help="Upload local index/pages/league/leaderboards/highlights JSON to Supabase Storage",
@@ -322,6 +341,11 @@ def main(argv: list[str] | None = None) -> None:
         "--highlights-only",
         action="store_true",
         help="With --season, upload highlights + league_weekly only (skip pages + league + leaderboards)",
+    )
+    p_up.add_argument(
+        "--all-highlight-weeks",
+        action="store_true",
+        help="With --highlights / --highlights-only, upload every local week for --season",
     )
     p_up.add_argument(
         "--also-current",
@@ -813,6 +837,52 @@ def main(argv: list[str] | None = None) -> None:
         )
         return
 
+    if args.cmd == "highlights-range":
+        if args.end < args.start:
+            raise SystemExit("--end must be >= --start")
+        if args.start < HIGHLIGHTS_START_YEAR:
+            raise SystemExit(f"--start must be >= {HIGHLIGHTS_START_YEAR}")
+        summary: list[dict] = []
+        for season in range(args.start, args.end + 1):
+            weeks = weeks_to_publish(season)
+            print(
+                f"=== highlights-range {season} weeks {weeks[0]}-{weeks[-1]} ===",
+                flush=True,
+            )
+            for week in weeks:
+                t0 = time.perf_counter()
+                result = publish_highlights(season, week)
+                board = json.loads(result.board.read_text(encoding="utf-8"))
+                print(
+                    f"  {season} w{week}: top={len(board.get('top') or [])} "
+                    f"({time.perf_counter() - t0:.1f}s)",
+                    flush=True,
+                )
+                summary.append(
+                    {
+                        "season": season,
+                        "week": week,
+                        "path": str(result.board),
+                        "top": len(board.get("top") or []),
+                    }
+                )
+            if args.upload:
+                print(f"=== upload all highlights {season} ===", flush=True)
+                r = upload_all_highlights_for_season(
+                    season,
+                    bucket=args.bucket,
+                    workers=args.workers,
+                )
+                print(
+                    f"  uploaded={r.uploaded} failed={r.failed} "
+                    f"bytes={r.bytes} seconds={r.seconds:.1f}",
+                    flush=True,
+                )
+                if r.failed:
+                    sys.exit(1)
+        print(json.dumps({"boards": len(summary), "items": summary}, indent=2))
+        return
+
     if args.cmd == "upload-storage":
         if not args.index and args.season is None:
             raise SystemExit("Provide --index and/or --season YEAR")
@@ -951,20 +1021,34 @@ def main(argv: list[str] | None = None) -> None:
                     flush=True,
                 )
             if do_highlights:
-                print(
-                    f"=== upload highlights + dists/league_weekly "
-                    f"{args.season}/w{week} ===",
-                    flush=True,
-                )
-                r = upload_season_highlights(
-                    args.season,
-                    week,
-                    bucket=args.bucket,
-                    workers=args.workers,
-                )
+                if args.all_highlight_weeks:
+                    print(
+                        f"=== upload all highlights + league_weekly "
+                        f"{args.season} ===",
+                        flush=True,
+                    )
+                    r = upload_all_highlights_for_season(
+                        args.season,
+                        bucket=args.bucket,
+                        workers=args.workers,
+                    )
+                    what = f"highlights+league_weekly/{args.season}/*"
+                else:
+                    print(
+                        f"=== upload highlights + dists/league_weekly "
+                        f"{args.season}/w{week} ===",
+                        flush=True,
+                    )
+                    r = upload_season_highlights(
+                        args.season,
+                        week,
+                        bucket=args.bucket,
+                        workers=args.workers,
+                    )
+                    what = f"highlights+league_weekly/{args.season}/w{week}"
                 reports.append(
                     {
-                        "what": f"highlights+league_weekly/{args.season}/w{week}",
+                        "what": what,
                         "uploaded": r.uploaded,
                         "failed": r.failed,
                         "bytes": r.bytes,

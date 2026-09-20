@@ -45,7 +45,7 @@ export type LeagueGroupJson = {
   completedWeek?: number;
   positionGroup: string;
   /** Present on Stage H game-level files; absent on YTD league shapes. */
-  scope?: "league_weekly";
+  scope?: "league_weekly" | "league_game_all_time";
   stats: Record<string, LeagueStatShape>;
 };
 
@@ -256,4 +256,24 @@ export async function fetchLeaderboard(
   asOfWeek: number,
 ): Promise<LeaderboardJson | null> {
   return loadLeaderboard(positionGroup, { season, asOfWeek });
+}
+
+/** Client fetch for home week/year picker. */
+export async function fetchHighlightsBoard(
+  season: number,
+  week: number,
+): Promise<HighlightsBoardJson | null> {
+  return loadHighlightsBoard({ season, week });
+}
+
+/** Client fetch for Stage H expand curves. */
+export async function fetchLeagueWeeklyGroup(
+  positionGroup: PositionGroup | string,
+  season: number,
+  week: number,
+): Promise<LeagueGroupJson | null> {
+  return loadLeagueWeeklyGroupJson(positionGroup, {
+    season,
+    asOfWeek: week,
+  });
 }

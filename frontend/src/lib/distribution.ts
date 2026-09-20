@@ -248,3 +248,93 @@ export function hoverSigmaStandingCopy(
 ): string {
   return `This ${label} is ${formatZScore(zScore)} versus single-game peers this season.`;
 }
+
+/** Order-of-magnitude rarity ladder (matches ballnet.scoring.RARITY_TIERS). */
+export const RARITY_TIERS = [
+  10, 100, 1_000, 10_000, 100_000, 1_000_000, 10_000_000, 100_000_000, 1_000_000_000,
+] as const;
+
+/** Geometric nearest snap onto RARITY_TIERS (log space). */
+export function snapOneInN(n: number | null | undefined): number | null {
+  if (n == null || !Number.isFinite(n) || n < 1) return null;
+  const value = Math.max(1, Math.round(n));
+  let best: number = RARITY_TIERS[0];
+  let bestDist = Math.abs(Math.log(value) - Math.log(best));
+  for (let i = 1; i < RARITY_TIERS.length; i += 1) {
+    const tier = RARITY_TIERS[i]!;
+    const dist = Math.abs(Math.log(value) - Math.log(tier));
+    if (dist < bestDist) {
+      best = tier;
+      bestDist = dist;
+    }
+  }
+  return best;
+}
+
+export function resolveRarityTier(row: {
+  rarityTier?: number | null;
+  oneInN: number | null;
+}): number | null {
+  if (row.rarityTier != null && Number.isFinite(row.rarityTier)) {
+    return row.rarityTier;
+  }
+  return snapOneInN(row.oneInN);
+}
+
+export function formatOneInN(tier: number): string {
+  return `1 in ${tier.toLocaleString("en-US")}`;
+}
+
+const RARITY_COLORS: Record<number, string> = {
+  10: "rgb(112, 168, 104)", // dark bronze
+  100: "rgb(173, 130, 80)", // light bronze
+  1_000: "rgb(168, 169, 173)", // silver
+  10_000: "rgb(212, 175, 55)", // gold
+  100_000: "rgb(126, 200, 227)", // diamond
+  1_000_000: "rgb(123, 94, 167)", // purple
+};
+
+/** Higher 10^k reuse purple, stepping slightly lighter. */
+export function rarityTierColor(tier: number): string {
+  if (RARITY_COLORS[tier]) return RARITY_COLORS[tier]!;
+  if (tier >= 1_000_000) return "rgb(168, 140, 210)";
+  if (tier >= 100_000) return RARITY_COLORS[100_000]!;
+  if (tier >= 10_000) return RARITY_COLORS[10_000]!;
+  if (tier >= 1_000) return RARITY_COLORS[1_000]!;
+  if (tier >= 100) return RARITY_COLORS[100]!;
+  return RARITY_COLORS[10]!;
+}
+
+export function rarityTierContrastText(tier: number): string {
+  return savantContrastText(rarityTierColor(tier));
+}
+
+/** Shimmer on every tier except dark bronze (10). */
+export function rarityTierShimmer(tier: number): boolean {
+  return tier >= 100;
+}
+
+export function rarityStandingParts(stat: {
+  label: string;
+  playerValue: number | null;
+  format: ValueFormat;
+  higherIsBetter: boolean;
+  rarityTier: number;
+}): {
+  prefix: string;
+  rarityLabel: string;
+  rest: string;
+} {
+  const note = stat.higherIsBetter ? "(Higher is better)" : "(Lower is better)";
+  const value =
+    stat.playerValue == null ? "—" : formatStatValue(stat.format, stat.playerValue);
+  return {
+    prefix: `${value} ${stat.label} is `,
+    rarityLabel: formatOneInN(stat.rarityTier),
+    rest: ` versus single-game peers all-time. ${note}`,
+  };
+}
+
+export function hoverRarityStandingCopy(label: string, rarityTier: number): string {
+  return `This ${label} is ${formatOneInN(rarityTier)} versus single-game peers all-time.`;
+}

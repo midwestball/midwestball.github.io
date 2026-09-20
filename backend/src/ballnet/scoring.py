@@ -10,6 +10,24 @@ import numpy as np
 # Peer sample must be large enough that z is not dominated by tiny groups (e.g. week-1 kickers).
 MIN_PEER_N = 16
 
+# Order-of-magnitude display ladder (10^k). Geometric nearest snap for UI chips.
+RARITY_TIERS: tuple[int, ...] = tuple(10**k for k in range(1, 10))  # 10 .. 1_000_000_000
+
+
+def snap_one_in_n(n: int | None) -> int | None:
+    """Snap a raw 1-in-N to the nearest RARITY_TIERS rung in log space."""
+    if n is None or not math.isfinite(n) or n < 1:
+        return None
+    n = max(1, int(n))
+    best = RARITY_TIERS[0]
+    best_dist = abs(math.log(n) - math.log(best))
+    for tier in RARITY_TIERS[1:]:
+        dist = abs(math.log(n) - math.log(tier))
+        if dist < best_dist:
+            best = tier
+            best_dist = dist
+    return best
+
 
 def z_score(
     value: float,
@@ -68,3 +86,8 @@ def gaussian_tail_one_in_n(oriented_z: float) -> int | None:
     # Survival function Φ̄(z) via erfc for stability.
     p = 0.5 * math.erfc(oriented_z / math.sqrt(2.0))
     return one_in_n_from_tail(p)
+
+
+def rarity_tier_from_z(oriented_z: float) -> int | None:
+    """Display tier (10^k) from oriented z via Gaussian-tail oneInN."""
+    return snap_one_in_n(gaussian_tail_one_in_n(oriented_z))

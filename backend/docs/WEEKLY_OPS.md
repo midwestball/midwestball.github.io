@@ -16,8 +16,10 @@ Intended stages inside `refresh` (not a new math path — wrap what already exis
 2. **B** `spine --season YEAR`
 3. **C–E** for every publishable group at `as-of-week W` (ytd → densities → percentiles)
 4. **G** `publish-all --season YEAR --as-of-week W` (scalar pages + league KDE + search leaderboards + **merged** index/current/seasons)
-5. **H** `highlights --season YEAR --week W` (weekly z-score board + `league_weekly` KDEs → `data/highlights/` + `data/dists/league_weekly/`)
+5. **H** `highlights --season YEAR --week W` (weekly board vs **all-time** single-game peers + `league_weekly` KDEs → `data/highlights/` + `data/dists/league_weekly/`; needs spines for `2016..YEAR`)
+   - Historical backfill: `highlights-range --start 2016 --end YEAR [--upload]`
 6. Optional: `--upload` → `upload-storage --index --season YEAR --highlights` (pages + league + leaderboards + highlights + league_weekly)
+   - All weeks for one year: `upload-storage --season YEAR --highlights-only --all-highlight-weeks`
 
 Until `refresh` exists, run that sequence manually (see below).
 

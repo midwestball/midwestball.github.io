@@ -4,13 +4,13 @@ Pre-compute in **ballnet** → publish JSON under reserved Storage prefixes → 
 
 ## 1. Home — best performances
 
-**Shipped (weekly):** Stage H → `highlights/{season}/w{week}.json` + expandable season-of-games KDEs from `dists/league_weekly/`; the frontend `/` renders `top` + `byGroup`. See `docs/adr/2026-08-25-weekly-highlights-json.md` and `docs/adr/2026-08-25-highlight-game-kde.md`.
+**Shipped (weekly):** Stage H → `highlights/{season}/w{week}.json` (all-time peers, `rarityTier`, per-player `also[]`) + expandable KDEs from `dists/league_weekly/`; the frontend `/` renders offense/defense boards. See `docs/adr/2026-08-25-weekly-highlights-json.md` and `docs/adr/2026-08-25-highlight-game-kde.md`.
 
 | Follow-up | Intent |
 |---|---|
 | Breakouts | Individual performances vs the player’s own recent baseline |
 | Boards | Best of season / all-time (overall + by position group) |
-| Rarity copy | Optional “1 in a thousand / million / billion” framing using published `oneInN` (coordinate with Mason on voice) |
+| Rarity copy | Optional finer voice for “1 in N” tiers (coordinate with Mason); ladder already shipped |
 
 ## 2. Overall player percentile → team strength
 
