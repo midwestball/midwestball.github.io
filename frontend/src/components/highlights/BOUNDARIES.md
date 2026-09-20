@@ -3,7 +3,7 @@
 ## Always
 
 - Render Stage H board rows only — no client-side z-score math for ranking (home may re-sort published rows into offense/defense overall lists by published `zScore`).
-- Home layout: offense overall → offense by group → defense overall → defense by group (kicker with offense). Season + week pickers (2016–current); URL `?season=&week=` for shareable links.
+- Home layout: offense overall (preview 8 + “See more”) → offense by group (preview 3 + “See more”). Defense sections are hidden until distribution issues are fixed (note in hero). Season + week pickers (2016–current); URL `?season=&week=` for shareable links.
 - Keep square chrome (`rounded-none`, hairline borders) matching search rows.
 - Expand with Framer Motion like a stat row; chart from `dists/league_weekly` via props — never invent a curve. Curves are all-time single-game peers (`scope: "league_game_all_time"`).
 - Show snapped **`rarityTier`** (“1 in N”) chips colored by the bronze→purple ladder; shimmer on tiers ≥ 100. Prefer published `rarityTier`; fall back to client `snapOneInN(oneInN)` for older boards.
@@ -15,6 +15,7 @@
 
 - Adding season / all-time board **tabs** (separate boards). Peer sample is already all-time; home has season/week pickers instead.
 - Changing the `10^k` rarity ladder or tier colors.
+- Re-enabling defensive highlight sections on home (needs distribution fix first).
 
 ## Never
 

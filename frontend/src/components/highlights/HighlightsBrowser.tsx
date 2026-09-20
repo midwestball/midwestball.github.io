@@ -19,11 +19,10 @@ const OFFENSE_GROUPS: PositionGroup[] = [
   "kicker",
 ];
 
-const DEFENSE_GROUPS: PositionGroup[] = ["def_front", "secondary"];
-
-const ALL_GROUPS: PositionGroup[] = [...OFFENSE_GROUPS, ...DEFENSE_GROUPS];
-
+/** Defense boards still publish; UI hidden until distribution issues are fixed. */
 const SIDE_TOP_N = 25;
+const OFFENSE_PREVIEW_N = 8;
+const GROUP_PREVIEW_N = 3;
 
 /** REG week count: 17 through 2020, 18 from 2021. */
 export function regWeeksInSeason(season: number): number {
@@ -39,16 +38,63 @@ function sideTop(
   return rows.slice(0, SIDE_TOP_N).map((row, i) => ({ ...row, rank: i + 1 }));
 }
 
+function HighlightListPreview({
+  rows,
+  season,
+  weeklyByGroup,
+  initialVisible,
+  resetKey,
+}: {
+  rows: HighlightRow[];
+  season: number;
+  weeklyByGroup: Record<string, LeagueGroupJson | null>;
+  initialVisible: number;
+  /** Change when season/week changes so “see more” collapses again. */
+  resetKey: string;
+}) {
+  const [expanded, setExpanded] = useState(false);
+  useEffect(() => {
+    setExpanded(false);
+  }, [resetKey]);
+
+  const visible =
+    expanded || rows.length <= initialVisible
+      ? rows
+      : rows.slice(0, initialVisible);
+  const hiddenCount = rows.length - initialVisible;
+
+  return (
+    <div className="space-y-1">
+      <HighlightList
+        rows={visible}
+        season={season}
+        weeklyByGroup={weeklyByGroup}
+      />
+      {hiddenCount > 0 ? (
+        <button
+          type="button"
+          onClick={() => setExpanded((v) => !v)}
+          className="text-xs text-zinc-400 hover:text-zinc-600"
+        >
+          {expanded ? "See less" : "See more"}
+        </button>
+      ) : null}
+    </div>
+  );
+}
+
 function GroupSections({
   groups,
   byGroup,
   season,
   weeklyByGroup,
+  resetKey,
 }: {
   groups: PositionGroup[];
   byGroup: Record<string, HighlightRow[]> | undefined;
   season: number;
   weeklyByGroup: Record<string, LeagueGroupJson | null>;
+  resetKey: string;
 }) {
   return (
     <>
@@ -60,10 +106,12 @@ function GroupSections({
             <h2 className="text-xs font-semibold tracking-[0.15em] text-zinc-500 uppercase">
               {GROUP_LABEL[group]}
             </h2>
-            <HighlightList
+            <HighlightListPreview
               rows={rows}
               season={season}
               weeklyByGroup={weeklyByGroup}
+              initialVisible={GROUP_PREVIEW_N}
+              resetKey={`${resetKey}-${group}`}
             />
           </section>
         );
@@ -174,7 +222,7 @@ export function HighlightsBrowser({
           return;
         }
         const entries = await Promise.all(
-          ALL_GROUPS.map(async (group) => {
+          OFFENSE_GROUPS.map(async (group) => {
             const json = await fetchLeagueWeeklyGroup(group, season, week);
             return [group, json] as const;
           }),
@@ -182,8 +230,8 @@ export function HighlightsBrowser({
         if (cancelled) return;
         setBoard(nextBoard);
         setWeeklyByGroup(Object.fromEntries(entries));
-        const hasRows = Object.values(nextBoard.byGroup ?? {}).some(
-          (rows) => (rows?.length ?? 0) > 0,
+        const hasRows = OFFENSE_GROUPS.some(
+          (g) => (nextBoard.byGroup?.[g]?.length ?? 0) > 0,
         );
         setStatus(hasRows ? "ready" : "empty");
       } catch {
@@ -198,8 +246,8 @@ export function HighlightsBrowser({
 
   const byGroup = board?.byGroup;
   const offenseTop = sideTop(byGroup, OFFENSE_GROUPS);
-  const defenseTop = sideTop(byGroup, DEFENSE_GROUPS);
   const hasBoard = status === "ready";
+  const sliceKey = `${season}-${week}`;
 
   return (
     <div>
@@ -243,8 +291,8 @@ export function HighlightsBrowser({
             Highlights
           </h1>
           <p className="mt-1 max-w-xl text-sm leading-5 text-zinc-600">
-            Best single-game performances, offense first. Ranked by z-score
-            versus all-time single-game peers — expand a row for the league
+            Best single-game offensive performances. Ranked by z-score versus
+            all-time single-game peers — expand a row for the league
             distribution and any other standout stats from the same player.
           </p>
         </div>
@@ -271,10 +319,12 @@ export function HighlightsBrowser({
               <h2 className="text-xs font-semibold tracking-[0.15em] text-zinc-500 uppercase">
                 Offense
               </h2>
-              <HighlightList
+              <HighlightListPreview
                 rows={offenseTop}
                 season={season}
                 weeklyByGroup={weeklyByGroup}
+                initialVisible={OFFENSE_PREVIEW_N}
+                resetKey={`${sliceKey}-offense`}
               />
             </section>
 
@@ -283,24 +333,7 @@ export function HighlightsBrowser({
               byGroup={byGroup}
               season={season}
               weeklyByGroup={weeklyByGroup}
-            />
-
-            <section className="space-y-2">
-              <h2 className="text-xs font-semibold tracking-[0.15em] text-zinc-500 uppercase">
-                Defense
-              </h2>
-              <HighlightList
-                rows={defenseTop}
-                season={season}
-                weeklyByGroup={weeklyByGroup}
-              />
-            </section>
-
-            <GroupSections
-              groups={DEFENSE_GROUPS}
-              byGroup={byGroup}
-              season={season}
-              weeklyByGroup={weeklyByGroup}
+              resetKey={sliceKey}
             />
           </>
         ) : null}
