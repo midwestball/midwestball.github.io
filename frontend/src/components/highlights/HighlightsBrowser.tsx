@@ -1,9 +1,10 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import {
+  fetchCurrentMeta,
   fetchHighlightsBoard,
   fetchLeagueWeeklyGroup,
   type LeagueGroupJson,
@@ -142,16 +143,22 @@ export function HighlightsBrowser({
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
+  const initialQuery = useRef({
+    season: searchParams.get("season"),
+    week: searchParams.get("week"),
+  });
+  const [latestSeason, setLatestSeason] = useState(currentSeason);
+  const [latestWeek, setLatestWeek] = useState(currentWeek);
 
   const seasonOptions = useMemo(() => {
     const out: number[] = [];
-    for (let y = currentSeason; y >= startSeason; y -= 1) out.push(y);
+    for (let y = latestSeason; y >= startSeason; y -= 1) out.push(y);
     return out;
-  }, [currentSeason, startSeason]);
+  }, [latestSeason, startSeason]);
 
   const parseSeason = (raw: string | null): number => {
     const n = Number(raw);
-    if (!Number.isFinite(n) || n < startSeason || n > currentSeason) {
+    if (!Number.isFinite(n) || n < startSeason || n > latestSeason) {
       return initialSeason;
     }
     return n;
@@ -159,10 +166,10 @@ export function HighlightsBrowser({
 
   const maxWeekFor = useCallback(
     (season: number) => {
-      if (season === currentSeason) return Math.max(1, currentWeek);
+      if (season === latestSeason) return Math.max(1, latestWeek);
       return regWeeksInSeason(season);
     },
-    [currentSeason, currentWeek],
+    [latestSeason, latestWeek],
   );
 
   const parseWeek = (raw: string | null, season: number): number => {
@@ -190,6 +197,47 @@ export function HighlightsBrowser({
     const max = maxWeekFor(season);
     return Array.from({ length: max }, (_, i) => i + 1);
   }, [season, maxWeekFor]);
+
+  // The page is statically exported, so its props reflect the last site build.
+  // Refresh the current pointer from Storage in the browser after every page load.
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      const current = await fetchCurrentMeta();
+      if (cancelled || !current) return;
+
+      const currentWeek = Math.max(1, current.asOfWeek);
+      setLatestSeason(current.season);
+      setLatestWeek(currentWeek);
+
+      const requestedSeason = Number(initialQuery.current.season);
+      const hasRequestedSeason =
+        initialQuery.current.season !== null &&
+        Number.isFinite(requestedSeason) &&
+        requestedSeason >= startSeason &&
+        requestedSeason <= current.season;
+      const selectedSeason = hasRequestedSeason
+        ? requestedSeason
+        : current.season;
+      const maxWeek =
+        selectedSeason === current.season
+          ? currentWeek
+          : regWeeksInSeason(selectedSeason);
+      const requestedWeek = Number(initialQuery.current.week);
+      const hasRequestedWeek =
+        initialQuery.current.week !== null &&
+        Number.isFinite(requestedWeek) &&
+        requestedWeek >= 1 &&
+        requestedWeek <= maxWeek;
+
+      setSeason(selectedSeason);
+      setWeek(hasRequestedWeek ? requestedWeek : maxWeek);
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [startSeason]);
 
   // Keep URL in sync for shareable links (static export).
   useEffect(() => {

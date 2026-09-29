@@ -10,7 +10,12 @@ import {
 } from "@/lib/catalog";
 import { hydratePlayerStats } from "@/lib/catalog/hydrate";
 import type { PlayerBio } from "@/lib/payload";
-import { loadHydratedPlayerSnapshots } from "@/lib/ballnet-store";
+import {
+  fetchCurrentMeta,
+  fetchPlayersIndex,
+  fetchSeasonsMeta,
+  loadHydratedPlayerSnapshots,
+} from "@/lib/ballnet-store";
 import {
   CompareBoard,
   type CompareColumn,
@@ -43,21 +48,51 @@ export function ComparePageClient({
   currentSeason: number;
 }) {
   const searchParams = useSearchParams();
+  const [livePlayers, setLivePlayers] = useState(players);
+  const [liveSeasonOptions, setLiveSeasonOptions] = useState(seasonOptions);
+  const [latestSeason, setLatestSeason] = useState(currentSeason);
+
+  useEffect(() => {
+    let cancelled = false;
+    void Promise.all([
+      fetchPlayersIndex(),
+      fetchSeasonsMeta(),
+      fetchCurrentMeta(),
+    ]).then(([playerIndex, seasonMeta, current]) => {
+      if (cancelled) return;
+      if (playerIndex) {
+        const demos = players.filter((player) => player.id.startsWith("demo-"));
+        setLivePlayers([...playerIndex.players, ...demos]);
+      }
+      if (seasonMeta) {
+        setLiveSeasonOptions(
+          seasonMeta.seasons
+            .map((row) => row.season)
+            .sort((a, b) => b - a),
+        );
+      }
+      if (current) setLatestSeason(current.season);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [players]);
+
   const selectedIds = useMemo(
     () => parsePlayerIds(searchParams.get("p")),
     [searchParams],
   );
   const season = useMemo(() => {
     const requested = Number(searchParams.get("season"));
-    return seasonOptions.includes(requested) ? requested : currentSeason;
-  }, [searchParams, seasonOptions, currentSeason]);
+    return liveSeasonOptions.includes(requested) ? requested : latestSeason;
+  }, [searchParams, liveSeasonOptions, latestSeason]);
 
   const selectedBios = useMemo(
     () =>
       selectedIds
-        .map((id) => players.find((player) => player.id === id))
+        .map((id) => livePlayers.find((player) => player.id === id))
         .filter((player): player is PlayerBio => Boolean(player)),
-    [selectedIds, players],
+    [selectedIds, livePlayers],
   );
 
   const groups = new Set(
@@ -80,7 +115,7 @@ export function ComparePageClient({
       return;
     }
     const bios = selectedIds
-      .map((id) => players.find((player) => player.id === id))
+      .map((id) => livePlayers.find((player) => player.id === id))
       .filter((player): player is PlayerBio => Boolean(player));
     if (bios.length === 0) {
       setColumns([]);
@@ -116,7 +151,7 @@ export function ComparePageClient({
     return () => {
       cancelled = true;
     };
-  }, [sameGroup, positionGroup, selectedIds, players, season]);
+  }, [sameGroup, positionGroup, selectedIds, livePlayers, season]);
 
   const groupLabel =
     positionGroup != null ? GROUP_LABEL[positionGroup] : null;
@@ -142,10 +177,10 @@ export function ComparePageClient({
       <main className="mx-auto max-w-6xl space-y-4 px-4 py-4">
         <div className="rounded-none border border-zinc-200 bg-white px-3 py-3">
           <ComparePicker
-            players={players}
+            players={livePlayers}
             selectedIds={selectedBios.map((p) => p.id)}
             season={season}
-            seasons={seasonOptions}
+            seasons={liveSeasonOptions}
           />
         </div>
 

@@ -73,9 +73,23 @@ export const loadCurrentMeta = cache(async (): Promise<CurrentEnvelope | null> =
   loadStorageJson<CurrentEnvelope>("index/current.json"),
 );
 
+/** Client-side current pointer. Unlike the server helper, this is not build-cached. */
+export async function fetchCurrentMeta(): Promise<CurrentEnvelope | null> {
+  return loadStorageJson<CurrentEnvelope>("index/current.json");
+}
+
 export const loadPlayersIndex = cache(async (): Promise<PlayersEnvelope | null> =>
   loadStorageJson<PlayersEnvelope>("index/players.json"),
 );
+
+/** Client-side index loaders for static pages that must track weekly uploads. */
+export async function fetchPlayersIndex(): Promise<PlayersEnvelope | null> {
+  return loadStorageJson<PlayersEnvelope>("index/players.json");
+}
+
+export async function fetchSeasonsMeta(): Promise<SeasonsEnvelope | null> {
+  return loadStorageJson<SeasonsEnvelope>("index/seasons.json");
+}
 
 /** Final published as-of week for a season, if Ballnet has published it. */
 export async function asOfWeekForSeason(

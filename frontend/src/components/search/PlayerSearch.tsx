@@ -13,7 +13,12 @@ import {
 } from "@/lib/catalog";
 import type { FantasyPosRankKind, LeaderboardJson, LeaderboardRow, PlayerBio } from "@/lib/payload";
 import { searchPlayers } from "@/lib/player-index";
-import { fetchLeaderboard } from "@/lib/ballnet-store";
+import {
+  fetchCurrentMeta,
+  fetchLeaderboard,
+  fetchPlayersIndex,
+  fetchSeasonsMeta,
+} from "@/lib/ballnet-store";
 import { TeamAbbr } from "@/components/TeamAbbr";
 import { PositionRankLabel } from "@/components/PositionRankLabel";
 
@@ -223,6 +228,9 @@ export function PlayerSearch({
   seasons,
   initialSeason,
 }: PlayerSearchProps) {
+  const [livePlayers, setLivePlayers] = useState(players);
+  const [liveSeasons, setLiveSeasons] = useState(seasons);
+  const [currentSeason, setCurrentSeason] = useState(initialSeason);
   const [query, setQuery] = useState("");
   const [season, setSeason] = useState(initialSeason);
   const [group, setGroup] = useState<SearchPositionFilter | null>(null);
@@ -236,13 +244,53 @@ export function PlayerSearch({
     () => new Map<string, SeasonAffiliation>(),
   );
 
+  // Search is statically exported, but its roster and current slice change weekly.
+  // Refresh both from Storage so a data upload does not require a site rebuild.
+  useEffect(() => {
+    let cancelled = false;
+    void Promise.all([
+      fetchPlayersIndex(),
+      fetchSeasonsMeta(),
+      fetchCurrentMeta(),
+    ]).then(([playerIndex, seasonMeta, current]) => {
+      if (cancelled) return;
+      if (playerIndex) {
+        const demos = players.filter((player) => player.id.startsWith("demo-"));
+        setLivePlayers([...playerIndex.players, ...demos]);
+      }
+      if (seasonMeta) {
+        const nextSeasons = seasonMeta.seasons.map((row) => ({
+          season: row.season,
+          asOfWeek: row.asOfWeek,
+          completedWeek: row.completedWeek ?? row.asOfWeek,
+        }));
+        if (current && !nextSeasons.some((row) => row.season === current.season)) {
+          nextSeasons.push({
+            season: current.season,
+            asOfWeek: current.asOfWeek,
+            completedWeek: current.completedWeek ?? current.asOfWeek,
+          });
+        }
+        nextSeasons.sort((a, b) => b.season - a.season);
+        setLiveSeasons(nextSeasons);
+      }
+      if (current) {
+        setCurrentSeason(current.season);
+        setSeason(current.season);
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [players]);
+
   const seasonOptions = useMemo(() => {
-    if (seasons.some((s) => s.season === initialSeason)) return seasons;
+    if (liveSeasons.some((s) => s.season === currentSeason)) return liveSeasons;
     return [
-      { season: initialSeason, asOfWeek: 18, completedWeek: 18 },
-      ...seasons,
+      { season: currentSeason, asOfWeek: 18, completedWeek: 18 },
+      ...liveSeasons,
     ].sort((a, b) => b.season - a.season);
-  }, [seasons, initialSeason]);
+  }, [liveSeasons, currentSeason]);
 
   const asOfWeek = useMemo(() => {
     return (
@@ -443,7 +491,7 @@ export function PlayerSearch({
   const effectiveMin = minVolume ?? floor ?? 0;
 
   const bioResults = useMemo(() => {
-    const inSeason = players.filter((player) => player.seasons.includes(season));
+    const inSeason = livePlayers.filter((player) => player.seasons.includes(season));
     const forSeason = inSeason.map((player) => {
       const aff = seasonAffiliation.get(player.id);
       if (!aff) return player;
@@ -459,7 +507,7 @@ export function PlayerSearch({
       ? forSeason.filter((player) => matchesPositionFilter(player.position, group))
       : forSeason;
     return searchPlayers(scoped, query);
-  }, [players, group, query, season, seasonAffiliation]);
+  }, [livePlayers, group, query, season, seasonAffiliation]);
 
   const rankedRows = useMemo(() => {
     if (!statId || !board) return null;
