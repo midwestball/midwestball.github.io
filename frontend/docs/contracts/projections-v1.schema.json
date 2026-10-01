@@ -1,0 +1,391 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://midwestball.com/contracts/projections-v1.schema.json",
+  "title": "Projection public objects v1",
+  "oneOf": [
+    {
+      "$ref": "#/$defs/pointer"
+    },
+    {
+      "$ref": "#/$defs/index"
+    },
+    {
+      "$ref": "#/$defs/entity"
+    },
+    {
+      "$ref": "#/$defs/manifest"
+    }
+  ],
+  "$defs": {
+    "pointer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schemaVersion",
+        "season",
+        "week",
+        "snapshotId",
+        "indexPath",
+        "manifestPath",
+        "generatedAt"
+      ],
+      "properties": {
+        "schemaVersion": {
+          "const": 1
+        },
+        "season": {
+          "type": "integer"
+        },
+        "week": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 25
+        },
+        "snapshotId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "indexPath": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.?(?:/|$))(?!.*\\\\).+$"
+        },
+        "manifestPath": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.?(?:/|$))(?!.*\\\\).+$"
+        },
+        "generatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      }
+    },
+    "index": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schemaVersion",
+        "season",
+        "week",
+        "snapshotId",
+        "generatedAt",
+        "trainedThrough",
+        "modelFamily",
+        "modelVersion",
+        "scoringProfile",
+        "scoringDescriptions",
+        "positionModelStatus",
+        "manifestPath",
+        "xGrid",
+        "entities"
+      ],
+      "properties": {
+        "schemaVersion": {
+          "const": 1
+        },
+        "season": {
+          "type": "integer"
+        },
+        "week": {
+          "type": "integer"
+        },
+        "snapshotId": {
+          "type": "string"
+        },
+        "generatedAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "trainedThrough": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "season",
+            "week"
+          ],
+          "properties": {
+            "season": {
+              "type": "integer"
+            },
+            "week": {
+              "type": "integer"
+            }
+          }
+        },
+        "modelFamily": {
+          "type": "string"
+        },
+        "modelVersion": {
+          "type": "string"
+        },
+        "scoringProfile": {
+          "type": "string"
+        },
+        "scoringDescriptions": {
+          "type": "object",
+          "required": [
+            "QB",
+            "RB",
+            "WR",
+            "TE",
+            "K",
+            "DST"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "QB": {
+              "type": "string",
+              "minLength": 1
+            },
+            "RB": {
+              "type": "string",
+              "minLength": 1
+            },
+            "WR": {
+              "type": "string",
+              "minLength": 1
+            },
+            "TE": {
+              "type": "string",
+              "minLength": 1
+            },
+            "K": {
+              "type": "string",
+              "minLength": 1
+            },
+            "DST": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        },
+        "positionModelStatus": {
+          "type": "object",
+          "required": [
+            "QB",
+            "RB",
+            "WR",
+            "TE",
+            "K",
+            "DST"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "QB": {
+              "enum": [
+                "promoted",
+                "promoted_with_calibration_note",
+                "initial_deployment"
+              ]
+            },
+            "RB": {
+              "enum": [
+                "promoted",
+                "promoted_with_calibration_note",
+                "initial_deployment"
+              ]
+            },
+            "WR": {
+              "enum": [
+                "promoted",
+                "promoted_with_calibration_note",
+                "initial_deployment"
+              ]
+            },
+            "TE": {
+              "enum": [
+                "promoted",
+                "promoted_with_calibration_note",
+                "initial_deployment"
+              ]
+            },
+            "K": {
+              "enum": [
+                "promoted",
+                "promoted_with_calibration_note",
+                "initial_deployment"
+              ]
+            },
+            "DST": {
+              "enum": [
+                "promoted",
+                "promoted_with_calibration_note",
+                "initial_deployment"
+              ]
+            }
+          }
+        },
+        "manifestPath": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.?(?:/|$))(?!.*\\\\).+$"
+        },
+        "xGrid": {
+          "type": "array",
+          "minItems": 2,
+          "items": {
+            "type": "number"
+          }
+        },
+        "entities": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "entityKey",
+              "entityType",
+              "playerId",
+              "name",
+              "position",
+              "team",
+              "opponent",
+              "expectedPoints",
+              "path"
+            ],
+            "properties": {
+              "entityKey": {
+                "type": "string",
+                "minLength": 1
+              },
+              "entityType": {
+                "enum": [
+                  "player",
+                  "defense"
+                ]
+              },
+              "playerId": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "name": {
+                "type": "string",
+                "minLength": 1
+              },
+              "position": {
+                "enum": [
+                  "QB",
+                  "RB",
+                  "WR",
+                  "TE",
+                  "K",
+                  "DST"
+                ]
+              },
+              "team": {
+                "type": "string",
+                "minLength": 1
+              },
+              "opponent": {
+                "type": "string",
+                "minLength": 1
+              },
+              "expectedPoints": {
+                "type": "number"
+              },
+              "path": {
+                "type": "string",
+                "minLength": 1,
+                "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.?(?:/|$))(?!.*\\\\).+$"
+              },
+              "availability": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      }
+    },
+    "entity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schemaVersion",
+        "snapshotId",
+        "entityKey",
+        "expectedPoints",
+        "yMax",
+        "pdf",
+        "cdf",
+        "lowerBound",
+        "bandwidth",
+        "nModelDraws"
+      ],
+      "properties": {
+        "schemaVersion": {
+          "const": 1
+        },
+        "snapshotId": {
+          "type": "string"
+        },
+        "entityKey": {
+          "type": "string"
+        },
+        "expectedPoints": {
+          "type": "number"
+        },
+        "yMax": {
+          "type": "number",
+          "minimum": 0
+        },
+        "pdf": {
+          "type": "array",
+          "minItems": 2,
+          "items": {
+            "type": "number",
+            "minimum": 0
+          }
+        },
+        "cdf": {
+          "type": "array",
+          "minItems": 2,
+          "items": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1
+          }
+        },
+        "lowerBound": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "bandwidth": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "nModelDraws": {
+          "type": "integer",
+          "minimum": 1
+        }
+      }
+    },
+    "manifest": {
+      "type": "object",
+      "required": [
+        "schemaVersion",
+        "snapshotId",
+        "files",
+        "validation"
+      ],
+      "properties": {
+        "schemaVersion": {
+          "const": 1
+        },
+        "snapshotId": {
+          "type": "string"
+        },
+        "files": {
+          "type": "array"
+        },
+        "validation": {
+          "type": "object"
+        }
+      }
+    }
+  }
+}

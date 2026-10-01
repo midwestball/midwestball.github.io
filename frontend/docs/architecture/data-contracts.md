@@ -83,3 +83,17 @@ Built from Stage E `ytd_*_pct.parquet`. The frontend search Filter sorts Best/Wo
 - Reuse `league_ytd` curves for home highlight expand charts.
 - Stuff every percentile into `index/players.json` for search sort.
 - Invent `fantasyPosRank` in the Next app when Ballnet omitted it.
+
+## Projection snapshots (`projections/`)
+
+Upcoming-week projections use public, schema-versioned JSON in the existing `knowball-public` Storage bucket. The canonical v1 schema is [`../contracts/projections-v1.schema.json`](../contracts/projections-v1.schema.json). The browser uses plain `fetch`; no credentials or Supabase SDK belong in the frontend.
+
+`projections/current.json` is the only mutable object and is fetched with `cache: "no-store"`. It points to an immutable revision index and manifest. Entity paths are relative to that revision index and must pass traversal checks. Revision JSON may use long-lived immutable caching. Publication uploads and verifies all immutable objects before updating the pointer.
+
+The index carries identity, matchup, scoring, model status, a shared `xGrid`, and expected points. Each selected entity file carries only the PDF/CDF arrays and linkage fields. Raw draws, training data, fitted models, credentials, and local paths are private and forbidden in this namespace. The frontend treats forecast distributions as distinct from historical stat payloads.
+
+The PDF is piecewise linear. Forward probability uses exact partial-trapezoid area. Inverse probability solves the matching within-cell quadratic. This keeps linked controls and focused chart shading consistent with the published curve.
+
+The published CDF is a lower-tail ("at most") quantity. The UI presents the upper tail, "chance of scoring X points or more", as `1 - CDF(x)`, and shades the region at or above the threshold. A typed probability is inverted through the CDF, so 50% still resolves to the median. Both forms are shown in `resolveThreshold` as `probability` (at least) and `atMost`, and neither form is invented in the browser: both derive from the published arrays.
+
+Comparisons are constrained to fantasy-relevant groups: QB against QB, RB/WR/TE against each other, K against K, and DST against DST. Cross-group selections are rejected in the picker and again in the page handler.

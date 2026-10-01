@@ -107,3 +107,16 @@ uv run ballnet publish-range --start 2016 --end $Y --skip-pipeline --no-current
 
 ## Recommendation
 Keep the manual/local-cron until a thin Ballnet refresh wrapper exists; only then consider GitHub Actions. Prefer Tuesday AM (America/New_York) so nflverse weeklies have landed.
+## Fantasy projections (final Tuesday stage)
+
+Run projections only after finalized historical stats publish successfully. The ignored local runner must use its frozen lock. It uploads immutable objects first and `projections/current.json` last. A projection failure must not undo the historical publish or move the old pointer. Run pruning in dry-run mode after acceptance; current, previous known-good, active-run, and required retention-window artifacts stay protected.
+
+### One command for the whole Tuesday operation
+
+Stages 1-6 above plus projections run in the required order by a single command, from `backend/local_ops/projections`:
+
+```bash
+uv run --frozen python -m projection_ops.cli tuesday --season YEAR --finalized-week W
+```
+
+This asserts projections are last before any work starts, stops if the historical publish fails, and on a projection failure leaves the historical data and `current.json` untouched while reporting status `stats_complete_projections_failed` with the exact recovery command. Schedule this one command, never the individual stages. Full details and flags are in `backend/local_ops/projections/RUNBOOK.md`.

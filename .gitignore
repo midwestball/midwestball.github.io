@@ -27,6 +27,7 @@ backend/__pycache__/
 backend/.pytest_cache/
 backend/archive/
 backend/local_ops/
+backend/projections/
 
 # agent tooling never commit
 .cursor/

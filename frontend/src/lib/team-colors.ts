@@ -162,3 +162,72 @@ export function compareFillColor(
   }
   return lighten(primary, (t - 0.5) * 0.7);
 }
+
+/**
+ * Distinct stroke colors for up to `count` players from one team.
+ * Slot 1 is the primary (top of the team swatch), slot 2 the secondary (bottom),
+ * and any further slots fall back to tinted variants of the primary so two curves
+ * from the same team never render identically.
+ */
+export function teamLinePalette(team: string, count: number): string[] {
+  if (count <= 0) return [];
+  const primary = teamPrimaryColor(team);
+  if (count === 1) return [primary];
+  const secondary = teamSecondaryColor(team);
+  const variants = [
+    lighten(primary, 0.45),
+    darken(primary, 0.3),
+    lighten(primary, 0.25),
+    darken(primary, 0.45),
+  ];
+  const out = [primary, secondary];
+  let v = 0;
+  while (out.length < count) out.push(variants[v++ % variants.length]!);
+  return out.slice(0, count);
+}
+
+/**
+ * Map every entity to a stroke color, keeping same-team players distinguishable.
+ * Input order is preserved, so the caller controls who takes which slot.
+ */
+export function assignTeamLineColors<T extends { entityKey: string; team: string }>(
+  items: readonly T[],
+): Map<string, string> {
+  const byTeam = new Map<string, T[]>();
+  for (const item of items) {
+    const list = byTeam.get(item.team);
+    if (list) list.push(item);
+    else byTeam.set(item.team, [item]);
+  }
+  const out = new Map<string, string>();
+  for (const [team, group] of byTeam) {
+    const palette = teamLinePalette(team, group.length);
+    group.forEach((item, i) => out.set(item.entityKey, palette[i] ?? FALLBACK_PRIMARY));
+  }
+  return out;
+}
+
+/** Relative luminance of an sRGB colour, used to choose readable badge text. */
+function relativeLuminance(hex: string): number | null {
+  const rgb = parseHex(hex);
+  if (!rgb) return null;
+  const channel = (v: number) => {
+    const c = v / 255;
+    return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+  };
+  return 0.2126 * channel(rgb.r) + 0.7152 * channel(rgb.g) + 0.0722 * channel(rgb.b);
+}
+
+const BADGE_DARK_TEXT = "#111827";
+
+/**
+ * Pick dark or white text for a filled badge by comparing real contrast ratios, so
+ * light team colours such as 49ers gold still get readable numbers.
+ */
+export function readableTextOn(hex: string): "#111827" | "#ffffff" {
+  const luminance = relativeLuminance(hex);
+  if (luminance == null) return BADGE_DARK_TEXT;
+  const darkLuminance = relativeLuminance(BADGE_DARK_TEXT)!;
+  const contrast = (a: number, b: number) => (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05);
+  return contrast(luminance, 1) >= contrast(luminance, darkLuminance) ? "#ffffff" : BADGE_DARK_TEXT;
+}
