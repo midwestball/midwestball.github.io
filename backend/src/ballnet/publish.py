@@ -70,7 +70,7 @@ class RangePublishResult:
     end: int
     seasons: list[BatchPublishResult]
     index_path: str
-    current_index_path: str
+    current_index_path: str | None
     seasons_index_path: str
     players: int
     seconds: float
@@ -408,11 +408,15 @@ def write_current_index(
 
 
 def _slice_row(s: dict[str, int]) -> dict[str, int]:
-    as_of = int(s["asOfWeek"])
+    if s.get("completedWeek") is None:
+        raise ValueError(
+            f"season slice {s.get('season')!r} / {s.get('asOfWeek')!r} "
+            "is missing completedWeek"
+        )
     return {
         "season": int(s["season"]),
-        "asOfWeek": as_of,
-        "completedWeek": int(s["completedWeek"]) if s.get("completedWeek") is not None else as_of,
+        "asOfWeek": int(s["asOfWeek"]),
+        "completedWeek": int(s["completedWeek"]),
     }
 
 
@@ -484,7 +488,12 @@ def rebuild_index_from_pages(
 
     index_path = write_players_index(bios_by_id.values(), merge_existing=False)
     seasons_path = write_seasons_index(
-        {"season": s, "asOfWeek": w} for s, w in slice_list
+        {
+            "season": s,
+            "asOfWeek": w,
+            "completedWeek": completed_week_for(s, w),
+        }
+        for s, w in slice_list
     )
     cur_season = current_season if current_season is not None else slice_list[-1][0]
     cur_week = current_week if current_week is not None else slice_list[-1][1]
@@ -541,7 +550,8 @@ def publish_all(
         index_path = str(
             write_players_index(all_bios, merge_existing=merge_index)
         )
-        current_path = str(write_current_index(season, as_of_week))
+        if also_current:
+            current_path = str(write_current_index(season, as_of_week))
         upsert_seasons_index(season, as_of_week)
 
     return BatchPublishResult(
@@ -596,11 +606,19 @@ def publish_range(
         )
         season_results.append(batch)
         _merge_bios(bios_by_id, batch.bios)
-        slices.append({"season": season, "asOfWeek": week})
+        slices.append(
+            {
+                "season": season,
+                "asOfWeek": week,
+                "completedWeek": completed_week_for(season, week),
+            }
+        )
 
     index_path = write_players_index(bios_by_id.values(), merge_existing=False)
-    last = season_results[-1]
-    current_path = write_current_index(last.season, last.as_of_week)
+    current_path: Path | None = None
+    if also_current_latest:
+        last = season_results[-1]
+        current_path = write_current_index(last.season, last.as_of_week)
     seasons_path = write_seasons_index(slices)
 
     return RangePublishResult(
@@ -608,7 +626,7 @@ def publish_range(
         end=end,
         seasons=season_results,
         index_path=str(index_path),
-        current_index_path=str(current_path),
+        current_index_path=str(current_path) if current_path is not None else None,
         seasons_index_path=str(seasons_path),
         players=len(bios_by_id),
         seconds=time.perf_counter() - t0,
