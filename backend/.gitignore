@@ -8,4 +8,9 @@ data
 *.pem
 reminders.md
 archive/
-local_ops/
+
+# `local_ops/` holds the fantasy projection package. Its source, tests, and
+# contract ARE version controlled; only runtime state stays ignored. The
+# package's own .gitignore handles the rest.
+local_ops/*
+!local_ops/projections/

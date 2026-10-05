@@ -1,0 +1,19 @@
+# Runtime state and secrets — never published.
+.env
+.env.*
+!.env.example
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+
+# Regenerable caches and bulky artifacts.
+cache/
+artifacts/
+state/
+
+# Internal agent worklog. Kept deliberately out of version control: it is a
+# migration checklist and scratchpad, not project documentation.
+projections_plan.md
