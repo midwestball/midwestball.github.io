@@ -12,6 +12,7 @@ import {
   YAxis,
 } from "recharts";
 import { formatStatValue } from "@/lib/catalog/format";
+import { statDescription } from "@/lib/catalog/stat-descriptions";
 import {
   CHART_PLOT,
   insertValuePoint,
@@ -266,9 +267,18 @@ export function CompareOverlayChart({
       ? percentileContrastText(focusMarker.percentile)
       : undefined;
   const standingNote = template.higherIsBetter ? "or lower" : "or higher";
+  const description = statDescription(template.id);
 
   return (
     <div className="space-y-2">
+      {description ? (
+        <p
+          className="text-[11px] leading-4 text-zinc-500"
+          data-testid="stat-description"
+        >
+          {description}
+        </p>
+      ) : null}
       <p className="text-[11px] leading-4 text-zinc-400">
         {focusMarker ? (
           <>

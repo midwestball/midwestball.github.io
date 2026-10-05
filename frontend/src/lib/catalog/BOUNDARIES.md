@@ -10,6 +10,7 @@ Position catalogs are product configuration, not player data. Rows on a player p
 - Treat rate stats as **0–1** in the contract (`percent` format). Display as `%` in the UI.
 - Derived rates are **ratio-of-sums** in Ballnet Stage C (`None` when the denominator is 0 — never impute 0 efficiency).
 - Compute ramp–hold and percentiles in Ballnet. The frontend only reads `qualified` / `unavailableReason`.
+- Give every published `stat.id` an entry in `stat-descriptions.ts`, kept under 240 characters and free of markup. `stat-descriptions.test.tsx` fails the build if coverage or the limit regresses.
 
 ## Ask First
 
@@ -32,3 +33,5 @@ Position catalogs are product configuration, not player data. Rows on a player p
 - Percentile orientation is Ballnet's job: the frontend assumes high = good and does not invert again on the slider.
 - Search min-volume joins `board.stats[volumeStatId]`; leave unset for NGS / games / snaps / dropbacks / air-yards / tackle_chances so the UI does not mislabel those rates as “Min Carries”.
 - Search min-volume floor is `minNBase × min(completedWeek, 5)`, never `asOfWeek`, when Ballnet has published `completedWeek`.
+- The stat label `title` is an affordance hint ("Click for more info"), not a copy slot; the plain-language meaning lives in `stat-descriptions.ts` and renders inside the expanded chart.
+- A stat id may be renamed to match the quantity it actually holds (see `passing_20_plus`, formerly `deep_attempts`). Rename it in **both** `catalog/*.ts` and `ballnet/catalog/*.py`, then republish.

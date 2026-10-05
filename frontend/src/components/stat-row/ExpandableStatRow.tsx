@@ -4,6 +4,7 @@ import { useState, type ReactNode } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { ChevronRight } from "lucide-react";
 import { formatStatValue } from "@/lib/catalog/format";
+import { statDescription } from "@/lib/catalog/stat-descriptions";
 import {
   percentileColor,
   percentileContrastText,
@@ -53,6 +54,7 @@ export function ExpandableStatRow({
       ? percentileContrastText(stat.percentile)
       : undefined;
   const standing = ready ? playerStandingParts(stat) : null;
+  const description = statDescription(stat.id);
   const inline = sliderPlacement === "inline";
 
   // Fixed width so value starts and slider starts share a column across rows.
@@ -113,7 +115,7 @@ export function ExpandableStatRow({
             theme.name,
             !ready && "text-zinc-500",
           )}
-          title={stat.label}
+          title={open ? "Click to collapse" : "Click for more info"}
         >
           {stat.label}
         </span>
@@ -143,6 +145,14 @@ export function ExpandableStatRow({
             className="overflow-hidden"
           >
             <div className={cn("px-2 pb-2", theme.chartWrap)}>
+              {description ? (
+                <p
+                  className={cn("mb-1.5 text-[11px] leading-4", theme.meta)}
+                  data-testid="stat-description"
+                >
+                  {description}
+                </p>
+              ) : null}
               {standing && color ? (
                 <p className={cn("mb-1 text-[11px] leading-4", theme.meta)}>
                   {standing.prefix}

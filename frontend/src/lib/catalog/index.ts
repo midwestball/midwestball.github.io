@@ -40,6 +40,7 @@ export {
   positionGroupOf,
 } from "./positions";
 export { formatStatValue } from "./format";
+export { STAT_DESCRIPTIONS, statDescription } from "./stat-descriptions";
 export type {
   PositionCode,
   PositionGroup,
