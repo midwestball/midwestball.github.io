@@ -140,7 +140,7 @@ QB_STATS: list[StatDefinition] = [
     StatDefinition(
         "passing_yards", "continuous", True, "yards", -10, 554, 8, "attempts", 1999, lower_bound=0
     ),
-    StatDefinition("deep_attempts", "discrete", True, "count", 0, 20, 8, "attempts", 1999, bin_width=1),
+    StatDefinition("passing_20_plus", "discrete", True, "count", 0, 20, 8, "attempts", 1999, bin_width=1),
     StatDefinition("rush_attempts", "discrete", True, "count", 0, 20, 3, "carries", 1999, bin_width=1),
     StatDefinition(
         "rushing_yards", "continuous", True, "yards", -15, 150, 3, "carries", 1999, lower_bound=0
@@ -166,7 +166,7 @@ QB_STATS = with_volume(QB_STATS, {
     "completion_pct": "pass_attempts",
     "completions": "pass_attempts",
     "cpoe": "pass_attempts",
-    "deep_attempts": "pass_attempts",
+    "passing_20_plus": "pass_attempts",
     "interception_rate": "pass_attempts",
     "pass_attempts": "pass_attempts",
     "passer_rating": "pass_attempts",
@@ -183,7 +183,7 @@ QB_STATS = with_min_n_base(QB_STATS, {
     "completion_pct": 28,
     "completions": 28,
     "cpoe": 28,
-    "deep_attempts": 28,
+    "passing_20_plus": 28,
     "epa_per_dropback": 30,
     "interception_rate": 28,
     "pacr": 28,

@@ -195,7 +195,9 @@ def _aggregate_qb_wide(panel: pl.DataFrame) -> pl.DataFrame:
         pl.col("sacks_taken").sum().alias("sacks_taken"),
         pl.col("passing_epa").sum().alias("passing_epa"),
         pl.col("passing_air_yards").sum().alias("passing_air_yards"),
-        pl.col("passing_20").sum().alias("deep_attempts"),
+        # nflverse `passing_20` counts COMPLETED passes gaining 20+ yards,
+        # not attempts, so the id names the completion rather than a "deep attempt".
+        pl.col("passing_20").sum().alias("passing_20_plus"),
         pl.col("carries").sum().alias("carries"),
         pl.col("rushing_yards").sum().alias("rushing_yards"),
         pl.col("rushing_tds").sum().alias("rushing_tds"),

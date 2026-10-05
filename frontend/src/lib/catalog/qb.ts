@@ -365,8 +365,8 @@ export const QB_STATS: StatDefinition[] = [
     zeroMass: "med",
   },
   {
-    id: "deep_attempts",
-    label: "Deep Attempts (20+)",
+    id: "passing_20_plus",
+    label: "20+ Yard Passes",
     section: "Volume",
     kind: "discrete",
     higherIsBetter: true,

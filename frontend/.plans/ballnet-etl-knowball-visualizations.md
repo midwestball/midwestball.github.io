@@ -347,7 +347,7 @@ Copy these ids **exactly**. Mixed plan rows (e.g. “Rush Att/Yds/TDs”) are **
 | `expected_completion_pct` | continuous | percent | true | 0–1 | 1 | NGS week | 2016 | NGS | 0–1 |
 | `air_yards_diff` | continuous | one_decimal | true | −10–8 | 1 | NGS week | 2016 | NGS | |
 | `air_yards_to_sticks` | continuous | one_decimal | true | −8–8 | 1 | NGS week | 2016 | NGS | |
-| `deep_attempts` | discrete | count | true | 0–20, bw 1 | 8 | attempts | 1999 | `passing_20` (20+ only; no separate 40+ id) | |
+| `passing_20_plus` | discrete | count | true | 0–20, bw 1 | 8 | attempts | 1999 | `passing_20` — completed passes of 20+ yards (was `deep_attempts`, renamed: the nflverse field counts completions, not attempts; no separate 40+ id) | |
 | `rush_attempts` | discrete | count | true | 0–20, bw 1 | 3 | carries | 1999 | `player_stats` | split from mixed rush row |
 | `rushing_yards` | continuous | yards | true | −15–150, lb 0 | 3 | carries | 1999 | `player_stats` | |
 | `rushing_tds` | discrete | count | true | 0–4, bw 1 | 3 | carries | 1999 | `player_stats` | |
