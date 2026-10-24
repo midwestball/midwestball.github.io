@@ -61,7 +61,8 @@ The order is fixed and asserted before any work starts:
 3. `ballnet publish-all --season S --as-of-week W`
 4. `ballnet highlights --season S --week W`
 5. `ballnet upload-storage --index --season S --as-of-week W --highlights`
-6. `projections weekly --season S --finalized-week W` (retrain, publish, anonymous GET)
+6. `projections weekly --season S --finalized-week W` (retrain upcoming-week forests,
+   then retrain ROS forests; validate/publish both horizons together; anonymous GET)
 
 Guarantees:
 

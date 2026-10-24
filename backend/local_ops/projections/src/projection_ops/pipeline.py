@@ -78,6 +78,7 @@ def build_snapshot(
     generated_at: datetime | None = None,
     epsilon: float = 1e-5,
     minimum_draws: int = 10000,
+    ros: dict | None = None,
 ) -> Path:
     verify_schema_copy()
     generated = _utc(generated_at)
@@ -90,6 +91,9 @@ def build_snapshot(
     if len(keys) != len(set(keys)):
         raise ValueError("duplicate entityKey")
     snapshot_id = _snapshot_id(generated, season, week, entities)
+    if ros is not None:
+        # ROS is part of revision identity, including forced rebuilds of the same week.
+        snapshot_id += "-" + sha256_bytes(canonical_bytes(ros))[:8]
     draw_series = [
         DrawSeries(x["entityKey"], x["position"], np.asarray(x["draws"], float)) for x in entities
     ]
@@ -156,6 +160,14 @@ def build_snapshot(
         "xGrid": grid,
         "entities": index_entities,
     }
+    if ros is not None:
+        public_ros = ros | {"snapshotId": snapshot_id, "generatedAt": generated_text}
+        data = canonical_bytes(public_ros)
+        (tmp / "ros.json").write_bytes(data)
+        file_inventory.append(
+            {"path": "ros.json", "bytes": len(data), "sha256": sha256_bytes(data)}
+        )
+        index["rosPath"] = "ros.json"
     data = canonical_bytes(index)
     (tmp / "index.json").write_bytes(data)
     file_inventory.append({"path": "index.json", "bytes": len(data), "sha256": sha256_bytes(data)})

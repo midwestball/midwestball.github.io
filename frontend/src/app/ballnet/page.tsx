@@ -1,6 +1,6 @@
 import { Suspense } from "react";
 
-import { ProjectionsPageClient } from "@/components/projections/ProjectionsPageClient";
+import { ProjectionHorizons } from "@/components/projections/ProjectionHorizons";
 
 export default function ProjectionsPage() {
   return (
@@ -11,7 +11,7 @@ export default function ProjectionsPage() {
         </div>
       }
     >
-      <ProjectionsPageClient />
+      <ProjectionHorizons />
     </Suspense>
   );
 }

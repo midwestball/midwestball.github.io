@@ -5,12 +5,13 @@ const NAV = [
   { href: "/search", label: "Search" },
   { href: "/compare", label: "Compare" },
   { href: "/ballnet", label: "Projections" },
+  { href: "/trades", label: "Trades" },
 ] as const;
 
 export function SiteHeader() {
   return (
     <header className="border-b border-zinc-200 bg-white">
-      <div className="mx-auto flex max-w-3xl items-center justify-between gap-3 px-4 py-2.5">
+      <div className="mx-auto flex max-w-3xl flex-wrap items-center justify-between gap-3 px-4 py-2.5">
         <Link href="/" className="min-w-0">
           <p className="text-xs font-semibold tracking-[0.2em] text-zinc-500 uppercase">
             midwestball
@@ -19,7 +20,7 @@ export function SiteHeader() {
             Player stats
           </p>
         </Link>
-        <nav className="flex items-center gap-1 text-sm">
+        <nav className="flex max-w-full items-center gap-1 overflow-x-auto text-sm">
           {NAV.map((item) => (
             <Link
               key={item.href}

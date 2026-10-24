@@ -21,6 +21,7 @@ from .live_data import load_live_tables, resolve_finalized_and_target
 from .weekly import WeeklyLedger, WeeklyPlan, require_final_tuesday_stage
 from . import tuesday as tuesday_ops
 from .quality import release_decision, disclosure_caveats
+from .ros.pipeline import generate_ros_forecasts
 
 
 class _DryBackend:
@@ -140,16 +141,19 @@ def main(argv=None):
                 n_draws=args.draws,
                 seed=args.seed,
             )
+            ros, ros_manifest = generate_ros_forecasts(args.season, trained, seed=args.seed)
             path = build_snapshot(
                 season=args.season,
                 week=args.week,
                 trained_through_week=trained,
                 entities=entities,
                 minimum_draws=args.draws,
+                ros=ros,
             )
             manifest_path = path / "manifest.json"
             manifest = json.loads(manifest_path.read_text())
             manifest["liveRun"] = live_manifest
+            manifest["rosRun"] = ros_manifest
             manifest["qualityReportSha256"] = sha256_file(quality)
             manifest["validation"]["warnings"] = disclosure_caveats(decision)
             manifest["releaseDecision"] = decision
@@ -233,16 +237,21 @@ def main(argv=None):
                     seed=args.seed,
                     tables=tables,
                 )
+                ros, ros_manifest = generate_ros_forecasts(
+                    args.season, args.finalized_week, seed=args.seed
+                )
                 path = build_snapshot(
                     season=args.season,
                     week=target,
                     trained_through_week=args.finalized_week,
                     entities=entities,
                     minimum_draws=10_000,
+                    ros=ros,
                 )
                 manifest_path = path / "manifest.json"
                 manifest = json.loads(manifest_path.read_text())
                 manifest["liveRun"] = live_manifest
+                manifest["rosRun"] = ros_manifest
                 manifest["qualityReportSha256"] = sha256_file(quality)
                 manifest["validation"]["warnings"] = disclosure_caveats(decision)
                 manifest["releaseDecision"] = decision

@@ -14,6 +14,9 @@
     },
     {
       "$ref": "#/$defs/manifest"
+    },
+    {
+      "$ref": "#/$defs/ros"
     }
   ],
   "$defs": {
@@ -296,6 +299,9 @@
               }
             }
           }
+        },
+        "rosPath": {
+          "const": "ros.json"
         }
       }
     },
@@ -384,6 +390,124 @@
         },
         "validation": {
           "type": "object"
+        }
+      }
+    },
+    "ros": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schemaVersion",
+        "kind",
+        "season",
+        "cutoffWeek",
+        "snapshotId",
+        "generatedAt",
+        "modelVersion",
+        "scoringProfile",
+        "quantileLevels",
+        "methodology",
+        "entities"
+      ],
+      "properties": {
+        "schemaVersion": {
+          "const": 1
+        },
+        "kind": {
+          "const": "ros"
+        },
+        "season": {
+          "type": "integer"
+        },
+        "cutoffWeek": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 17
+        },
+        "snapshotId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "generatedAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "modelVersion": {
+          "type": "string",
+          "minLength": 1
+        },
+        "scoringProfile": {
+          "const": "ppr-v1"
+        },
+        "quantileLevels": {
+          "const": [
+            0.05,
+            0.25,
+            0.5,
+            0.75,
+            0.95
+          ]
+        },
+        "methodology": {
+          "type": "string",
+          "minLength": 1
+        },
+        "entities": {
+          "type": "array",
+          "minItems": 4,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "playerId",
+              "name",
+              "position",
+              "team",
+              "remainingTeamGames",
+              "mean",
+              "quantiles"
+            ],
+            "properties": {
+              "playerId": {
+                "type": "string",
+                "minLength": 1
+              },
+              "name": {
+                "type": "string",
+                "minLength": 1
+              },
+              "team": {
+                "type": "string",
+                "minLength": 1
+              },
+              "position": {
+                "enum": [
+                  "QB",
+                  "RB",
+                  "WR",
+                  "TE"
+                ]
+              },
+              "remainingTeamGames": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 17
+              },
+              "mean": {
+                "type": "number",
+                "minimum": 0
+              },
+              "quantiles": {
+                "type": "array",
+                "minItems": 5,
+                "maxItems": 5,
+                "items": {
+                  "type": "number",
+                  "minimum": 0
+                }
+              }
+            }
+          }
         }
       }
     }

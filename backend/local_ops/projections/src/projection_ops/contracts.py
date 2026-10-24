@@ -121,6 +121,27 @@ def validate_snapshot(directory: Path) -> dict:
             raise ContractError("yMax mismatch")
     inventory = {x["path"]: x for x in manifest["files"]}
     expected_paths = {"index.json", *paths}
+    if "rosPath" in index:
+        if index["rosPath"] != "ros.json":
+            raise ContractError("noncanonical ROS path")
+        ros = json.loads((directory / "ros.json").read_text(encoding="utf-8"))
+        validate_document(ros)
+        if (
+            ros["snapshotId"] != index["snapshotId"]
+            or ros["season"] != index["season"]
+            or ros["cutoffWeek"] != index["trainedThrough"]["week"]
+            or ros["scoringProfile"] != index["scoringProfile"]
+        ):
+            raise ContractError("ROS snapshot linkage mismatch")
+        keys = [row["playerId"] for row in ros["entities"]]
+        if len(keys) != len(set(keys)):
+            raise ContractError("duplicate ROS player")
+        if {row["position"] for row in ros["entities"]} != {"QB", "RB", "WR", "TE"}:
+            raise ContractError("ROS must cover all four positions")
+        for row in ros["entities"]:
+            if any(b < a for a, b in zip(row["quantiles"], row["quantiles"][1:])):
+                raise ContractError("ROS quantiles must be ordered")
+        expected_paths.add("ros.json")
     if set(inventory) != expected_paths:
         raise ContractError("manifest inventory is incomplete or has extras")
     for rel in expected_paths:

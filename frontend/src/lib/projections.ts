@@ -1,11 +1,12 @@
 import { vizStorageBase } from "@/lib/viz-config";
+import { isRosSnapshot, type RosSnapshot } from "@/lib/ros";
 
 export const PROJECTION_POSITIONS = ["QB", "RB", "WR", "TE", "K", "DST"] as const;
 export type ProjectionPosition = (typeof PROJECTION_POSITIONS)[number];
 export type PositionModelStatus = "promoted" | "promoted_with_calibration_note" | "initial_deployment";
 export type ProjectionPointer = { schemaVersion: 1; season: number; week: number; snapshotId: string; indexPath: string; manifestPath: string; generatedAt: string };
 export type ProjectionEntitySummary = { entityKey: string; entityType: "player" | "defense"; playerId: string | null; name: string; position: ProjectionPosition; team: string; opponent: string; expectedPoints: number; path: string; availability?: string };
-export type ProjectionIndex = { schemaVersion: 1; season: number; week: number; snapshotId: string; generatedAt: string; trainedThrough: { season: number; week: number }; modelFamily: string; modelVersion: string; scoringProfile: string; scoringDescriptions: Record<ProjectionPosition, string>; positionModelStatus: Record<ProjectionPosition, PositionModelStatus>; manifestPath: string; xGrid: number[]; entities: ProjectionEntitySummary[] };
+export type ProjectionIndex = { schemaVersion: 1; season: number; week: number; snapshotId: string; generatedAt: string; trainedThrough: { season: number; week: number }; modelFamily: string; modelVersion: string; scoringProfile: string; scoringDescriptions: Record<ProjectionPosition, string>; positionModelStatus: Record<ProjectionPosition, PositionModelStatus>; manifestPath: string; rosPath?: string; xGrid: number[]; entities: ProjectionEntitySummary[] };
 export type ProjectionEntityDistribution = { schemaVersion: 1; snapshotId: string; entityKey: string; expectedPoints: number; yMax: number; pdf: number[]; cdf: number[]; lowerBound: number | null; bandwidth: number; nModelDraws: number };
 export type ProjectionManifest = { schemaVersion: 1; snapshotId: string; [key: string]: unknown };
 
@@ -26,6 +27,7 @@ export function isProjectionEntity(v: unknown): v is ProjectionEntityDistributio
 export function isProjectionIndex(v: unknown): v is ProjectionIndex {
   if (!object(v) || v.schemaVersion !== 1 || !finite(v.season) || !finite(v.week) || !text(v.snapshotId) || !text(v.generatedAt) || !object(v.trainedThrough) || !finite(v.trainedThrough.season) || !finite(v.trainedThrough.week) || !text(v.modelFamily) || !text(v.modelVersion) || !text(v.scoringProfile) || !object(v.scoringDescriptions) || !object(v.positionModelStatus) || !safeRelativePath(v.manifestPath) || !finiteArray(v.xGrid) || v.xGrid.length < 2 || !v.xGrid.every((x,i,a)=>i===0 || x>a[i-1]!) || !Array.isArray(v.entities)) return false;
   for (const p of PROJECTION_POSITIONS) if (!text(v.scoringDescriptions[p]) || !text(v.positionModelStatus[p])) return false;
+  if (v.rosPath !== undefined && v.rosPath !== "ros.json") return false;
   const keys = new Set<string>();
   return v.entities.every((e) => object(e) && text(e.entityKey) && !keys.has(e.entityKey) && !!keys.add(e.entityKey) && (e.entityType === "player" || e.entityType === "defense") && (e.playerId === null || text(e.playerId)) && text(e.name) && position(e.position) && text(e.team) && text(e.opponent) && finite(e.expectedPoints) && safeRelativePath(e.path));
 }
@@ -146,3 +148,14 @@ export async function loadProjectionSnapshot(signal?: AbortSignal): Promise<{ po
 export async function loadProjectionEntity(indexPath: string, index: ProjectionIndex, summary: ProjectionEntitySummary, signal?: AbortSignal): Promise<ProjectionEntityDistribution> { const raw = await json(storageUrl(resolveRevisionPath(indexPath, summary.path)), { signal }, true); if (!isProjectionEntity(raw) || raw.snapshotId !== index.snapshotId || raw.entityKey !== summary.entityKey || raw.pdf.length !== index.xGrid.length || raw.expectedPoints !== summary.expectedPoints) throw new ProjectionLoadError("invalid", `Distribution for ${summary.name} failed validation.`); return raw; }
 export async function loadProjectionManifest(indexPath: string, index: ProjectionIndex): Promise<ProjectionManifest> { const raw = await json(storageUrl(resolveRevisionPath(indexPath, index.manifestPath)), undefined, true); if (!object(raw) || raw.schemaVersion !== 1 || raw.snapshotId !== index.snapshotId) throw new ProjectionLoadError("invalid", "Projection manifest failed validation."); return raw as ProjectionManifest; }
 export function parseProjectionSelection(search: string, available: Set<string>) { const params = new URLSearchParams(search); const requested = (params.get("p") ?? "").split(",").filter(Boolean); const unique = [...new Set(requested)].slice(0, 4); const selected = unique.filter((id) => available.has(id)); const requestedFocus = params.get("focus"); return { selected, focus: requestedFocus && selected.includes(requestedFocus) ? requestedFocus : selected[0] ?? null, stale: unique.length - selected.length }; }
+
+/** Optional ROS file shares the weekly revision and is fetched only when requested. */
+export async function loadRosSnapshot(signal?: AbortSignal): Promise<RosSnapshot> {
+  const { pointer, index } = await loadProjectionSnapshot(signal);
+  if (!index.rosPath) throw new ProjectionLoadError("unavailable", "Rest-of-season projections have not been published for this snapshot yet.");
+  const raw = await json(storageUrl(resolveRevisionPath(pointer.indexPath, index.rosPath)), { signal }, true);
+  if (!isRosSnapshot(raw) || raw.snapshotId !== index.snapshotId || raw.season !== index.season ||
+      raw.cutoffWeek !== index.trainedThrough.week || raw.scoringProfile !== index.scoringProfile)
+    throw new ProjectionLoadError("invalid", "Rest-of-season projections failed validation.");
+  return raw;
+}

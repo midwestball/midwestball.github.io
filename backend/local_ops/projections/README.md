@@ -22,6 +22,28 @@ cache, fitted models, raw draws, weekly ledger, and logs — is not; see `.gitig
 5. **`storage.py`** publishes immutable objects first and the `current.json` pointer last,
    verifying every remote byte and hash before the pointer moves.
 
+### Rest-of-season projections
+
+Every live `build` and scheduled `weekly` run now fits the four ROS forests **after**
+the six upcoming-week forests. `ros/` is a standalone production port of the frozen
+`ffoptim/projections/ROS` F0 forest and feature definitions; the runtime never imports
+the research checkout. Fits use completed seasons from 2016 onward, while the current
+season contributes only cutoff-known forecast features. Historical source partitions
+are cached in this package; the weekly run refreshes the current-season sources first.
+
+The same immutable revision optionally contains `ros.json`, linked by `index.rosPath`.
+It stores only player identity, remaining team games, mean and five quantiles
+(5/25/50/75/95%). No ROS models or raw draws are uploaded. Publication, remote/anonymous
+verification, promotion, rollback and retention include ROS through the existing
+manifest inventory. A ROS training/validation/upload failure prevents pointer promotion.
+`--resume` reuses a validated combined snapshot without retraining either horizon.
+Legacy snapshots remain readable and the frontend reports when ROS is unavailable.
+
+ROS covers QB/RB/WR/TE under the existing skill-position PPR formulas, through the end
+of the regular season. Injury news is not a model input; central intervals can be
+conservative and arbitrary live cutoffs are outside the frozen 0/4/8/12 training grid.
+The frontend trade tool uses sums of individual medians, never win probabilities.
+
 ## Current release status
 
 Implemented and tested: schema/KDE contract, six-position offline smoke build, scoring and CRPS forest primitives, local validation, immutable-first/pointer-last Storage publishing, pruning safeguards, and secret-safe source exports. The frontend consumes the same schema.

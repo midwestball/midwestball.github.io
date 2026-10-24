@@ -90,7 +90,7 @@ def publish_snapshot(
     index = json.loads((directory / "index.json").read_text())
     manifest = json.loads((directory / "manifest.json").read_text())
     base = f"{prefix}/{index['season']}/w{index['week']}/{index['snapshotId']}"
-    ordered = [x["path"] for x in manifest["files"] if x["path"].startswith("entities/")] + [
+    ordered = [x["path"] for x in manifest["files"] if x["path"] != "index.json"] + [
         "index.json",
         "manifest.json",
     ]
