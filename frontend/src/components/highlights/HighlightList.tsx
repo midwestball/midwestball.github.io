@@ -21,6 +21,7 @@ import {
 } from "@/lib/distribution";
 import { cn } from "@/lib/utils";
 import { DistributionChart } from "@/components/stat-row/TremorDistribution";
+import { HistogramChart } from "@/components/stat-row/HistogramChart";
 import { TeamAbbr } from "@/components/TeamAbbr";
 import { PositionRankLabel } from "@/components/PositionRankLabel";
 
@@ -39,11 +40,12 @@ function formatHighlightValue(row: HighlightRow): string {
 function curveForRow(
   row: HighlightRow,
   weeklyByGroup: Record<string, LeagueGroupJson | null>,
-): { curve: Point[]; xMin: number; xMax: number; yMax: number } | null {
+): { curve: Point[]; bins?: Array<{lower: number; upper: number; count: number}>; xMin: number; xMax: number; yMax: number } | null {
   const shape = weeklyByGroup[row.positionGroup]?.stats?.[row.statId];
-  if (!shape?.curve?.length) return null;
+  if (!shape?.curve?.length && !shape?.bins?.length) return null;
   return {
-    curve: shape.curve,
+    curve: shape.curve ?? [],
+    bins: shape.bins,
     xMin: shape.xMin,
     xMax: shape.xMax,
     yMax: shape.yMax,
@@ -125,7 +127,10 @@ function PerformanceBlock({
           {standing.rest}
         </p>
       ) : null}
-      {shape ? (
+      {row.rarityMethod === "empirical-inclusive-v2" && row.favorableCount != null && <p className="text-xs text-zinc-600">{row.favorableCount} of {row.peerN} qualifying games since 2016 were at least this favorable.</p>}
+      {shape?.bins?.length ? (
+        <HistogramChart label={row.statLabel} bins={shape.bins} format={format} markers={[{name: row.name, value: row.value, color}]} interactive shadeColor={color} />
+      ) : shape ? (
         <DistributionChart
           id={chartId}
           label={row.statLabel}
@@ -192,8 +197,9 @@ function HighlightRowExpandable({
               {row.rank}
             </span>
             <Link
-              href={`/players/${row.playerId}?season=${season}`}
+              href={`/players/?id=${encodeURIComponent(row.playerId)}&season=${season}`}
               onClick={(e) => e.stopPropagation()}
+              onKeyDown={(e) => e.stopPropagation()}
               className="hover:underline"
             >
               {row.name}

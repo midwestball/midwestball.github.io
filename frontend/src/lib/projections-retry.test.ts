@@ -11,6 +11,12 @@ vi.stubEnv("VIZ_STORAGE_BASE_URL","https://example.supabase.co/storage/v1/object
 afterEach(()=>{vi.unstubAllGlobals();});
 
 describe("projection storage resilience",()=>{
+ it("requests the mutable pointer without browser caching",async()=>{
+  const fetchMock=vi.fn(async(url:string, init?:RequestInit)=>{ void init; return String(url).endsWith("current.json")?jsonResponse(POINTER):jsonResponse(INDEX); });
+  vi.stubGlobal("fetch",fetchMock);
+  await loadProjectionSnapshot();
+  expect(fetchMock.mock.calls[0]?.[1]).toMatchObject({cache:"no-store"});
+ });
  it("recovers from a single dropped connection instead of showing an error page",async()=>{
   let calls=0;
   vi.stubGlobal("fetch",vi.fn(async(url:string)=>{

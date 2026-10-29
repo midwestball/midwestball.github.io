@@ -228,7 +228,7 @@ export const QB_STATS: StatDefinition[] = [
     xMax: 6,
     lowerBound: 1.5,
     minNBase: 1,
-    denom: "NGS pass attempts",
+    denom: "NGS weeks",
     source: "nextgen_stats passing",
     startYear: 2016,
     zeroMass: "none",

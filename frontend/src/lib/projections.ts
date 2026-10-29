@@ -49,16 +49,13 @@ function abortError(): Error {
 function isAbort(cause: unknown): boolean {
   return cause instanceof Error && cause.name === "AbortError";
 }
-function readTimeout(ms: number, url: string): Promise<never> {
-  return new Promise((_, reject) => setTimeout(() => reject(new ProjectionLoadError("network", `Projection request timed out for ${url}.`)), ms));
-}
 
 /** One HTTP round trip, with transport failures normalised to ProjectionLoadError. */
-async function requestOnce(url: string, signal?: AbortSignal | null): Promise<Response> {
+async function requestOnce(url: string, init?: RequestInit): Promise<Response> {
   let response: Response;
-  try { response = await fetch(url, signal ? { signal } : undefined); }
+  try { response = await fetch(url, init); }
   catch (cause) {
-    if (isAbort(cause) || signal?.aborted) throw cause;
+    if (isAbort(cause) || init?.signal?.aborted) throw cause;
     throw new ProjectionLoadError("network", "Could not reach projection storage.");
   }
   if (response.status === 404) throw new ProjectionLoadError("unavailable", "No projection snapshot is published.");
@@ -73,6 +70,31 @@ async function parseBody(response: Response): Promise<unknown> {
     // routine teardown into a red "Projection JSON is invalid." banner.
     if (isAbort(cause)) throw cause;
     throw new ProjectionLoadError("invalid", "Projection JSON is invalid.");
+  }
+}
+
+/** Bound both response headers and body parsing; always release the timer. */
+async function requestJson(url: string, init?: RequestInit): Promise<unknown> {
+  const controller = new AbortController();
+  const signal = init?.signal;
+  if (signal?.aborted) throw abortError();
+  const onAbort = () => controller.abort();
+  signal?.addEventListener("abort", onAbort, { once: true });
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => {
+      controller.abort();
+      reject(new ProjectionLoadError("network", "Projection request timed out."));
+    }, SHARED_TIMEOUT_MS);
+  });
+  try {
+    return await Promise.race([
+      requestOnce(url, { ...init, signal: controller.signal }).then(parseBody),
+      timeout,
+    ]);
+  } finally {
+    if (timer) clearTimeout(timer);
+    signal?.removeEventListener("abort", onAbort);
   }
 }
 
@@ -96,8 +118,7 @@ async function sharedJson(url: string): Promise<unknown> {
     try {
       // The shared request carries no caller signal, so it can only be torn down by a
       // browser-level event. It races a timeout instead, which is purgeable.
-      const response = await Promise.race([requestOnce(url), readTimeout(SHARED_TIMEOUT_MS, url)]);
-      return await parseBody(response);
+      return await requestJson(url);
     } catch (error) {
       if (isAbort(error)) throw error;
       if (!isRetriable(error, attempt)) throw error;
@@ -134,7 +155,7 @@ async function json(url: string, init?: RequestInit, cache = false): Promise<unk
   // Uncached (the pointer is always revalidated) stays bound to its caller.
   for (let attempt = 0; ; attempt++) {
     try {
-      return await parseBody(await requestOnce(url, init?.signal));
+      return await requestJson(url, init);
     } catch (error) {
       if (isAbort(error) || init?.signal?.aborted) throw error;
       if (!isRetriable(error, attempt)) throw error;

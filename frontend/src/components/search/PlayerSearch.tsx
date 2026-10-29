@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import {
   STATS_BY_GROUP,
@@ -130,6 +130,7 @@ function sortFantasyRankRows(
 function sortLeaderboardRows(
   rows: LeaderboardRow[],
   mode: SortMode,
+  higherIsBetter: boolean,
 ): LeaderboardRow[] {
   const copy = [...rows];
   copy.sort((a, b) => {
@@ -137,6 +138,14 @@ function sortLeaderboardRows(
     const bNull = b.percentile == null;
     if (aNull !== bNull) return aNull ? 1 : -1;
     if (a.percentile == null || b.percentile == null) {
+      if (a.value == null || b.value == null) {
+        if (a.value == null && b.value != null) return 1;
+        if (a.value != null && b.value == null) return -1;
+      } else {
+        const direction = (higherIsBetter === (mode === "best")) ? -1 : 1;
+        const diff = direction * (a.value - b.value);
+        if (diff !== 0) return diff;
+      }
       return a.playerId.localeCompare(b.playerId);
     }
     const diff =
@@ -199,6 +208,7 @@ type SeasonAffiliation = {
   fantasyPosRank?: number;
   fantasyPosRankKind?: FantasyPosRankKind;
 };
+const EMPTY_AFFILIATION = new Map<string, SeasonAffiliation>();
 
 /** Index bios are latest-only; season boards carry team/position/rank as-of that year. */
 function affiliationFromBoard(board: LeaderboardJson): Map<string, SeasonAffiliation> {
@@ -228,21 +238,18 @@ export function PlayerSearch({
   seasons,
   initialSeason,
 }: PlayerSearchProps) {
-  const [livePlayers, setLivePlayers] = useState(players);
+  const [livePlayers, setLivePlayers] = useState(() => players.filter(player => !player.id.startsWith("demo-")));
   const [liveSeasons, setLiveSeasons] = useState(seasons);
   const [currentSeason, setCurrentSeason] = useState(initialSeason);
   const [query, setQuery] = useState("");
   const [season, setSeason] = useState(initialSeason);
+  const seasonTouched = useRef(false);
   const [group, setGroup] = useState<SearchPositionFilter | null>(null);
   const [statId, setStatId] = useState<string | null>(null);
   const [sortMode, setSortMode] = useState<SortMode>("best");
-  const [minVolume, setMinVolume] = useState<number | null>(null);
-  const [volumeDraft, setVolumeDraft] = useState("");
-  const [board, setBoard] = useState<LeaderboardJson | null>(null);
-  const [boardStatus, setBoardStatus] = useState<BoardStatus>("idle");
-  const [seasonAffiliation, setSeasonAffiliation] = useState(
-    () => new Map<string, SeasonAffiliation>(),
-  );
+  const [volumeChoice, setVolumeChoice] = useState<{key: string; value: number | null; draft: string}>({key: "", value: null, draft: ""});
+  const [boardResult, setBoardResult] = useState<{key: string; board: LeaderboardJson | null; status: BoardStatus}>({key: "", board: null, status: "idle"});
+  const [affiliationResult, setAffiliationResult] = useState<{key: string; map: Map<string, SeasonAffiliation>}>({key: "", map: EMPTY_AFFILIATION});
 
   // Search is statically exported, but its roster and current slice change weekly.
   // Refresh both from Storage so a data upload does not require a site rebuild.
@@ -255,8 +262,7 @@ export function PlayerSearch({
     ]).then(([playerIndex, seasonMeta, current]) => {
       if (cancelled) return;
       if (playerIndex) {
-        const demos = players.filter((player) => player.id.startsWith("demo-"));
-        setLivePlayers([...playerIndex.players, ...demos]);
+        setLivePlayers(playerIndex.players.filter(player => !player.id.startsWith("demo-")));
       }
       if (seasonMeta) {
         const nextSeasons = seasonMeta.seasons.map((row) => ({
@@ -276,7 +282,7 @@ export function PlayerSearch({
       }
       if (current) {
         setCurrentSeason(current.season);
-        setSeason(current.season);
+        if (!seasonTouched.current) setSeason(current.season);
       }
     });
     return () => {
@@ -306,6 +312,11 @@ export function PlayerSearch({
   }, [seasonOptions, season, asOfWeek]);
 
   const boardGroup = group ? boardGroupOf(group) : null;
+  const boardKey = `${season}:${asOfWeek}:${boardGroup ?? ""}`;
+  const board = statId && boardResult.key === boardKey ? boardResult.board : null;
+  const boardStatus: BoardStatus = !boardGroup || !statId ? "idle" : boardResult.key === boardKey ? boardResult.status : "loading";
+  const affiliationKey = `${season}:${asOfWeek}:${boardGroup ?? "all"}`;
+  const seasonAffiliation = !statId && affiliationResult.key === affiliationKey ? affiliationResult.map : EMPTY_AFFILIATION;
   const statEnabled = group != null;
   const sortEnabled = group != null && statId != null;
   const isFantasyRank = statId === FANTASY_RANK_STAT_ID;
@@ -357,6 +368,11 @@ export function PlayerSearch({
     }
     return max;
   }, [statRows, hasVolumeData, volumeMap]);
+  const volumeKey = `${statId ?? ""}:${floor ?? ""}`;
+  const selectedVolume = volumeChoice.key === volumeKey ? volumeChoice.value : floor;
+  const minVolume = selectedVolume == null ? null : volumeMax > 0 ? Math.min(selectedVolume, volumeMax) : selectedVolume;
+  const volumeDraft = volumeChoice.key === volumeKey && (selectedVolume == null || volumeMax <= 0 || selectedVolume <= volumeMax)
+    ? volumeChoice.draft : minVolume == null ? "" : String(minVolume);
 
   /** Interactive when any resolved volume exists (range is 0…max). */
   const volumeInteractive =
@@ -370,33 +386,27 @@ export function PlayerSearch({
 
   useEffect(() => {
     if (!boardGroup || !statId) {
-      setBoard(null);
-      setBoardStatus("idle");
       return;
     }
+    if (boardResult.key === boardKey) return;
     let cancelled = false;
-    setBoard(null);
-    setBoardStatus("loading");
     void fetchLeaderboard(boardGroup, season, asOfWeek)
       .then((payload) => {
         if (cancelled) return;
-        setBoard(payload);
-        setBoardStatus(payload ? "ready" : "error");
+        setBoardResult({key: boardKey, board: payload, status: payload ? "ready" : "error"});
       })
       .catch(() => {
         if (cancelled) return;
-        setBoard(null);
-        setBoardStatus("error");
+        setBoardResult({key: boardKey, board: null, status: "error"});
       });
     return () => {
       cancelled = true;
     };
-  }, [boardGroup, statId, season, asOfWeek]);
+  }, [boardGroup, statId, season, asOfWeek, boardKey, boardResult.key]);
 
   // Bio list has no ranked board; overlay team/position from season leaderboards.
   useEffect(() => {
     if (statId) {
-      setSeasonAffiliation(new Map());
       return;
     }
     let cancelled = false;
@@ -413,36 +423,16 @@ export function PlayerSearch({
             map.set(id, aff);
           }
         }
-        setSeasonAffiliation(map);
+        setAffiliationResult({key: affiliationKey, map});
       })
       .catch(() => {
         if (cancelled) return;
-        setSeasonAffiliation(new Map());
+        setAffiliationResult({key: affiliationKey, map: EMPTY_AFFILIATION});
       });
     return () => {
       cancelled = true;
     };
-  }, [boardGroup, statId, season, asOfWeek]);
-
-  useEffect(() => {
-    if (floor == null) {
-      setMinVolume(null);
-      setVolumeDraft("");
-      return;
-    }
-    // Default to ramp–hold baseline; user may drag/type down to 0.
-    setMinVolume(floor);
-    setVolumeDraft(String(floor));
-  }, [floor, statId]);
-
-  // Board max can arrive after the default; never leave the value above the track.
-  useEffect(() => {
-    if (minVolume == null || volumeMax <= 0) return;
-    if (minVolume > volumeMax) {
-      setMinVolume(volumeMax);
-      setVolumeDraft(String(volumeMax));
-    }
-  }, [volumeMax, minVolume]);
+  }, [boardGroup, statId, season, asOfWeek, affiliationKey]);
 
   function clampVolume(n: number): number {
     const max = Math.max(volumeMax, 0);
@@ -452,14 +442,13 @@ export function PlayerSearch({
 
   function setVolume(next: number) {
     const clamped = clampVolume(next);
-    setMinVolume(clamped);
-    setVolumeDraft(String(clamped));
+    setVolumeChoice({key: volumeKey, value: clamped, draft: String(clamped)});
   }
 
   function commitVolumeDraft() {
     const parsed = Number(volumeDraft.trim());
     if (!Number.isFinite(parsed)) {
-      setVolumeDraft(String(minVolume ?? floor ?? 0));
+      setVolumeChoice({key: volumeKey, value: minVolume, draft: String(minVolume ?? floor ?? 0)});
       return;
     }
     setVolume(parsed);
@@ -531,7 +520,7 @@ export function PlayerSearch({
       // NGS / missing-source boards: fall back to Ballnet ramp–hold flag.
       return row.qualified;
     });
-    return sortLeaderboardRows(filtered, sortMode);
+    return sortLeaderboardRows(filtered, sortMode, selectedStat?.higherIsBetter ?? true);
   }, [
     board,
     statId,
@@ -542,6 +531,7 @@ export function PlayerSearch({
     effectiveMin,
     volumeMap,
     statRows,
+    selectedStat,
   ]);
 
   const showRanked = Boolean(group && statId);
@@ -565,7 +555,7 @@ export function PlayerSearch({
         />
         <select
           value={season}
-          onChange={(event) => setSeason(Number(event.target.value))}
+          onChange={(event) => { seasonTouched.current = true; setSeason(Number(event.target.value)); }}
           aria-label="Season"
           className={`${controlEnabled} shrink-0`}
         >
@@ -688,12 +678,8 @@ export function PlayerSearch({
             disabled={!volumeInteractive}
             onChange={(event) => {
               const raw = event.target.value;
-              setVolumeDraft(raw);
-              if (raw.trim() === "") return;
               const parsed = Number(raw);
-              if (Number.isFinite(parsed)) {
-                setMinVolume(clampVolume(parsed));
-              }
+              setVolumeChoice({key: volumeKey, value: raw.trim() !== "" && Number.isFinite(parsed) ? clampVolume(parsed) : minVolume, draft: raw});
             }}
             onBlur={commitVolumeDraft}
             onKeyDown={(event) => {
@@ -723,7 +709,7 @@ export function PlayerSearch({
             {rankedRows.map((row) => (
               <li key={row.playerId}>
                 <Link
-                  href={`/players/${row.playerId}?season=${season}`}
+                  href={`/players/?id=${encodeURIComponent(row.playerId)}&season=${season}`}
                   className="flex items-center justify-between rounded-none border border-zinc-200 bg-white px-3 py-2 hover:bg-zinc-50"
                 >
                   <div>
@@ -762,7 +748,7 @@ export function PlayerSearch({
                         <p className="text-xs text-zinc-400">
                           {row.percentile != null
                             ? `${Math.round(row.percentile)}%`
-                            : "—"}
+                            : row.value != null ? "Unqualified · raw value" : "—"}
                         </p>
                       </>
                     )}
@@ -784,7 +770,7 @@ export function PlayerSearch({
             {bioResults.map((player) => (
               <li key={player.id}>
                 <Link
-                  href={`/players/${player.id}?season=${season}`}
+                  href={`/players/?id=${encodeURIComponent(player.id)}&season=${season}`}
                   className="flex items-center justify-between rounded-none border border-zinc-200 bg-white px-3 py-2 hover:bg-zinc-50"
                 >
                   <div>

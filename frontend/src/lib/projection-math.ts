@@ -2,6 +2,21 @@ import type { ProjectionEntityDistribution } from "@/lib/projections";
 
 const EPS = 1e-12;
 
+/** Probability bounds from histogram counts; an interior bin is not interpolated. */
+export function histogramProbabilityAtLeast(edges: readonly number[], counts: readonly number[], threshold: number): { lower: number; upper: number } {
+  if (!Number.isFinite(threshold) || counts.length === 0 || edges.length !== counts.length + 1 ||
+      edges.some((x, i) => !Number.isFinite(x) || (i > 0 && x <= edges[i - 1]!)) ||
+      counts.some(c => !Number.isInteger(c) || c < 0)) throw new Error("Invalid histogram");
+  const total = counts.reduce((n, c) => n + c, 0);
+  if (!total) throw new Error("Histogram has no draws");
+  let certain = 0, possible = 0;
+  counts.forEach((count, i) => {
+    if (threshold <= edges[i]!) { certain += count; possible += count; }
+    else if (threshold < edges[i + 1]! || (i === counts.length - 1 && threshold === edges[i + 1])) possible += count;
+  });
+  return { lower: certain / total, upper: possible / total };
+}
+
 function assertCurve(grid: readonly number[], curve: ProjectionEntityDistribution) {
   if (grid.length < 2 || curve.pdf.length !== grid.length || curve.cdf.length !== grid.length) {
     throw new Error("Projection grid and distribution lengths do not match");

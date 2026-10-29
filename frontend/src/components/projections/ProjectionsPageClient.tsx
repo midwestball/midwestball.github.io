@@ -21,7 +21,9 @@ export function ProjectionsPageClient(){const searchParams=useSearchParams();con
   loadProjectionSnapshot(ctl.signal).then(s=>{
    if(ctl.signal.aborted)return;
    const parsed=parseProjectionSelection(initialUrl.toString(),new Set(s.index.entities.map(e=>e.entityKey)));
-   setSnapshot(s);setSelected(parsed.selected);setFocus(parsed.focus);setStale(parsed.stale);setStatus("ready");
+   const anchor=s.index.entities.find(e=>e.entityKey===parsed.selected[0]);
+   const compatible=parsed.selected.filter(id=>{const entity=s.index.entities.find(e=>e.entityKey===id);return !!entity&&(!anchor||canCompare(anchor.position,entity.position));});
+   setSnapshot(s);setSelected(compatible);setFocus(parsed.focus&&compatible.includes(parsed.focus)?parsed.focus:(compatible[0]??null));setStale(parsed.stale+parsed.selected.length-compatible.length);setStatus("ready");
   }).catch(e=>{
    if(ctl.signal.aborted)return;
    if(e instanceof Error&&e.name==="AbortError")return;
@@ -31,7 +33,7 @@ export function ProjectionsPageClient(){const searchParams=useSearchParams();con
   return()=>ctl.abort();
   // eslint-disable-next-line react-hooks/exhaustive-deps
  },[revision]);
- const updateUrl=useCallback((ids:string[],focused:string|null)=>{const p=new URLSearchParams();if(ids.length)p.set("p",ids.join(","));if(focused)p.set("focus",focused);history.replaceState(null,"",`${location.pathname}${p.size?`?${p}`:""}`)},[]);
+ const updateUrl=useCallback((ids:string[],focused:string|null)=>{const p=new URLSearchParams(location.search);p.delete("p");p.delete("focus");if(ids.length)p.set("p",ids.join(","));if(focused)p.set("focus",focused);history.replaceState(null,"",`${location.pathname}${p.size?`?${p}`:""}`)},[]);
   useEffect(()=>{
   const run=++curveRun.current;
   if(!snapshot||selected.length===0)return;

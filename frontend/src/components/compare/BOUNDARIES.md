@@ -4,7 +4,7 @@
 
 - Cap selection at **4** players; URL state is `/compare?p=id1,id2&season=YYYY` (`/ffoptim` only redirects).
 - Restrict the picker to one catalog **position group** after the first player is chosen so rows align on `stat.id`.
-- Expanded rows use **one** `CompareOverlayChart` (shared league curve + per-player markers). Chart fill/focus color comes from `compareFillColor`. Slider thumbs stay Savant percentile colored.
+- Expanded rows use one shared league histogram with per-player markers for version 2, or the legacy shared curve for version 1. Slider thumbs stay Savant percentile colored.
 - Marker labels use `shortPlayerName` (`F. Last`) and stack by descending oriented percentile.
 - Keep square chrome (`rounded-none`, no pills/shadows).
 - Season-scoped position on column meta uses `PositionRankLabel` from the hydrated page (`fantasyPosRank` / kind). Picker chips stay index-only (no rank).

@@ -8,7 +8,7 @@ The frontend renders JSON. Ballnet computes it. Do not put a SQL/PostgREST clien
 
 Hydration (`hydratePlayerStats`) always walks the **full position catalog**. Missing snapshots stay `pending`. `alwaysUnavailable` catalog flags become `not_in_nflverse` even if Ballnet sends a row. Load path: `loadHydratedPlayerSnapshots` merges league shapes first.
 
-Rate stats are stored **0–1**. Percentile is inclusive CDF \(P(X \le x)\), already oriented so the slider's 100 is "good".
+Rate stats are stored **0–1**. Version 2 percentiles are oriented empirical midranks among qualified peers, with ties split evenly. Version 1 historical snapshots retain their legacy KDE interpretation.
 
 Optional `player.fantasyPosRank` + `player.fantasyPosRankKind` (`"consensus"` | `"finish"`) are season-scoped fantasy position ranks for **QB / WR / RB / TE** only. Live season is FantasyPros weekly ECR; closed seasons are PPR finish. Omit the fields rather than invent a rank. Not present on `index/players.json`.
 
@@ -21,11 +21,11 @@ schemaVersion: 1
 season, asOfWeek, completedWeek, positionGroup
 stats: { [statId]: {
   kind, xMin, xMax, yMax,    # kind is catalog metadata (formatting)
-  curve,                     # reflected KDE for every id
+  bins, valueCounts,         # v2 observed histogram and aggregated exact-value counts
 } }
 ```
 
-`ready` rows require non-empty `curve[]` after league merge. Histograms (`bins`) and rug `samples` are not part of the contract.
+Version 2 `ready` rows require a non-empty histogram and a published percentile. Version 1 legacy payloads may still supply `curve[]`; they must not be mixed with v2 scalar snapshots.
 
 ## Recommended Ballnet store (visualization only)
 
@@ -55,7 +55,7 @@ player_stat_values
 
 `as_of_week` is the latest REG week included in the YTD slice (partial slates allowed). Ramp–hold uses `min_n = n_base × min(completed_week, 5)` in Ballnet, then sets `qualified`. `completed_week` is the last consecutive REG week where every scheduled game has scores, floored at 1 and capped at `as_of_week`. Publish `completedWeek` on pages, league, leaderboards, and `index/{current,seasons}.json`. Legacy JSON without the field: treat `completedWeek = asOfWeek`.
 
-Publish path: Storage (or local `data/`) serves **scalar** `PlayerPageJson` plus **shared** `league/*.json`. The frontend merges at fetch time — still not a runtime SQL client. Weekly home boards are separate Stage H objects under `highlights/{season}/w{week}.json`. Highlight rows may include optional `fantasyPosRank`, snapped `rarityTier` (`10^k`), and nested `also[]` (same-player secondary performances); `rank` on that board is z-score order among unique players, not fantasy position. Expand charts load allowlist single-game KDEs from `dists/league_weekly/{season}/w{week}/{group}.json` (`scope: "league_game_all_time"` — peers from 2016+ through the board week) — never the YTD `league/` curves.
+Publish path: Storage (or local `data/`) serves **scalar** `PlayerPageJson` plus **shared** `league/*.json`. The frontend merges at fetch time — still not a runtime SQL client. Weekly home boards are separate Stage H objects under `highlights/{season}/w{week}.json`. Version 2 highlight rarity uses inclusive observed favorable peer counts, rounded down to a 1/2/5 ladder, with nested `also[]` performances; `rank` is empirical rarity order, not fantasy position. Expanded charts use single-game peer histograms from `dists/league_weekly/{season}/w{week}/{group}.json`, with peers from 2016 through the board week. Legacy v1 boards retain their z-score ordering and do not display an empirical rarity badge.
 
 ## Search leaderboard payload
 

@@ -16,6 +16,7 @@ export type StatAvailabilityStatus =
   | "ready"
   | "pending"
   | "insufficient_sample"
+  | "insufficient_peers"
   | "missing_source"
   | "not_in_nflverse";
 
@@ -36,6 +37,9 @@ export type StatPayload = {
   minN: number | null;
   denom: string;
   curve: Point[];
+  bins?: Array<{ lower: number; upper: number; count: number }>;
+  valueCounts?: Array<{ value: number; count: number }>;
+  nSample?: number;
   kind: "continuous" | "discrete";
   lowerBound?: number;
   upperBound?: number;
@@ -104,6 +108,13 @@ export function kdeCdf(curve: Point[], value: number): number {
 }
 
 export function percentileAt(stat: StatPayload, value: number): number {
+  if (stat.valueCounts?.length) {
+    const n = stat.valueCounts.reduce((total, row) => total + row.count, 0);
+    if (!n) return 0;
+    const worse = stat.valueCounts.reduce((total, row) => total + ((stat.higherIsBetter ? row.value < value : row.value > value) ? row.count : 0), 0);
+    const ties = stat.valueCounts.reduce((total, row) => total + (row.value === value ? row.count : 0), 0);
+    return 100 * (worse + ties / 2) / n;
+  }
   const pct = kdeCdf(stat.curve, value) * 100;
   return stat.higherIsBetter ? pct : 100 - pct;
 }
@@ -118,9 +129,9 @@ export function playerStandingParts(stat: StatPayload): {
   const value =
     stat.playerValue == null ? "—" : formatStatValue(stat.format, stat.playerValue);
   return {
-    prefix: `${value} ${stat.label} is better than `,
-    pctLabel: `${pct}%`,
-    rest: ` of the rest of the league. ${note}`,
+    prefix: `${value} ${stat.label} is in the `,
+    pctLabel: `${ordinal(pct)} percentile`,
+    rest: stat.bins?.length ? ` among ${stat.nSample ?? "qualified"} qualified players; ties split evenly. ${note}` : ` of the modeled league distribution. ${note}`,
   };
 }
 
@@ -250,31 +261,20 @@ export function hoverSigmaStandingCopy(
 }
 
 /** Order-of-magnitude rarity ladder (matches ballnet.scoring.RARITY_TIERS). */
-export const RARITY_TIERS = [
-  10, 100, 1_000, 10_000, 100_000, 1_000_000, 10_000_000, 100_000_000, 1_000_000_000,
-] as const;
+export const RARITY_TIERS = Array.from({ length: 10 }, (_, k) => [1, 2, 5].map(n => n * 10 ** k)).flat();
 
 /** Geometric nearest snap onto RARITY_TIERS (log space). */
 export function snapOneInN(n: number | null | undefined): number | null {
   if (n == null || !Number.isFinite(n) || n < 1) return null;
-  const value = Math.max(1, Math.round(n));
-  let best: number = RARITY_TIERS[0];
-  let bestDist = Math.abs(Math.log(value) - Math.log(best));
-  for (let i = 1; i < RARITY_TIERS.length; i += 1) {
-    const tier = RARITY_TIERS[i]!;
-    const dist = Math.abs(Math.log(value) - Math.log(tier));
-    if (dist < bestDist) {
-      best = tier;
-      bestDist = dist;
-    }
-  }
-  return best;
+  return RARITY_TIERS.filter(tier => tier <= n).at(-1) ?? null;
 }
 
 export function resolveRarityTier(row: {
   rarityTier?: number | null;
   oneInN: number | null;
+  rarityMethod?: string;
 }): number | null {
+  if (row.rarityMethod !== "empirical-inclusive-v2") return null;
   if (row.rarityTier != null && Number.isFinite(row.rarityTier)) {
     return row.rarityTier;
   }
@@ -286,12 +286,12 @@ export function formatOneInN(tier: number): string {
 }
 
 const RARITY_COLORS: Record<number, string> = {
-  10: "rgb(112, 168, 104)", // dark bronze
-  100: "rgb(173, 130, 80)", // light bronze
-  1_000: "rgb(168, 169, 173)", // silver
-  10_000: "rgb(212, 175, 55)", // gold
-  100_000: "rgb(126, 200, 227)", // diamond
-  1_000_000: "rgb(123, 94, 167)", // purple
+  10: "rgb(112, 168, 104)", // common
+  50: "rgb(173, 130, 80)", // bronze
+  100: "rgb(168, 169, 173)", // silver
+  1_000: "rgb(212, 175, 55)", // gold
+  10_000: "rgb(126, 200, 227)", // diamond
+  100_000: "rgb(123, 94, 167)", // purple
 };
 
 /** Higher 10^k reuse purple, stepping slightly lighter. */
@@ -302,6 +302,7 @@ export function rarityTierColor(tier: number): string {
   if (tier >= 10_000) return RARITY_COLORS[10_000]!;
   if (tier >= 1_000) return RARITY_COLORS[1_000]!;
   if (tier >= 100) return RARITY_COLORS[100]!;
+  if (tier >= 50) return RARITY_COLORS[50]!;
   return RARITY_COLORS[10]!;
 }
 
@@ -309,9 +310,9 @@ export function rarityTierContrastText(tier: number): string {
   return savantContrastText(rarityTierColor(tier));
 }
 
-/** Shimmer on every tier except dark bronze (10). */
+/** Shimmer on bronze and rarer tiers. */
 export function rarityTierShimmer(tier: number): boolean {
-  return tier >= 100;
+  return tier >= 50;
 }
 
 export function rarityStandingParts(stat: {
@@ -331,10 +332,10 @@ export function rarityStandingParts(stat: {
   return {
     prefix: `${value} ${stat.label} is `,
     rarityLabel: formatOneInN(stat.rarityTier),
-    rest: ` versus single-game peers all-time. ${note}`,
+    rest: ` or more common among qualifying single-game peers since 2016. ${note}`,
   };
 }
 
 export function hoverRarityStandingCopy(label: string, rarityTier: number): string {
-  return `This ${label} is ${formatOneInN(rarityTier)} versus single-game peers all-time.`;
+  return `This ${label} is ${formatOneInN(rarityTier)} or more common among qualifying single-game peers since 2016.`;
 }

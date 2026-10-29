@@ -1,7 +1,7 @@
 import type { HighlightRow } from "@/lib/payload";
 
 /**
- * One primary row per player (highest zScore); nest the rest as `also`.
+ * One primary row per player by empirical rarity (legacy boards use zScore).
  * Safe on already-collapsed boards (flattens existing `also` then re-nests).
  */
 export function collapseHighlightsByPlayer(
@@ -11,15 +11,17 @@ export function collapseHighlightsByPlayer(
 
   const flat: HighlightRow[] = [];
   for (const row of rows) {
-    const { also, rank: _rank, ...primary } = row;
+    const { also, rank, ...primary } = row;
+    void rank;
     flat.push(primary as HighlightRow);
     for (const secondary of also ?? []) {
-      const { also: _a, rank: _r, ...rest } = secondary;
+      const { also: nested, rank: secondaryRank, ...rest } = secondary;
+      void nested; void secondaryRank;
       flat.push(rest as HighlightRow);
     }
   }
 
-  flat.sort((a, b) => b.zScore - a.zScore);
+  flat.sort((a, b) => (b.rarityScore ?? b.zScore) - (a.rarityScore ?? a.zScore));
 
   const byPlayer = new Map<string, HighlightRow[]>();
   const order: string[] = [];
@@ -37,7 +39,8 @@ export function collapseHighlightsByPlayer(
     const head = group[0]!;
     const primary: HighlightRow = { ...head, rank: index + 1 };
     const alsoRows = group.slice(1).map((row) => {
-      const { also: _a, rank: _r, ...rest } = row;
+      const { also: nested, rank, ...rest } = row;
+      void nested; void rank;
       return rest as HighlightRow;
     });
     if (alsoRows.length > 0) primary.also = alsoRows;

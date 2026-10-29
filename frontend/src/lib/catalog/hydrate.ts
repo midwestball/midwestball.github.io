@@ -10,7 +10,8 @@ function availabilityFor(
   if (!snapshot) return "pending";
   if (snapshot.unavailableReason) return snapshot.unavailableReason;
   if (!snapshot.qualified) return "insufficient_sample";
-  return Boolean(snapshot.curve?.length) ? "ready" : "pending";
+  if (snapshot.bins?.length && snapshot.percentile == null) return "insufficient_peers";
+  return Boolean(snapshot.bins?.length || snapshot.curve?.length) ? "ready" : "pending";
 }
 
 export function hydratePlayerStats(
@@ -30,7 +31,7 @@ export function hydratePlayerStats(
       higherIsBetter: definition.higherIsBetter,
       format: definition.format,
       availability,
-      minN: definition.minNBase,
+      minN: snapshot?.minN ?? definition.minNBase,
       denom: definition.denom,
       xMin: snapshot?.xMin ?? definition.xMin,
       xMax: snapshot?.xMax ?? definition.xMax,
@@ -38,6 +39,9 @@ export function hydratePlayerStats(
       playerValue: snapshot?.playerValue ?? null,
       percentile: snapshot?.percentile ?? null,
       curve: snapshot?.curve ?? [],
+      bins: snapshot?.bins,
+      valueCounts: snapshot?.valueCounts,
+      nSample: snapshot?.nSample,
       kind: definition.kind,
       lowerBound: snapshot?.lowerBound ?? definition.lowerBound,
       upperBound: snapshot?.upperBound ?? definition.upperBound,

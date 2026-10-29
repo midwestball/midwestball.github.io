@@ -12,6 +12,7 @@ import {
 } from "recharts";
 import { formatStatValue } from "@/lib/catalog/format";
 import type { ValueFormat } from "@/lib/catalog/types";
+import { HistogramChart } from "./HistogramChart";
 import {
   CHART_PLOT,
   hoverStandingCopy,
@@ -199,6 +200,9 @@ type TremorDistributionProps = {
 
 /** Player-page wrapper: percentile color + percentile hover copy. */
 export function TremorDistribution({ stat }: TremorDistributionProps) {
+  if (stat.playerValue != null && stat.percentile != null && stat.bins?.length) {
+    return <HistogramChart label={stat.label} bins={stat.bins} format={stat.format} markers={[{ name: "Player", value: stat.playerValue, color: percentileColor(stat.percentile) }]} />;
+  }
   if (
     stat.playerValue == null ||
     stat.percentile == null ||

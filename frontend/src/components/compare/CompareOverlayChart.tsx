@@ -23,6 +23,7 @@ import {
 } from "@/lib/distribution";
 import { isStatReady } from "@/lib/stat-status";
 import { cn } from "@/lib/utils";
+import { HistogramChart } from "@/components/stat-row/HistogramChart";
 
 const LABEL_STEP = 24;
 const RIGHT_MARGIN = 108;
@@ -206,8 +207,7 @@ export function CompareOverlayChart({
         (m) =>
           isStatReady(m.stat) &&
           m.stat.playerValue != null &&
-          m.stat.percentile != null &&
-          m.stat.curve.length > 0,
+          m.stat.percentile != null,
       )
       .map((m) => ({
         ...m,
@@ -256,6 +256,10 @@ export function CompareOverlayChart({
         No ready distributions for this row yet.
       </div>
     );
+  }
+
+  if (template.bins?.length) {
+    return <div className="space-y-2"><p className="text-xs text-zinc-600">{statDescription(template.id)}</p><HistogramChart label={template.label} bins={template.bins} format={template.format} markers={readyMarkers.map(m => ({ name: m.name, value: m.value, color: m.color }))} /></div>;
   }
 
   const shadeId = `compare-shade-${reactId}`;

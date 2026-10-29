@@ -7,7 +7,7 @@ export function isStatReady(
     stat.availability === "ready" &&
     stat.playerValue != null &&
     stat.percentile != null &&
-    stat.curve.length > 0
+    (stat.curve.length > 0 || Boolean(stat.bins?.length))
   );
 }
 
@@ -21,6 +21,8 @@ export function availabilityCopy(stat: StatPayload): string {
       return stat.minN != null
         ? `Not enough sample yet. Needs ${stat.minN} ${stat.denom}`
         : "Not enough sample yet for a stable percentile.";
+    case "insufficient_peers":
+      return "Not enough qualified peers to calculate a percentile.";
     case "pending":
       return "Waiting on an update. The row is listed so the position catalog is complete.";
     case "ready":

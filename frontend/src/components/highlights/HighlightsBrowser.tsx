@@ -35,7 +35,7 @@ function sideTop(
   groups: PositionGroup[],
 ): HighlightRow[] {
   const rows = groups.flatMap((g) => byGroup?.[g] ?? []);
-  rows.sort((a, b) => b.zScore - a.zScore);
+  rows.sort((a, b) => (b.rarityScore ?? b.zScore) - (a.rarityScore ?? a.zScore));
   return rows.slice(0, SIDE_TOP_N).map((row, i) => ({ ...row, rank: i + 1 }));
 }
 
@@ -53,10 +53,8 @@ function HighlightListPreview({
   /** Change when season/week changes so “see more” collapses again. */
   resetKey: string;
 }) {
-  const [expanded, setExpanded] = useState(false);
-  useEffect(() => {
-    setExpanded(false);
-  }, [resetKey]);
+  const [expansion, setExpansion] = useState({ key: resetKey, expanded: false });
+  const expanded = expansion.key === resetKey && expansion.expanded;
 
   const visible =
     expanded || rows.length <= initialVisible
@@ -74,7 +72,7 @@ function HighlightListPreview({
       {hiddenCount > 0 ? (
         <button
           type="button"
-          onClick={() => setExpanded((v) => !v)}
+          onClick={() => setExpansion({ key: resetKey, expanded: !expanded })}
           className="text-xs text-zinc-400 hover:text-zinc-600"
         >
           {expanded ? "See less" : "See more"}
@@ -147,6 +145,7 @@ export function HighlightsBrowser({
     season: searchParams.get("season"),
     week: searchParams.get("week"),
   });
+  const selectionTouched = useRef(false);
   const [latestSeason, setLatestSeason] = useState(currentSeason);
   const [latestWeek, setLatestWeek] = useState(currentWeek);
 
@@ -189,9 +188,12 @@ export function HighlightsBrowser({
   const [weeklyByGroup, setWeeklyByGroup] = useState<
     Record<string, LeagueGroupJson | null>
   >({});
-  const [status, setStatus] = useState<"loading" | "ready" | "empty" | "error">(
+  const [responseStatus, setStatus] = useState<"loading" | "ready" | "empty" | "error">(
     "loading",
   );
+  const [responseKey, setResponseKey] = useState("");
+  const sliceKey = `${season}-${week}`;
+  const status = responseKey === sliceKey ? responseStatus : "loading";
 
   const weekOptions = useMemo(() => {
     const max = maxWeekFor(season);
@@ -230,8 +232,10 @@ export function HighlightsBrowser({
         requestedWeek >= 1 &&
         requestedWeek <= maxWeek;
 
-      setSeason(selectedSeason);
-      setWeek(hasRequestedWeek ? requestedWeek : maxWeek);
+      if (!selectionTouched.current) {
+        setSeason(selectedSeason);
+        setWeek(hasRequestedWeek ? requestedWeek : maxWeek);
+      }
     })();
 
     return () => {
@@ -255,9 +259,6 @@ export function HighlightsBrowser({
 
   useEffect(() => {
     let cancelled = false;
-    setStatus("loading");
-    setBoard(null);
-    setWeeklyByGroup({});
 
     void (async () => {
       try {
@@ -267,6 +268,7 @@ export function HighlightsBrowser({
           setBoard(null);
           setWeeklyByGroup({});
           setStatus("empty");
+          setResponseKey(sliceKey);
           return;
         }
         const entries = await Promise.all(
@@ -282,20 +284,20 @@ export function HighlightsBrowser({
           (g) => (nextBoard.byGroup?.[g]?.length ?? 0) > 0,
         );
         setStatus(hasRows ? "ready" : "empty");
+        setResponseKey(sliceKey);
       } catch {
-        if (!cancelled) setStatus("error");
+        if (!cancelled) { setStatus("error"); setResponseKey(sliceKey); }
       }
     })();
 
     return () => {
       cancelled = true;
     };
-  }, [season, week]);
+  }, [season, week, sliceKey]);
 
   const byGroup = board?.byGroup;
   const offenseTop = sideTop(byGroup, OFFENSE_GROUPS);
   const hasBoard = status === "ready";
-  const sliceKey = `${season}-${week}`;
 
   return (
     <div>
@@ -307,6 +309,7 @@ export function HighlightsBrowser({
               <select
                 value={season}
                 onChange={(e) => {
+                  selectionTouched.current = true;
                   const next = Number(e.target.value);
                   setSeason(next);
                   setWeek((w) => Math.min(w, maxWeekFor(next)));
@@ -324,7 +327,7 @@ export function HighlightsBrowser({
               Week
               <select
                 value={week}
-                onChange={(e) => setWeek(Number(e.target.value))}
+                onChange={(e) => { selectionTouched.current = true; setWeek(Number(e.target.value)); }}
                 className={selectClass}
               >
                 {weekOptions.map((w) => (
@@ -339,9 +342,10 @@ export function HighlightsBrowser({
             Highlights
           </h1>
           <p className="mt-1 max-w-xl text-sm leading-5 text-zinc-600">
-            Best single-game offensive performances. Ranked by z-score versus
-            all-time single-game peers — expand a row for the league
-            distribution and any other standout stats from the same player.
+            Best single-game offensive performances. {board?.schemaVersion === 2
+              ? "Ranked by observed rarity among qualifying games since 2016."
+              : "Legacy boards are ranked by standardized scores among qualifying games since 2016."}
+            {" "}Expand a row for the peer distribution and other standout stats.
           </p>
         </div>
       </div>

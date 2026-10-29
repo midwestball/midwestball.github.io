@@ -48,7 +48,7 @@ export function ComparePageClient({
   currentSeason: number;
 }) {
   const searchParams = useSearchParams();
-  const [livePlayers, setLivePlayers] = useState(players);
+  const [livePlayers, setLivePlayers] = useState(() => players.filter(player => !player.id.startsWith("demo-")));
   const [liveSeasonOptions, setLiveSeasonOptions] = useState(seasonOptions);
   const [latestSeason, setLatestSeason] = useState(currentSeason);
 
@@ -61,8 +61,7 @@ export function ComparePageClient({
     ]).then(([playerIndex, seasonMeta, current]) => {
       if (cancelled) return;
       if (playerIndex) {
-        const demos = players.filter((player) => player.id.startsWith("demo-"));
-        setLivePlayers([...playerIndex.players, ...demos]);
+        setLivePlayers(playerIndex.players.filter(player => !player.id.startsWith("demo-")));
       }
       if (seasonMeta) {
         setLiveSeasonOptions(
@@ -106,24 +105,22 @@ export function ComparePageClient({
     : undefined;
 
   const [columns, setColumns] = useState<CompareColumn[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [loadedKey, setLoadedKey] = useState("");
+  const requestKey = `${season}:${positionGroup ?? ""}:${selectedBios.map(b => `${b.id}:${b.position}`).join(",")}`;
+  const loading = sameGroup && Boolean(positionGroup) && selectedBios.length > 0 && loadedKey !== requestKey;
+  const displayedColumns = loadedKey === requestKey && selectedBios.length > 0 ? columns : [];
 
   useEffect(() => {
     if (!sameGroup || !positionGroup || selectedIds.length === 0) {
-      setColumns([]);
-      setLoading(false);
       return;
     }
     const bios = selectedIds
       .map((id) => livePlayers.find((player) => player.id === id))
       .filter((player): player is PlayerBio => Boolean(player));
     if (bios.length === 0) {
-      setColumns([]);
-      setLoading(false);
       return;
     }
     let cancelled = false;
-    setLoading(true);
     void Promise.all(
       bios.map(async (bio) => {
         const { page, snapshots } = await loadHydratedPlayerSnapshots(
@@ -146,12 +143,16 @@ export function ComparePageClient({
     ).then((loaded) => {
       if (cancelled) return;
       setColumns(loaded);
-      setLoading(false);
+      setLoadedKey(requestKey);
+    }).catch(() => {
+      if (cancelled) return;
+      setColumns([]);
+      setLoadedKey(requestKey);
     });
     return () => {
       cancelled = true;
     };
-  }, [sameGroup, positionGroup, selectedIds, livePlayers, season]);
+  }, [sameGroup, positionGroup, selectedIds, livePlayers, season, requestKey]);
 
   const groupLabel =
     positionGroup != null ? GROUP_LABEL[positionGroup] : null;
@@ -193,14 +194,14 @@ export function ComparePageClient({
           <div className="rounded-none border border-zinc-200 bg-white px-3 py-4 text-sm leading-5 text-zinc-600">
             Loading comparison…
           </div>
-        ) : columns.length === 0 ? (
+        ) : displayedColumns.length === 0 ? (
           <div className="rounded-none border border-zinc-200 bg-white px-3 py-4 text-sm leading-5 text-zinc-600">
             Select players above to align their percentile sliders and league
             distributions.
           </div>
         ) : (
           <div className="rounded-none border border-zinc-200 bg-white max-md:-mx-4 max-md:border-x-0">
-            <CompareBoard columns={columns} />
+            <CompareBoard columns={displayedColumns} />
           </div>
         )}
       </main>

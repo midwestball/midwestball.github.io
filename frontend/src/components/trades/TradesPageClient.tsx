@@ -70,6 +70,7 @@ export function TradesPageClient() {
   return <main className="mx-auto max-w-5xl space-y-4 px-4 py-5">
     <header><p className="text-xs font-semibold uppercase tracking-[0.2em] text-zinc-500">{snapshot.season} · ROS through week {snapshot.cutoffWeek} · Full PPR</p>
       <h1 className="text-3xl font-semibold tracking-tight">Trade analysis</h1>
+      <p className="mt-2 border border-amber-300 bg-amber-50 p-2 text-sm text-amber-900"><strong>Experimental:</strong> Rest-of-season forecasts have not passed a separate ROS validation gate. Current injury news is not an input. Updated <time dateTime={snapshot.generatedAt}>{new Date(snapshot.generatedAt).toLocaleString()}</time>.</p>
       <p className="mt-1 max-w-3xl text-sm text-zinc-600">Compare remaining regular-season points using each player’s median projection. Add your roster to see how a trade changes your best starting lineup.</p>
     </header>
     <div role="group" aria-label="Trade comparison mode" className="flex gap-1">{[true, false].map(value => <button key={String(value)} onClick={() => changeMode(value)} aria-pressed={rosterAware === value} className={`border px-3 py-2 text-sm font-semibold ${rosterAware === value ? "border-zinc-900 bg-zinc-900 text-white" : "border-zinc-300 bg-white text-zinc-600"}`}>{value ? "My roster" : "Player packages"}</button>)}</div>

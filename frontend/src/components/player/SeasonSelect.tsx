@@ -19,7 +19,9 @@ export function SeasonSelect({
       <select
         value={season}
         onChange={(event) => {
-          router.push(`/players/${playerId}/?season=${event.target.value}`);
+          router.push(playerId.startsWith("demo-")
+            ? `/players/${encodeURIComponent(playerId)}/?season=${event.target.value}`
+            : `/players/?id=${encodeURIComponent(playerId)}&season=${event.target.value}`);
         }}
         className="h-8 rounded-none border border-zinc-200 bg-white px-2 text-sm text-zinc-900 outline-none focus:border-zinc-400"
       >

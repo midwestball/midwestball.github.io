@@ -153,7 +153,7 @@ export const BACKFIELD_STATS: StatDefinition[] = [
     label: "NGS Efficiency",
     section: "NGS",
     kind: "continuous",
-    higherIsBetter: true,
+    higherIsBetter: false,
     format: "ratio",
     xMin: 0,
     xMax: 8,

@@ -10,6 +10,7 @@ export type JsonStatSnapshot = {
   percentile: number | null;
   qualified: boolean;
   denomYtd?: number;
+  minN?: number;
   kind: "continuous" | "discrete";
   xMin?: number;
   xMax?: number;
@@ -17,6 +18,9 @@ export type JsonStatSnapshot = {
   lowerBound?: number;
   upperBound?: number;
   curve?: Point[];
+  bins?: Array<{ lower: number; upper: number; count: number }>;
+  valueCounts?: Array<{ value: number; count: number }>;
+  nSample?: number;
   unavailableReason?: Exclude<StatAvailabilityStatus, "ready" | "pending">;
 };
 
@@ -34,7 +38,7 @@ export type PlayerBio = {
 };
 
 export type PlayerPageJson = {
-  schemaVersion?: 1;
+  schemaVersion?: 1 | 2;
   player: PlayerBio;
   season: number;
   asOfWeek: number;
@@ -56,6 +60,9 @@ export type HighlightRow = {
   value: number;
   zScore: number;
   peerN: number;
+  favorableCount?: number;
+  rarityScore?: number;
+  rarityMethod?: string;
   oneInN: number | null;
   /** Geometric snap of oneInN onto 10^k (10, 100, 1000, …). */
   rarityTier?: number | null;
@@ -67,7 +74,7 @@ export type HighlightRow = {
 };
 
 export type HighlightsBoardJson = {
-  schemaVersion: 1;
+  schemaVersion: 1 | 2;
   season: number;
   week: number;
   generatedAt?: string;
@@ -92,7 +99,7 @@ export type LeaderboardRow = {
 };
 
 export type LeaderboardJson = {
-  schemaVersion: 1;
+  schemaVersion: 1 | 2;
   season: number;
   asOfWeek: number;
   /** Last fully scored REG week used for ramp–hold. Falls back to asOfWeek. */

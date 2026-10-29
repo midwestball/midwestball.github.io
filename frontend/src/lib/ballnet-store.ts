@@ -8,7 +8,9 @@ import type {
 } from "@/lib/payload";
 import type { Point } from "@/lib/distribution";
 import type { PositionGroup } from "@/lib/catalog/types";
+import { positionGroupOf } from "@/lib/catalog/positions";
 import { vizStorageBase } from "@/lib/viz-config";
+import { ballnetDatasetBase } from "@/lib/ballnet-dataset";
 
 export type SeasonsEnvelope = {
   schemaVersion: 1;
@@ -36,10 +38,14 @@ export type LeagueStatShape = {
   lowerBound?: number;
   upperBound?: number;
   curve?: Point[];
+  representation?: "histogram";
+  bins?: Array<{ lower: number; upper: number; count: number }>;
+  valueCounts?: Array<{ value: number; count: number }>;
+  nSample?: number;
 };
 
 export type LeagueGroupJson = {
-  schemaVersion: 1;
+  schemaVersion: 1 | 2;
   season: number;
   asOfWeek: number;
   completedWeek?: number;
@@ -49,9 +55,9 @@ export type LeagueGroupJson = {
   stats: Record<string, LeagueStatShape>;
 };
 
-async function tryFetchRemoteJson<T>(url: string): Promise<T | null> {
+async function tryFetchRemoteJson<T>(url: string, init?: RequestInit): Promise<T | null> {
   try {
-    const res = await fetch(url);
+    const res = await fetch(url, init);
     if (!res.ok) return null;
     return (await res.json()) as T;
   } catch {
@@ -59,36 +65,38 @@ async function tryFetchRemoteJson<T>(url: string): Promise<T | null> {
   }
 }
 
-async function loadStorageJson<T>(rel: string): Promise<T | null> {
-  const base = vizStorageBase();
+async function loadStorageJson<T>(rel: string, init?: RequestInit): Promise<T | null> {
+  const root = vizStorageBase();
+  if (!root) return null;
+  const base = await ballnetDatasetBase(root);
   if (!base) return null;
-  return tryFetchRemoteJson<T>(`${base}/${rel}`);
+  return tryFetchRemoteJson<T>(`${base}/${rel}`, init);
 }
 
 export const loadSeasonsMeta = cache(async (): Promise<SeasonsEnvelope | null> =>
-  loadStorageJson<SeasonsEnvelope>("index/seasons.json"),
+  loadStorageJson<SeasonsEnvelope>("index/seasons.json", { cache: "no-store" }),
 );
 
 export const loadCurrentMeta = cache(async (): Promise<CurrentEnvelope | null> =>
-  loadStorageJson<CurrentEnvelope>("index/current.json"),
+  loadStorageJson<CurrentEnvelope>("index/current.json", { cache: "no-store" }),
 );
 
 /** Client-side current pointer. Unlike the server helper, this is not build-cached. */
 export async function fetchCurrentMeta(): Promise<CurrentEnvelope | null> {
-  return loadStorageJson<CurrentEnvelope>("index/current.json");
+  return loadStorageJson<CurrentEnvelope>("index/current.json", { cache: "no-store" });
 }
 
 export const loadPlayersIndex = cache(async (): Promise<PlayersEnvelope | null> =>
-  loadStorageJson<PlayersEnvelope>("index/players.json"),
+  loadStorageJson<PlayersEnvelope>("index/players.json", { cache: "no-store" }),
 );
 
 /** Client-side index loaders for static pages that must track weekly uploads. */
 export async function fetchPlayersIndex(): Promise<PlayersEnvelope | null> {
-  return loadStorageJson<PlayersEnvelope>("index/players.json");
+  return loadStorageJson<PlayersEnvelope>("index/players.json", { cache: "no-store" });
 }
 
 export async function fetchSeasonsMeta(): Promise<SeasonsEnvelope | null> {
-  return loadStorageJson<SeasonsEnvelope>("index/seasons.json");
+  return loadStorageJson<SeasonsEnvelope>("index/seasons.json", { cache: "no-store" });
 }
 
 /** Final published as-of week for a season, if Ballnet has published it. */
@@ -168,6 +176,7 @@ export function mergeLeagueIntoSnapshots(
       xMax: shape.xMax,
       yMax: shape.yMax,
       curve: shape.curve ?? [],
+      ...(shape.representation === "histogram" ? { bins: shape.bins ?? [], valueCounts: shape.valueCounts ?? [], nSample: shape.nSample } : {}),
       ...(shape.lowerBound != null ? { lowerBound: shape.lowerBound } : {}),
       ...(shape.upperBound != null ? { upperBound: shape.upperBound } : {}),
     };
@@ -179,7 +188,9 @@ export async function loadPlayerPageJson(
   opts?: { season?: number; asOfWeek?: number },
 ): Promise<PlayerPageJson | null> {
   const current = await resolveCurrentPointer();
-  const base = vizStorageBase();
+  const root = vizStorageBase();
+  if (!root) return null;
+  const base = await ballnetDatasetBase(root);
   if (!base) return null;
 
   let week = opts?.asOfWeek;
@@ -200,6 +211,7 @@ export async function loadPlayerPageJson(
     const page = await tryFetchRemoteJson<PlayerPageJson>(url);
     if (!page) continue;
     if (opts?.season != null && page.season !== opts.season) continue;
+    if (opts?.asOfWeek != null && page.asOfWeek !== opts.asOfWeek) continue;
     return page;
   }
   return null;
@@ -211,6 +223,7 @@ export async function loadHydratedPlayerSnapshots(
   positionGroup: PositionGroup | string,
   opts?: { season?: number; asOfWeek?: number },
 ): Promise<{ page: PlayerPageJson | null; snapshots: JsonStatSnapshot[] }> {
+  void positionGroup; // Historical page affiliation determines the peer group.
   const page = await loadPlayerPageJson(playerId, opts);
   if (!page) return { page: null, snapshots: [] };
 
@@ -218,10 +231,13 @@ export async function loadHydratedPlayerSnapshots(
     season: page.season,
     asOfWeek: page.asOfWeek,
   };
-  const league = await loadLeagueGroupJson(positionGroup, leagueOpts);
+  const pageGroup = positionGroupOf(page.player.position);
+  const league = await loadLeagueGroupJson(pageGroup, leagueOpts);
+  const compatible = league && (page.schemaVersion ?? 1) === league.schemaVersion &&
+    league.season === page.season && league.asOfWeek === page.asOfWeek && league.positionGroup === pageGroup;
   return {
     page,
-    snapshots: mergeLeagueIntoSnapshots(page.stats ?? [], league),
+    snapshots: mergeLeagueIntoSnapshots(page.stats ?? [], compatible ? league : null),
   };
 }
 

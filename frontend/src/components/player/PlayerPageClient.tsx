@@ -54,31 +54,42 @@ export function PlayerPageClient({
   }, [livePlayer.seasons, seasonParam, latestSeason]);
 
   const positionGroup = positionGroupOf(livePlayer.position);
-  const groupLabel = GROUP_LABEL[positionGroup];
 
   const [pageJson, setPageJson] = useState<PlayerPageJson | null>(null);
   const [stats, setStats] = useState<StatPayload[]>([]);
-  const [status, setStatus] = useState<"loading" | "ready">("loading");
+  const [loadedKey, setLoadedKey] = useState("");
+  const [loadError, setLoadError] = useState("");
+  const [retry, setRetry] = useState(0);
+  const requestKey = `${livePlayer.id}:${livePlayer.position}:${season}`;
+  const status = loadedKey === requestKey ? "ready" : "loading";
 
   useEffect(() => {
     let cancelled = false;
-    setStatus("loading");
     void loadHydratedPlayerSnapshots(livePlayer.id, positionGroup, { season }).then(
       ({ page, snapshots }) => {
         if (cancelled) return;
         setPageJson(page);
-        setStats(hydratePlayerStats(livePlayer.position, snapshots));
-        setStatus("ready");
+        setStats(hydratePlayerStats(page?.player.position ?? livePlayer.position, snapshots));
+        setLoadError("");
+        setLoadedKey(requestKey);
       },
-    );
+    ).catch(() => {
+      if (cancelled) return;
+      setPageJson(null);
+      setStats([]);
+      setLoadError("Could not load this player’s statistics.");
+      setLoadedKey(requestKey);
+    });
     return () => {
       cancelled = true;
     };
-  }, [livePlayer.id, livePlayer.position, positionGroup, season]);
+  }, [livePlayer.id, livePlayer.position, positionGroup, season, requestKey, retry]);
 
-  const hasSnapshot = Boolean(pageJson);
-  const displayPosition = pageJson?.player.position ?? livePlayer.position;
-  const displayTeam = pageJson?.player.team ?? livePlayer.team;
+  const displayedPage = loadedKey === requestKey ? pageJson : null;
+  const hasSnapshot = Boolean(displayedPage);
+  const displayPosition = displayedPage?.player.position ?? livePlayer.position;
+  const displayTeam = displayedPage?.player.team ?? livePlayer.team;
+  const groupLabel = GROUP_LABEL[positionGroupOf(displayPosition)];
 
   return (
     <div>
@@ -116,8 +127,8 @@ export function PlayerPageClient({
             <p className="flex flex-wrap items-center gap-x-1.5 text-sm text-zinc-500">
               <PositionRankLabel
                 position={displayPosition}
-                rank={pageJson?.player.fantasyPosRank}
-                kind={pageJson?.player.fantasyPosRankKind}
+                rank={displayedPage?.player.fantasyPosRank}
+                kind={displayedPage?.player.fantasyPosRankKind}
               />
               <span aria-hidden>·</span>
               <TeamAbbr team={displayTeam} />
@@ -125,8 +136,8 @@ export function PlayerPageClient({
               <span>{season}</span>
             </p>
             <p className="mt-1 text-xs text-zinc-400">
-              {hasSnapshot && pageJson
-                ? `As of week ${pageJson.asOfWeek}`
+              {hasSnapshot && displayedPage
+                ? `As of week ${displayedPage.asOfWeek}`
                 : "Current season · no snapshot yet"}
             </p>
           </div>
@@ -134,7 +145,8 @@ export function PlayerPageClient({
       </div>
 
       <main className="mx-auto max-w-3xl px-4 py-4">
-        <TremorVariant stats={stats} />
+        {loadError && loadedKey === requestKey && <p role="alert" className="mb-3 text-sm text-red-700">{loadError} <button className="underline" onClick={() => { setLoadedKey(""); setRetry(n => n + 1); }}>Retry</button></p>}
+        <TremorVariant stats={displayedPage ? stats : []} />
         <div className="mt-4 rounded-none border border-zinc-200 bg-white px-3 py-2">
           <SeasonSelect
             playerId={livePlayer.id}

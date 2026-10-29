@@ -1,7 +1,11 @@
 import { describe,expect,it } from "vitest";
-import { canCompare,pointsAtProbability,probabilityAtLeast,probabilityAtPoints,resolveThreshold } from "./projection-math";
+import { canCompare,histogramProbabilityAtLeast,pointsAtProbability,probabilityAtLeast,probabilityAtPoints,resolveThreshold } from "./projection-math";
 import type { ProjectionEntityDistribution } from "./projections";
 const curve:ProjectionEntityDistribution={schemaVersion:1,snapshotId:"s",entityKey:"e",expectedPoints:1,yMax:1,pdf:[0,1,0],cdf:[0,.5,1],lowerBound:null,bandwidth:1,nModelDraws:10000};
+it("returns exact edge probabilities and bounds inside a histogram bin",()=>{
+  expect(histogramProbabilityAtLeast([-1,0,1,2],[1,2,1],0)).toEqual({lower:.75,upper:.75});
+  expect(histogramProbabilityAtLeast([-1,0,1,2],[1,2,1],.2)).toEqual({lower:.25,upper:.75});
+});
 describe("projection math",()=>{it("integrates a partial trapezoid, not linear CDF",()=>expect(probabilityAtPoints([0,1,2],curve,.5)).toBeCloseTo(.125));it("inverts the quadratic",()=>{const x=pointsAtProbability([0,1,2],curve,.125);expect(x).toBeCloseTo(.5);expect(probabilityAtPoints([0,1,2],curve,x)).toBeCloseTo(.125)});it("maps endpoints",()=>{expect(pointsAtProbability([0,1,2],curve,0)).toBe(0);expect(pointsAtProbability([0,1,2],curve,1)).toBe(2)});it("uses the left edge of a plateau",()=>{const c={...curve,pdf:[1,0,0,1],cdf:[0,.5,.5,1]};expect(pointsAtProbability([0,1,2,3],c,.5)).toBe(1)});it("preserves the last-edited source",()=>expect(resolveThreshold([0,1,2],curve,{source:"points",value:.5}).points).toBeCloseTo(.5));
  it("reports the chance of scoring AT LEAST the threshold",()=>{const r=resolveThreshold([0,1,2],curve,{source:"points",value:.5});expect(r.atMost).toBeCloseTo(.125);expect(r.probability).toBeCloseTo(.875)});
  it("probabilityAtLeast is the complement of the CDF",()=>{for(const x of [0,.5,1,1.5,2]) expect(probabilityAtLeast([0,1,2],curve,x)).toBeCloseTo(1-probabilityAtPoints([0,1,2],curve,x))});

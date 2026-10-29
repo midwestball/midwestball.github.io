@@ -81,7 +81,7 @@ export const KICKER_STATS: StatDefinition[] = [
     xMax: 4,
     binWidth: 1,
     minNBase: 1,
-    denom: "attempts in bucket",
+    denom: "field-goal attempts",
     source: "fg_made_40_49",
     startYear: 1999,
     zeroMass: "high",

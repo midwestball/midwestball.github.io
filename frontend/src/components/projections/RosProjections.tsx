@@ -14,6 +14,7 @@ export function RosProjections() {
     <header className="border-b border-zinc-200 bg-white"><div className="mx-auto max-w-5xl px-4 py-5">
       <p className="text-xs font-semibold uppercase tracking-[0.2em] text-zinc-500">Rest of season · {snapshot.season} · through week {snapshot.cutoffWeek}</p>
       <h1 className="text-3xl font-semibold tracking-tight">Projections</h1>
+      <p className="mt-2 border border-amber-300 bg-amber-50 p-2 text-sm text-amber-900"><strong>Experimental:</strong> Rest-of-season forecasts have not passed a separate ROS validation gate. Current injury news is not an input.</p>
       <p className="mt-1 text-sm text-zinc-600">Remaining regular-season fantasy points, including missed-game risk. Full PPR. Updated <time dateTime={snapshot.generatedAt}>{new Date(snapshot.generatedAt).toLocaleString()}</time>.</p>
     </div></header>
     <main className="mx-auto max-w-5xl space-y-4 px-4 py-4">

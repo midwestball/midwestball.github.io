@@ -6,9 +6,10 @@
 - Home layout: offense overall (preview 8 + “See more”) → offense by group (preview 3 + “See more”). Defense sections are hidden until distribution issues are fixed (note in hero). Season + week pickers (2016–current); URL `?season=&week=` for shareable links.
 - Keep square chrome (`rounded-none`, hairline borders) matching search rows.
 - Expand with Framer Motion like a stat row; chart from `dists/league_weekly` via props — never invent a curve. Curves are all-time single-game peers (`scope: "league_game_all_time"`).
-- Show snapped **`rarityTier`** (“1 in N”) chips colored by the bronze→purple ladder; shimmer on tiers ≥ 100. Prefer published `rarityTier`; fall back to client `snapOneInN(oneInN)` for older boards.
+- Show empirical **`rarityTier`** (“1 in N”) chips: bronze from 50, silver from 100, gold from 1,000, diamond from 10,000, and purple from 100,000. Shimmer starts at bronze.
+- Highlight histograms shade whole bins through the hovered or focused bin and show the observed bin and cumulative shares. Preserve the published bin-edge semantics.
 - One list row per player (primary = highest `zScore`). Nested `also[]` performances render only when expanded (“Also this week”). `HighlightList` always runs `collapseHighlightsByPlayer` so older boards without `also` still dedupe.
-- Link player name to `/players/{id}?season=` from the board’s season (`stopPropagation` so the link does not toggle expand).
+- Link player name to the static-safe `/players/?id={id}&season=` route using the board's season (`stopPropagation` so the link does not toggle expand).
 - Render published `fantasyPosRank` on the position label via `PositionRankLabel`. Tooltip copy is kind-specific. `stopPropagation` so the subscript does not toggle expand.
 
 ## Ask First
