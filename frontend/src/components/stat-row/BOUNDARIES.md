@@ -6,7 +6,7 @@
 - Render charts only when `isStatReady` — gray unavailable states for pending / insufficient / missing / not_in_nflverse.
 - Use Recharts + square chrome (`rounded-none`, no shadows).
 - Player percentile badge comes from Ballnet JSON; do not re-orient in the chart layer.
-- Version 2 stat rows use observed histogram bins and empirical midranks. Legacy version 1 snapshots may continue to display their KDE until migrated.
+- Player stat rows show the original reflected Gaussian KDE. Version 2 reconstructs it from exact peer-value counts and retains empirical midrank percentiles; version 1 uses its published KDE.
 
 ## Ask First
 

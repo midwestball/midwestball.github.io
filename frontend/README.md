@@ -10,3 +10,5 @@ npm run build                # static export → out/
 ```
 
 Reads Ballnet viz JSON from public Supabase Storage only. Deployed via the repo-root GitHub Actions Pages workflow.
+
+Player and comparison distributions use the original reflected Gaussian KDE; v2 data reconstructs the curve from exact peer-value counts while retaining empirical percentiles. Highlights use observed single-game histograms.

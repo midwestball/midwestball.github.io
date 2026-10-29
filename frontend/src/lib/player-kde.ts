@@ -1,4 +1,4 @@
-import type { Point } from "@/lib/distribution";
+import type { Point, StatPayload } from "@/lib/distribution";
 
 type ValueCount = { value: number; count: number };
 type Domain = { xMin: number; xMax: number; lowerBound?: number; upperBound?: number };
@@ -41,4 +41,14 @@ export function playerKdeFromCounts(counts: ValueCount[], domain: Domain): Playe
   for (let i = 1; i < curve.length; i++) integral += (curve[i - 1].y + curve[i].y) * dx / 2;
   const normalized = integral > 0 ? curve.map(point => ({ ...point, y: point.y / integral })) : curve;
   return { curve: normalized, xMin, xMax, yMax: Math.max(...normalized.map(point => point.y)) };
+}
+
+/** Legacy curves are kept verbatim; v2 curves use exact counts, never histogram bins. */
+export function playerKdeForStat(stat: StatPayload): PlayerKde | null {
+  if (stat.curve.length) return { curve: stat.curve, xMin: stat.xMin, xMax: stat.xMax, yMax: stat.yMax };
+  return playerKdeFromCounts(stat.valueCounts ?? [], {
+    ...(stat.kdeDomain ?? { xMin: stat.xMin, xMax: stat.xMax }),
+    lowerBound: stat.lowerBound,
+    upperBound: stat.upperBound,
+  });
 }

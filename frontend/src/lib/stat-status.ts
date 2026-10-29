@@ -7,7 +7,7 @@ export function isStatReady(
     stat.availability === "ready" &&
     stat.playerValue != null &&
     stat.percentile != null &&
-    (stat.curve.length > 0 || Boolean(stat.bins?.length))
+    (stat.curve.length > 0 || Boolean(stat.valueCounts?.length))
   );
 }
 

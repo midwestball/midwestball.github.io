@@ -1,5 +1,6 @@
 "use client";
 
+import { useMemo } from "react";
 import {
   Area,
   CartesianGrid,
@@ -12,7 +13,7 @@ import {
 } from "recharts";
 import { formatStatValue } from "@/lib/catalog/format";
 import type { ValueFormat } from "@/lib/catalog/types";
-import { HistogramChart } from "./HistogramChart";
+import { playerKdeForStat } from "@/lib/player-kde";
 import {
   CHART_PLOT,
   hoverStandingCopy,
@@ -200,13 +201,11 @@ type TremorDistributionProps = {
 
 /** Player-page wrapper: percentile color + percentile hover copy. */
 export function TremorDistribution({ stat }: TremorDistributionProps) {
-  if (stat.playerValue != null && stat.percentile != null && stat.bins?.length) {
-    return <HistogramChart label={stat.label} bins={stat.bins} format={stat.format} markers={[{ name: "Player", value: stat.playerValue, color: percentileColor(stat.percentile) }]} />;
-  }
+  const chart = useMemo(() => playerKdeForStat(stat), [stat]);
   if (
     stat.playerValue == null ||
     stat.percentile == null ||
-    stat.curve.length === 0
+    !chart
   ) {
     return null;
   }
@@ -217,11 +216,11 @@ export function TremorDistribution({ stat }: TremorDistributionProps) {
       label={stat.label}
       playerValue={stat.playerValue}
       higherIsBetter={stat.higherIsBetter}
-      xMin={stat.xMin}
-      xMax={stat.xMax}
-      yMax={stat.yMax}
+      xMin={chart.xMin}
+      xMax={chart.xMax}
+      yMax={chart.yMax}
       format={stat.format}
-      curve={stat.curve}
+      curve={chart.curve}
       color={percentileColor(stat.percentile)}
       hoverStanding={(x) => hoverStandingCopy(stat, x)}
     />

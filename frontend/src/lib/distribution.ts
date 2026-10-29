@@ -5,8 +5,8 @@
  * (continuous vs discrete) is formatting metadata only — it does not
  * select a histogram. Y-axis = KDE density (∫y dx ≈ 1).
  *
- * `format` is a catalog enum (JSON-safe). Percentile is inclusive CDF P(X ≤ x),
- * already oriented so high = good.
+ * `format` is a catalog enum (JSON-safe). V2 percentiles are empirical
+ * midranks; legacy percentiles come from the KDE. Both are oriented high = good.
  */
 
 import type { ValueFormat } from "@/lib/catalog/types";
@@ -40,6 +40,8 @@ export type StatPayload = {
   bins?: Array<{ lower: number; upper: number; count: number }>;
   valueCounts?: Array<{ value: number; count: number }>;
   nSample?: number;
+  /** Catalog domain used for the original KDE's degenerate-sample padding. */
+  kdeDomain?: { xMin: number; xMax: number };
   kind: "continuous" | "discrete";
   lowerBound?: number;
   upperBound?: number;

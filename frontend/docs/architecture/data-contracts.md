@@ -25,7 +25,7 @@ stats: { [statId]: {
 } }
 ```
 
-Version 2 `ready` rows require a non-empty histogram and a published percentile. Version 1 legacy payloads may still supply `curve[]`; they must not be mixed with v2 scalar snapshots.
+Version 2 player rows require exact peer-value counts and a published percentile. The player and comparison charts reconstruct the original reflected Gaussian KDE from those counts using the catalog bounds and Scott bandwidth; they do not derive a curve from histogram bins. Percentiles remain empirical. Version 1 rows use their published `curve[]`; they must not be mixed with v2 scalar snapshots. Highlight charts continue to use the observed single-game histogram bins.
 
 ## Recommended Ballnet store (visualization only)
 

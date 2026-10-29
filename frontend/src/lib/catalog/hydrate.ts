@@ -11,7 +11,7 @@ function availabilityFor(
   if (snapshot.unavailableReason) return snapshot.unavailableReason;
   if (!snapshot.qualified) return "insufficient_sample";
   if (snapshot.bins?.length && snapshot.percentile == null) return "insufficient_peers";
-  return Boolean(snapshot.bins?.length || snapshot.curve?.length) ? "ready" : "pending";
+  return Boolean(snapshot.valueCounts?.length || snapshot.curve?.length) ? "ready" : "pending";
 }
 
 export function hydratePlayerStats(
@@ -42,6 +42,7 @@ export function hydratePlayerStats(
       bins: snapshot?.bins,
       valueCounts: snapshot?.valueCounts,
       nSample: snapshot?.nSample,
+      kdeDomain: { xMin: definition.xMin, xMax: definition.xMax },
       kind: definition.kind,
       lowerBound: snapshot?.lowerBound ?? definition.lowerBound,
       upperBound: snapshot?.upperBound ?? definition.upperBound,

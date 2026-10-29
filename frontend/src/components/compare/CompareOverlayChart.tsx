@@ -23,7 +23,7 @@ import {
 } from "@/lib/distribution";
 import { isStatReady } from "@/lib/stat-status";
 import { cn } from "@/lib/utils";
-import { HistogramChart } from "@/components/stat-row/HistogramChart";
+import { playerKdeForStat } from "@/lib/player-kde";
 
 const LABEL_STEP = 24;
 const RIGHT_MARGIN = 108;
@@ -223,12 +223,13 @@ export function CompareOverlayChart({
   }, [markers, fills]);
 
   const template = readyMarkers[0]?.stat;
+  const chart = useMemo(() => template ? playerKdeForStat(template) : null, [template]);
   const focusMarker =
     readyMarkers.find((m) => m.playerId === focusId) ?? null;
 
   const curveData: CurveRow[] = useMemo(() => {
-    if (!template) return [];
-    let curve: Point[] = template.curve;
+    if (!template || !chart) return [];
+    let curve: Point[] = chart.curve;
     if (focusMarker) {
       curve = insertValuePoint(curve, focusMarker.value);
     }
@@ -248,18 +249,14 @@ export function CompareOverlayChart({
               ? point.y
               : null,
     }));
-  }, [template, focusMarker]);
+  }, [template, chart, focusMarker]);
 
-  if (!template || readyMarkers.length === 0) {
+  if (!template || !chart || readyMarkers.length === 0) {
     return (
       <div className="rounded-none border border-zinc-200 bg-zinc-50 px-3 py-6 text-center text-sm text-zinc-500">
         No ready distributions for this row yet.
       </div>
     );
-  }
-
-  if (template.bins?.length) {
-    return <div className="space-y-2"><p className="text-xs text-zinc-600">{statDescription(template.id)}</p><HistogramChart label={template.label} bins={template.bins} format={template.format} markers={readyMarkers.map(m => ({ name: m.name, value: m.value, color: m.color }))} /></div>;
   }
 
   const shadeId = `compare-shade-${reactId}`;
@@ -270,7 +267,6 @@ export function CompareOverlayChart({
     focusMarker != null
       ? percentileContrastText(focusMarker.percentile)
       : undefined;
-  const standingNote = template.higherIsBetter ? "or lower" : "or higher";
   const description = statDescription(template.id);
 
   return (
@@ -296,7 +292,7 @@ export function CompareOverlayChart({
             >
               {Math.round(focusMarker.percentile)}%
             </span>
-            {` of the league has a ${template.label} of ${formatStatValue(template.format, focusMarker.value)} ${standingNote}.`}
+            {` peer standing for ${template.label}: ${formatStatValue(template.format, focusMarker.value)}.`}
           </>
         ) : (
           "Hover or click a name to shade that player’s standing on the league curve."
@@ -340,7 +336,7 @@ export function CompareOverlayChart({
             <XAxis
               dataKey="x"
               type="number"
-              domain={[template.xMin, template.xMax]}
+              domain={[chart.xMin, chart.xMax]}
               tickLine={false}
               axisLine={false}
               tick={{ fill: "#71717a", fontSize: 11 }}
@@ -352,7 +348,7 @@ export function CompareOverlayChart({
             />
             <YAxis
               width={CHART_PLOT.left}
-              domain={[0, template.yMax]}
+              domain={[0, chart.yMax]}
               tickLine={false}
               axisLine={false}
               tick={{ fill: "#71717a", fontSize: 11 }}
