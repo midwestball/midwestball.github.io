@@ -20,3 +20,7 @@ Player discovery normalizes punctuation and diacritics and accepts conservative 
 ## Published leaderboard filters
 
 Discovery uses season boards, oriented percentiles, published fantasy ranks, and completed-week ramp?hold qualification. WR and TE share one pass-catcher board. Run `npm run test -- src/lib/search/leaderboards.test.ts`.
+
+## Share URL schemas
+
+Search uses `p,season,pos,stat,sort,min,q`; projections use route-specific `p,focus,points`. Trades use readable `v=1&r=ID,~IR_ID&g=GIVE&a=RECEIVE&d=DROP` with optional fixed-order slot settings. Invalid trade imports report errors without partial repair. Run `npm run test -- src/lib/share-state`.

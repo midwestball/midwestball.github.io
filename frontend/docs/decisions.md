@@ -7,3 +7,7 @@ All meaningful tokens must match a name or explicit metadata field. One edit is 
 ## Leaderboard domain boundary
 
 Pure discovery helpers retain published ranks, null ordering and joined volume semantics; filtering never changes comparison selections or recomputes published statistics.
+
+## Versioned scenario links
+
+Trade URL versioning is independent of saved roster schema v1. Pure parsers reject invalid ownership, overlap, duplicate entries, unsupported versions and oversized lists. Unknown snapshot IDs stay visible as warnings; links select current published data rather than freezing forecasts. Appearance never travels in links.
