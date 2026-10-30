@@ -1,9 +1,9 @@
 "use client";
 import type { useLeaderboardDiscovery } from "./useLeaderboardDiscovery";
 import { FILTER_OPTIONS, FANTASY_RANK_BOARD_GROUPS, FANTASY_RANK_STAT_ID, type SearchPositionFilter } from "@/lib/search/leaderboards";
-const controlBase = "h-9 border border-zinc-200 bg-white px-2 text-sm outline-none rounded-none";
-const controlEnabled = `${controlBase} text-zinc-900 focus:border-zinc-400`;
-const controlDisabled = `${controlBase} cursor-not-allowed border-zinc-100 bg-zinc-50 text-zinc-400`;
+const controlBase = "h-9 border border-border bg-card px-2 text-sm outline-none rounded-none";
+const controlEnabled = `${controlBase} text-foreground focus:border-ring`;
+const controlDisabled = `${controlBase} cursor-not-allowed border-border bg-muted text-muted-foreground`;
 export function PlayerLeaderboardFilters({ model, children }: { model: ReturnType<typeof useLeaderboardDiscovery>; children?: React.ReactNode }) {
   const { query, setQuery, season, setSeason, seasonOptions, group, onSelectGroup, statId, onSelectStat, statEnabled, sortEnabled, boardGroup, statOptions, sortMode, setSortMode, volumeInteractive, volumeVisible, hasVolumeData, boardStatus, volumeMax, floor, volumeLabel, sliderMax, sliderValue, setVolume, volumeDraft, setVolumeChoice, volumeKey, clampVolume, minVolume, commitVolumeDraft } = model;
   return <>      <div className="flex items-center gap-1.5">
@@ -13,7 +13,7 @@ export function PlayerLeaderboardFilters({ model, children }: { model: ReturnTyp
           value={query}
           onChange={(event) => setQuery(event.target.value)}
           placeholder="Search players, positions, teams"
-          className="h-9 min-w-0 flex-1 rounded-none border border-zinc-200 bg-white px-2 text-sm text-zinc-900 outline-none placeholder:text-zinc-400 focus:border-zinc-400"
+          className="h-9 min-w-0 flex-1 rounded-none border border-border bg-card px-2 text-sm text-foreground outline-none placeholder:text-muted-foreground focus:border-ring"
         />
         )}
         <select
@@ -32,7 +32,7 @@ export function PlayerLeaderboardFilters({ model, children }: { model: ReturnTyp
 
       <div className="flex flex-wrap items-center gap-x-1.5 gap-y-2">
         <div className="flex flex-wrap items-center gap-1.5">
-          <span className="shrink-0 text-xs font-semibold tracking-[0.15em] text-zinc-500 uppercase">
+          <span className="shrink-0 text-xs font-semibold tracking-[0.15em] text-muted-foreground uppercase">
             Filter
           </span>
           <select
@@ -74,10 +74,10 @@ export function PlayerLeaderboardFilters({ model, children }: { model: ReturnTyp
               onClick={() => setSortMode("best")}
               className={`h-9 border px-2 text-sm rounded-none ${
                 !sortEnabled
-                  ? "cursor-not-allowed border-zinc-100 bg-zinc-50 text-zinc-400"
+                  ? "cursor-not-allowed border-border bg-muted text-muted-foreground"
                   : sortMode === "best"
-                    ? "border-zinc-900 bg-zinc-900 text-white"
-                    : "border-zinc-200 bg-white text-zinc-700 hover:bg-zinc-50"
+                    ? "border-ring bg-primary text-primary-foreground"
+                    : "border-border bg-card text-text-secondary hover:bg-muted"
               }`}
             >
               Best
@@ -88,10 +88,10 @@ export function PlayerLeaderboardFilters({ model, children }: { model: ReturnTyp
               onClick={() => setSortMode("worst")}
               className={`h-9 border border-l-0 px-2 text-sm rounded-none ${
                 !sortEnabled
-                  ? "cursor-not-allowed border-zinc-100 bg-zinc-50 text-zinc-400"
+                  ? "cursor-not-allowed border-border bg-muted text-muted-foreground"
                   : sortMode === "worst"
-                    ? "border-zinc-900 bg-zinc-900 text-white"
-                    : "border-zinc-200 bg-white text-zinc-700 hover:bg-zinc-50"
+                    ? "border-ring bg-primary text-primary-foreground"
+                    : "border-border bg-card text-text-secondary hover:bg-muted"
               }`}
             >
               Worst
@@ -115,7 +115,7 @@ export function PlayerLeaderboardFilters({ model, children }: { model: ReturnTyp
         >
           <label
             htmlFor="min-volume"
-            className="shrink-0 text-xs text-zinc-500 whitespace-nowrap"
+            className="shrink-0 text-xs text-muted-foreground whitespace-nowrap"
           >
             Min Volume
           </label>
@@ -128,7 +128,7 @@ export function PlayerLeaderboardFilters({ model, children }: { model: ReturnTyp
             value={volumeVisible ? sliderValue : 0}
             disabled={!volumeInteractive}
             onChange={(event) => setVolume(Number(event.target.value))}
-            className="h-9 min-w-0 flex-1 cursor-pointer accent-zinc-900 disabled:cursor-not-allowed"
+            className="h-9 min-w-0 flex-1 cursor-pointer accent-primary disabled:cursor-not-allowed"
             aria-label={`Minimum ${volumeLabel}`}
           />
           <input
@@ -152,8 +152,8 @@ export function PlayerLeaderboardFilters({ model, children }: { model: ReturnTyp
             }}
             className={`h-9 w-11 shrink-0 rounded-none border px-0.5 text-right text-sm tabular-nums outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none ${
               volumeInteractive
-                ? "border-zinc-200 bg-white text-zinc-900 focus:border-zinc-400"
-                : "cursor-not-allowed border-zinc-100 bg-zinc-50 text-zinc-400"
+                ? "border-border bg-card text-foreground focus:border-ring"
+                : "cursor-not-allowed border-border bg-muted text-muted-foreground"
             }`}
             aria-label={`Minimum ${volumeLabel} value`}
           />

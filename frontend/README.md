@@ -52,3 +52,7 @@ A shared trade opens as a temporary preview. Editing it updates its URL without 
 ## Automatic appearance
 
 CSS follows effective browser light/dark preference, defaults to charcoal when indeterminate, and updates live. No theme control is shown. The reserved `midwestball-theme-preference-v1` key accepts `system|light|dark`; explicit overrides apply before paint and synchronize across tabs. Run `npm run test -- src/lib/theme`.
+
+## Semantic feature surfaces
+
+Panels, forms, selected actions, warnings, unavailable states and keyboard focus use semantic tokens across all routes; percentile and team identities retain their original colors. Run `npm run test` for feature regressions.

@@ -73,19 +73,19 @@ function CompareCell({
         type="button"
         aria-expanded={open}
         onClick={onToggle}
-        className="flex h-full w-full min-w-0 flex-col items-stretch justify-center gap-0.5 px-1 py-1 text-left hover:bg-zinc-50/80 md:flex-row md:items-center md:gap-2 md:px-2"
+        className="flex h-full w-full min-w-0 flex-col items-stretch justify-center gap-0.5 px-1 py-1 text-left hover:bg-muted/80 md:flex-row md:items-center md:gap-2 md:px-2"
       >
         <ChevronRight
           className={cn(
             "hidden size-4 shrink-0 transition-transform duration-300 md:block",
             open && "rotate-90",
-            !ready && "text-zinc-400",
+            !ready && "text-muted-foreground",
           )}
         />
         <span
           className={cn(
-            "min-w-0 truncate text-left text-[11px] font-semibold tabular-nums text-zinc-900 md:w-[4.75rem] md:shrink-0 md:text-sm",
-            !ready && "font-normal text-zinc-400",
+            "min-w-0 truncate text-left text-[11px] font-semibold tabular-nums text-foreground md:w-[4.75rem] md:shrink-0 md:text-sm",
+            !ready && "font-normal text-muted-foreground",
           )}
         >
           {stat.playerValue == null
@@ -98,8 +98,8 @@ function CompareCell({
             disabled={!ready}
             alignWithChart={false}
             className="max-md:px-2"
-            trackClassName="bg-zinc-200/60"
-            thumbClassName="border-white max-md:size-5 max-md:text-[9px]"
+            trackClassName="bg-muted/60"
+            thumbClassName="border-card max-md:size-5 max-md:text-[9px]"
           />
         </div>
       </button>
@@ -169,18 +169,18 @@ export function CompareBoard({ columns }: { columns: CompareColumn[] }) {
           { "--compare-cols": String(colCount) } as React.CSSProperties
         }
       >
-        <div className="border-b border-zinc-200 px-1 py-2 md:px-2" />
+        <div className="border-b border-border px-1 py-2 md:px-2" />
         {columns.map((col) => (
           <div
             key={col.playerId}
-            className="min-w-0 border-b border-l border-zinc-200 px-1 py-2 md:px-2"
+            className="min-w-0 border-b border-l border-border px-1 py-2 md:px-2"
           >
             <div className="min-w-0 px-0 py-0 md:px-2">
-              <p className="truncate text-xs font-semibold text-zinc-900 md:text-sm">
+              <p className="truncate text-xs font-semibold text-foreground md:text-sm">
                 <span className="md:hidden">{shortPlayerName(col.name)}</span>
                 <span className="hidden md:inline">{col.name}</span>
               </p>
-              <p className="flex flex-wrap items-center gap-x-1 text-[10px] text-zinc-500 md:gap-x-1.5 md:text-xs">
+              <p className="flex flex-wrap items-center gap-x-1 text-[10px] text-muted-foreground md:gap-x-1.5 md:text-xs">
                 <PositionRankLabel
                   position={col.position}
                   rank={col.fantasyPosRank}
@@ -196,7 +196,7 @@ export function CompareBoard({ columns }: { columns: CompareColumn[] }) {
         {sections.map((section) => (
           <div key={section.title} className="contents">
             <div className="col-span-full px-1 pt-3 pb-1 md:px-2">
-              <h2 className="text-xs font-semibold tracking-[0.2em] text-zinc-500 uppercase">
+              <h2 className="text-xs font-semibold tracking-[0.2em] text-muted-foreground uppercase">
                 {section.title}
               </h2>
             </div>
@@ -204,12 +204,12 @@ export function CompareBoard({ columns }: { columns: CompareColumn[] }) {
               const open = openStatId === templateStat.id;
               return (
                 <div key={templateStat.id} className="contents">
-                  <div className="flex min-w-0 items-start border-t border-zinc-100 px-1 py-1 md:px-2">
+                  <div className="flex min-w-0 items-start border-t border-border px-1 py-1 md:px-2">
                     <button
                       type="button"
                       aria-expanded={open}
                       onClick={() => toggleStat(templateStat.id)}
-                      className="flex w-full min-w-0 items-start gap-0.5 py-1 text-left text-xs font-medium text-zinc-900 hover:bg-zinc-50/80 md:gap-1 md:text-sm"
+                      className="flex w-full min-w-0 items-start gap-0.5 py-1 text-left text-xs font-medium text-foreground hover:bg-muted/80 md:gap-1 md:text-sm"
                     >
                       <ChevronRight
                         className={cn(
@@ -232,7 +232,7 @@ export function CompareBoard({ columns }: { columns: CompareColumn[] }) {
                     return (
                       <div
                         key={`${col.playerId}-${templateStat.id}`}
-                        className="min-w-0 border-t border-l border-zinc-100"
+                        className="min-w-0 border-t border-l border-border"
                       >
                         <CompareCell
                           stat={stat}
@@ -242,7 +242,7 @@ export function CompareBoard({ columns }: { columns: CompareColumn[] }) {
                       </div>
                     );
                   })}
-                  <div className="col-span-full overflow-hidden border-t border-zinc-100">
+                  <div className="col-span-full overflow-hidden border-t border-border">
                     <AnimatePresence initial={false}>
                       {open ? (
                         <motion.div

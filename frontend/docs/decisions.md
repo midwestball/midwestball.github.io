@@ -46,3 +46,7 @@ Legacy routes use replacement navigation to avoid redirect loops in browser hist
 ## CSS-first theme precedence
 
 Charcoal is the root fallback; positive light media detection enables light. Valid explicit `data-theme` overrides beat media detection. Bootstrap reads only the reserved preference key, catches storage failures, and never writes a preference. All app chrome uses semantic tokens; data colors remain independent.
+
+## Theme surface migration
+
+Surface and text tokens carry presentation meaning rather than fixed zinc values. Selected controls use paired primary colors; warnings and deltas preserve severity with explicit text. Theme switching changes CSS only and never remounts data views.
