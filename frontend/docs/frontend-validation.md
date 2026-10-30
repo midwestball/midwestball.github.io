@@ -21,6 +21,10 @@ Review tasks:
 2. Open a Search link in a fresh tab; refresh and use Back/Forward. Verify legacy links preserve all query fields.
 3. Share weekly focus/threshold and ROS selections, refresh and switch horizons.
 4. Save a personal roster, open a different shared trade, edit it, and verify personal storage changes only after explicit Save. Check recovery from a malformed link.
-5. Inspect Home, Search/Compare, player details, weekly/ROS and Trades in effective light/dark mode. Check first paint, native controls, chart labels, unavailable states and reduced motion. Confirm no visible theme setting exists.
+5. Inspect Home, Search/Compare, legacy player redirects, weekly/ROS and Trades in effective light/dark mode. Check first paint, native controls, chart labels, unavailable states and reduced motion. Confirm no visible theme setting exists.
 
 The optional Canvas lattice is deliberately omitted. No code has been pushed or merged as part of local review.
+
+## Comparison-only navigation checks
+
+Filter result rows select directly without Add buttons or profile links. Home, weekly summaries/tables, ROS and roster/package/lineup names link to season-scoped Search comparisons. Both old player URL forms redirect without loading a standalone profile. The follow-up automated run passed 160 tests in 29 files.

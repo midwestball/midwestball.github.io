@@ -5,7 +5,7 @@
 - Position filter options are publishable groups (`GROUP_LABEL`) except **WR / TE**, which split the `pass_catcher` leaderboard client-side. Stats still come from `STATS_BY_GROUP.pass_catcher` (skip `alwaysUnavailable`). Percentiles stay pass-catcher-wide.
 - Year select sits to the right of the search input; options come from Ballnet `index/seasons.json` (plus current). Bio list is scoped to players whose `seasons` include the selected year. Changing year also reloads `leaderboards/{season}/w{asOfWeek}/…` using that season’s published data week and recomputes the ramp–hold floor from `completedWeek` (last fully scored week), not `asOfWeek`.
 - Ranked Best/Worst lists load `leaderboards/{season}/w{week}/{group}.json` via `fetchLeaderboard` (browser Storage fetch) — never N player-page fetches.
-- Player result links include `?season=` for the selected search year.
+- Activating a result row adds its player to comparison while preserving the selected season and filters; no separate Add button or profile link.
 - Sort on oriented percentile (100 = good); Best = descending, Worst = ascending; null percentiles last.
 - Stat dropdown may include search-only **Fantasy Rank** (`fantasy_pos_rank`) for QB / backfield / WR / TE. Not a catalog `stat.id`. Best = rank 1 first; Worst = largest published rank first. Drop players Ballnet omitted. No min-volume slider.
 - Filter row sits directly above the Filter results list, below the selected-player comparison; Stat and Best/Worst stay visible but disabled (gray) until prerequisites are set.

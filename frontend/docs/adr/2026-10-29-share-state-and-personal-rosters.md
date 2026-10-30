@@ -11,3 +11,7 @@ The personal `midwestball-trade-roster-v1` key and `{version:1,settings,roster}`
 Browser query subscriptions handle native history and popstate. Discrete selections create history entries; rapid query/volume/threshold and shared-preview edits replace the current entry. Only owned fields change. Snapshot fetch lifetimes do not depend on discovery queries, thresholds or appearance. Clipboard failure exposes selectable URL text.
 
 No backend, publication schema, short-link service or local roster migration is involved.
+
+## Player navigation consolidation
+
+Player analysis is now comparison-only. Filter result rows append a compatible player directly; player-name links from other pages start a comparison with the clicked player and source season selected. Standalone profiles are removed; both legacy `/players/` URL forms are redirect shells only. Published scalar artifacts under Storage `pages/` retain their existing schema and purpose for comparison hydration.

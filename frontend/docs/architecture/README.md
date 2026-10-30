@@ -57,7 +57,8 @@ The accepted UI lives under **`frontend/`**. Run with `cd frontend && npm ci && 
 | Home | `src/app/page.tsx` |
 | Highlight list | `src/components/highlights/HighlightList.tsx` |
 | Search | `src/app/search/page.tsx` |
-| Player page | `src/app/players/[id]/page.tsx` + `PlayerPageClient` |
+| Legacy player URLs | `src/app/players/` + `src/components/player/LegacyPlayerRedirect.tsx` (redirect only) |
+| Player name links | `src/components/PlayerComparisonLink.tsx` + `src/lib/player-navigation.ts` |
 | Projections (`/ballnet`) | `src/app/ballnet/page.tsx` |
 | Search comparison | `src/components/search/SearchPageClient.tsx`, `src/components/compare/` |
 | Legacy comparison links | `src/app/compare/page.tsx`, `src/app/ffoptim/page.tsx` |
