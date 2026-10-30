@@ -6,7 +6,7 @@ export default function ProjectionsPage() {
   return (
     <Suspense
       fallback={
-        <div className="px-4 py-8 text-sm text-zinc-500">
+        <div className="px-4 py-8 text-sm text-muted-foreground">
           Loading projections…
         </div>
       }

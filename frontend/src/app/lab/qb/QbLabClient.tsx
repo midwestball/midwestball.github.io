@@ -62,9 +62,9 @@ function DensityField({
 }) {
   return (
     <label className="flex min-w-[11rem] flex-1 flex-col gap-1">
-      <span className="flex justify-between text-[11px] font-medium text-zinc-600">
+      <span className="flex justify-between text-[11px] font-medium text-text-secondary">
         <span>{label}</span>
-        <span className="tabular-nums text-zinc-900">{value}px</span>
+        <span className="tabular-nums text-foreground">{value}px</span>
       </span>
       <input
         type="range"
@@ -73,7 +73,7 @@ function DensityField({
         step={1}
         value={value}
         onChange={(event) => onChange(Number(event.target.value))}
-        className="h-1.5 w-full cursor-pointer appearance-none rounded-none bg-zinc-200 accent-zinc-900"
+        className="h-1.5 w-full cursor-pointer appearance-none rounded-none bg-muted accent-primary"
       />
     </label>
   );
@@ -101,51 +101,51 @@ export function QbLabClient({
 
   return (
     <div>
-      <div className="border-b border-zinc-200 bg-white">
+      <div className="border-b border-border bg-card">
         <div className="mx-auto flex max-w-3xl flex-col gap-3 px-4 py-5 sm:flex-row sm:items-end sm:justify-between">
           <div>
-            <p className="text-xs font-semibold tracking-[0.2em] text-zinc-500 uppercase">
+            <p className="text-xs font-semibold tracking-[0.2em] text-muted-foreground uppercase">
               Layout lab · {groupLabel}
             </p>
             <h1 className="mt-0.5 text-3xl font-semibold tracking-tight">
               {player.name}
             </h1>
-            <p className="mt-1 max-w-xl text-sm leading-5 text-zinc-600">
+            <p className="mt-1 max-w-xl text-sm leading-5 text-text-secondary">
               Same QB catalog as the player page. Every variation here puts the
               slider beside the stat name. Density sliders apply to all blocks
               below. The live profile is unchanged.
             </p>
-            <p className="mt-2 text-sm text-zinc-500">
+            <p className="mt-2 text-sm text-muted-foreground">
               <Link
                 href={`/players/${PLAYER_ID}`}
-                className="font-medium text-zinc-900 underline"
+                className="font-medium text-foreground underline"
               >
                 Back to the live QB page
               </Link>
             </p>
           </div>
-          <div className="rounded-none border border-zinc-200 bg-zinc-50 px-3 py-2">
+          <div className="rounded-none border border-border bg-muted px-3 py-2">
             <p className="text-lg font-semibold">{player.name}</p>
-            <p className="flex flex-wrap items-center gap-x-1.5 text-sm text-zinc-500">
+            <p className="flex flex-wrap items-center gap-x-1.5 text-sm text-muted-foreground">
               <span>{player.position}</span>
               <span aria-hidden>·</span>
               <TeamAbbr team={player.team} />
               <span aria-hidden>·</span>
               <span>2025</span>
             </p>
-            <p className="mt-1 text-xs text-zinc-400">Layout experiments only</p>
+            <p className="mt-1 text-xs text-muted-foreground">Layout experiments only</p>
           </div>
         </div>
       </div>
 
-      <div className="sticky top-0 z-20 border-b border-zinc-200 bg-zinc-100/95 backdrop-blur">
+      <div className="sticky top-0 z-20 border-b border-border bg-muted/95 backdrop-blur">
         <div className="mx-auto max-w-3xl space-y-2 px-4 py-2">
           <div className="flex gap-2 overflow-x-auto text-xs">
             {VARIATIONS.map((variation) => (
               <a
                 key={variation.id}
                 href={`#${variation.id}`}
-                className="shrink-0 rounded-none border border-zinc-200 bg-white px-2 py-1 font-medium text-zinc-600 hover:border-zinc-300 hover:text-zinc-900"
+                className="shrink-0 rounded-none border border-border bg-card px-2 py-1 font-medium text-text-secondary hover:border-border hover:text-foreground"
               >
                 {variation.title.split(" · ")[0]}
               </a>
@@ -181,13 +181,13 @@ export function QbLabClient({
         {VARIATIONS.map((variation) => (
           <div key={variation.id} id={variation.id} className="scroll-mt-36">
             <div className="mb-4">
-              <p className="text-xs font-semibold tracking-[0.2em] text-zinc-500 uppercase">
+              <p className="text-xs font-semibold tracking-[0.2em] text-muted-foreground uppercase">
                 Variation
               </p>
               <h2 className="mt-1 text-xl font-semibold tracking-tight">
                 {variation.title}
               </h2>
-              <p className="mt-1 max-w-xl text-sm leading-6 text-zinc-600">
+              <p className="mt-1 max-w-xl text-sm leading-6 text-text-secondary">
                 {variation.note}
               </p>
             </div>

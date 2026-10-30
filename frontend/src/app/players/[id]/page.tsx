@@ -26,7 +26,7 @@ export default async function PlayerPage({
 
   return (
     <Suspense
-      fallback={<div className="px-4 py-8 text-sm text-zinc-500">Loading…</div>}
+      fallback={<div className="px-4 py-8 text-sm text-muted-foreground">Loading…</div>}
     >
       <PlayerPageClient player={player} currentSeason={currentSeason} />
     </Suspense>

@@ -62,3 +62,7 @@ SVG axes, neutral curves, grids, threshold ink, labels and tooltip surfaces use 
 ## Player and highlight surfaces
 
 Player catalogs and highlight rows use the shared surface hierarchy. Rarity and percentile colors retain published meaning and their existing contrast-aware labels.
+
+## Shared and fallback chrome
+
+Public lab, loading and not-found routes share the same semantic appearance as primary screens. Shared controls do not depend on a separate dark class or competing appearance state.

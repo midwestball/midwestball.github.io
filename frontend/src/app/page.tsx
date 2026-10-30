@@ -12,7 +12,7 @@ export default async function Home() {
   return (
     <Suspense
       fallback={
-        <div className="mx-auto max-w-3xl px-4 py-8 text-sm text-zinc-500">
+        <div className="mx-auto max-w-3xl px-4 py-8 text-sm text-muted-foreground">
           Loading highlights…
         </div>
       }
