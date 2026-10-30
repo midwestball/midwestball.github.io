@@ -114,3 +114,7 @@ The season selector aligns with the query input even while its suggestion list i
 ## Comparison-scoped discovery visibility
 
 Incompatible discovery rows are hidden while a catalog group is selected, including at the four-player cap. WR and TE remain compatible. This is a presentation filter over existing ranked/bio results; published ordering and selected players remain unchanged.
+
+## Stable Search geometry
+
+The Search main has explicit full width and a zero minimum width within the flex column, capped at 72rem. Chart intrinsic sizing cannot enlarge the page from a narrower collapsed state; the wider layout is present before expansion. Existing mobile comparison tracks and overflow behavior remain intact.

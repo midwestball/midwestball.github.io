@@ -42,7 +42,7 @@ export function SearchPageClient(props: Parameters<typeof useLeaderboardDiscover
     bioResults: model.bioResults.filter(p => !differentGroup(p.id)),
     rankedRows: model.rankedRows?.filter(row => !differentGroup(row.playerId)) ?? null,
   };
-  return <main className="mx-auto max-w-6xl space-y-3 px-4 py-5">
+  return <main className="mx-auto w-full min-w-0 max-w-6xl space-y-3 px-4 py-5">
     <header><h1 className="text-3xl font-semibold tracking-tight">Search</h1>
       <p className="text-sm text-muted-foreground">Discover players and compare up to four from the same stat group.</p></header>
     <PlayerLeaderboardFilters model={model}>

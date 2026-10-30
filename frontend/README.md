@@ -68,3 +68,7 @@ Home season/week choices preserve unrelated query parameters and create navigabl
 ## Compatible discovery results
 
 Selecting comparison players hides discovery rows from other catalog groups in both bio and ranked views, without changing numerical ordering or clearing discovery filters. Removing the selection restores the full discovery scope. Run `npm run test -- src/components/search/search-discovery.test.tsx`.
+
+## Stable Search width
+
+Search fills the available page width up to its existing `max-w-6xl` limit before any distribution is opened. Expanding or closing a comparison plot changes height only; the page does not shrink-wrap its contents.
