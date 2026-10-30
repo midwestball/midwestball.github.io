@@ -74,8 +74,8 @@
   --accent: #363b44;
   --accent-foreground: #e9edf2;
   --destructive: #ff9e9e;
-  --border: #606975;
-  --input: #606975;
+  --border: #747e8c;
+  --input: #747e8c;
   --ring: #8bbcff;
   --radius: 0;
   --text-secondary: #bfc6d0;
@@ -83,7 +83,7 @@
   --chart-axis: #aeb6c2;
   --chart-league-line: #aeb6c2;
   --chart-league-fill: #363b44;
-  --chart-cursor: #606975;
+  --chart-cursor: #747e8c;
   --chart-label-surface: #30353d;
   --chart-threshold: #e9edf2;
   --warning-surface: #403823;
@@ -92,7 +92,7 @@
   --success: #87dfb1;
   --error-surface: #452e34;
   --error-border: #d77d89;
-  --track: #606975;
+  --track: #747e8c;
   --chart-1: #aeb6c2;
   --chart-2: #aeb6c2;
   --chart-3: #aeb6c2;
@@ -104,7 +104,7 @@
   --sidebar-primary-foreground: #202329;
   --sidebar-accent: #363b44;
   --sidebar-accent-foreground: #e9edf2;
-  --sidebar-border: #606975;
+  --sidebar-border: #747e8c;
   --sidebar-ring: #8bbcff;
 }
 

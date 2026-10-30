@@ -82,3 +82,7 @@ Home writes only season/week on deliberate control changes, using synchronous hi
 ## Long trade link fallback
 
 Links above 1,800 characters receive a soft warning and an intact JSON text export. No list is truncated to meet this warning threshold. Empty explicit player lists are malformed; canonical empty lists are omitted. Package previews do not offer a roster-save action.
+
+## Representative contrast gate
+
+Automated checks validate primary, secondary and muted ink on canvas, content, hover and popover surfaces at 4.5:1, with focus and input boundaries at 3:1. These token checks supplement rather than replace browser layout and composite-color review.
