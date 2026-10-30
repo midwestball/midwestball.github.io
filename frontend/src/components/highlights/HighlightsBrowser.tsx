@@ -73,7 +73,7 @@ function HighlightListPreview({
         <button
           type="button"
           onClick={() => setExpansion({ key: resetKey, expanded: !expanded })}
-          className="text-xs text-zinc-400 hover:text-zinc-600"
+          className="text-xs text-muted-foreground hover:text-text-secondary"
         >
           {expanded ? "See less" : "See more"}
         </button>
@@ -102,7 +102,7 @@ function GroupSections({
         if (rows.length === 0) return null;
         return (
           <section key={group} className="space-y-2">
-            <h2 className="text-xs font-semibold tracking-[0.15em] text-zinc-500 uppercase">
+            <h2 className="text-xs font-semibold tracking-[0.15em] text-muted-foreground uppercase">
               {GROUP_LABEL[group]}
             </h2>
             <HighlightListPreview
@@ -120,7 +120,7 @@ function GroupSections({
 }
 
 const selectClass =
-  "h-9 rounded-none border border-zinc-200 bg-white px-2 text-sm text-zinc-900 outline-none focus:border-zinc-400";
+  "h-9 rounded-none border border-border bg-card px-2 text-sm text-foreground outline-none focus:border-ring";
 
 export type HighlightsBrowserProps = {
   /** Earliest season with spine coverage (NGS era). */
@@ -301,10 +301,10 @@ export function HighlightsBrowser({
 
   return (
     <div>
-      <div className="border-b border-zinc-200 bg-white">
+      <div className="border-b border-border bg-card">
         <div className="mx-auto max-w-3xl px-4 py-5">
           <div className="flex flex-wrap items-center gap-2">
-            <label className="flex items-center gap-1.5 text-xs font-semibold tracking-[0.15em] text-zinc-500 uppercase">
+            <label className="flex items-center gap-1.5 text-xs font-semibold tracking-[0.15em] text-muted-foreground uppercase">
               Season
               <select
                 value={season}
@@ -323,7 +323,7 @@ export function HighlightsBrowser({
                 ))}
               </select>
             </label>
-            <label className="flex items-center gap-1.5 text-xs font-semibold tracking-[0.15em] text-zinc-500 uppercase">
+            <label className="flex items-center gap-1.5 text-xs font-semibold tracking-[0.15em] text-muted-foreground uppercase">
               Week
               <select
                 value={week}
@@ -341,7 +341,7 @@ export function HighlightsBrowser({
           <h1 className="mt-2 text-3xl font-semibold tracking-tight">
             Highlights
           </h1>
-          <p className="mt-1 max-w-xl text-sm leading-5 text-zinc-600">
+          <p className="mt-1 max-w-xl text-sm leading-5 text-text-secondary">
             Best single-game offensive performances. {board?.schemaVersion === 2
               ? "Ranked by observed rarity among qualifying games since 2016."
               : "Legacy boards are ranked by standardized scores among qualifying games since 2016."}
@@ -352,15 +352,15 @@ export function HighlightsBrowser({
 
       <main className="mx-auto max-w-3xl space-y-6 px-4 py-4">
         {status === "loading" ? (
-          <p className="text-sm text-zinc-500">Loading highlights…</p>
+          <p className="text-sm text-muted-foreground">Loading highlights…</p>
         ) : null}
         {status === "error" ? (
-          <p className="text-sm text-zinc-500">
+          <p className="text-sm text-muted-foreground">
             Could not load highlights for {season} week {week}.
           </p>
         ) : null}
         {status === "empty" ? (
-          <p className="text-sm text-zinc-500">
+          <p className="text-sm text-muted-foreground">
             No highlight board published for {season} week {week} yet.
           </p>
         ) : null}
@@ -368,7 +368,7 @@ export function HighlightsBrowser({
         {hasBoard ? (
           <>
             <section className="space-y-2">
-              <h2 className="text-xs font-semibold tracking-[0.15em] text-zinc-500 uppercase">
+              <h2 className="text-xs font-semibold tracking-[0.15em] text-muted-foreground uppercase">
                 Offense
               </h2>
               <HighlightListPreview
@@ -390,9 +390,9 @@ export function HighlightsBrowser({
           </>
         ) : null}
 
-        <p className="pt-1 text-sm text-zinc-500">
+        <p className="pt-1 text-sm text-muted-foreground">
           Looking for someone else?{" "}
-          <Link href="/search" className="font-medium text-zinc-900 underline">
+          <Link href="/search" className="font-medium text-foreground underline">
             Search every player
           </Link>
           .

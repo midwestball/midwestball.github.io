@@ -58,3 +58,7 @@ Forecast controls and roster warnings share semantic surfaces; signed deltas use
 ## Chart support colors
 
 SVG axes, neutral curves, grids, threshold ink, labels and tooltip surfaces use CSS variables. Team and percentile fills retain their identity; labels use theme ink with team-colored outlines so dark franchise colors do not become unreadable text.
+
+## Player and highlight surfaces
+
+Player catalogs and highlight rows use the shared surface hierarchy. Rarity and percentile colors retain published meaning and their existing contrast-aware labels.

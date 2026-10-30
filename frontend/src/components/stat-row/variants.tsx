@@ -8,47 +8,47 @@ import { TremorDistribution } from "./TremorDistribution";
 import { UnavailableChart } from "./UnavailableChart";
 
 export const tremorTheme: StatRowTheme = {
-  shell: "border border-zinc-200 bg-white",
-  header: "hover:bg-zinc-50",
-  name: "text-zinc-900",
-  value: "text-zinc-900 font-semibold",
-  meta: "text-zinc-400",
+  shell: "border border-border bg-card",
+  header: "hover:bg-muted",
+  name: "text-foreground",
+  value: "text-foreground font-semibold",
+  meta: "text-muted-foreground",
   chartWrap: "",
-  sliderTrack: "bg-zinc-100",
-  sliderThumb: "border-white",
+  sliderTrack: "bg-muted",
+  sliderThumb: "border-card",
 };
 
 const flushTheme: StatRowTheme = {
   shell: "",
-  header: "hover:bg-zinc-50/80",
-  name: "text-zinc-900",
-  value: "text-zinc-900 font-semibold",
-  meta: "text-zinc-400",
+  header: "hover:bg-muted/80",
+  name: "text-foreground",
+  value: "text-foreground font-semibold",
+  meta: "text-muted-foreground",
   chartWrap: "",
-  sliderTrack: "bg-zinc-200/70",
-  sliderThumb: "border-white",
+  sliderTrack: "bg-muted/70",
+  sliderThumb: "border-card",
 };
 
 const nestedTheme: StatRowTheme = {
   shell: "",
-  header: "hover:bg-zinc-50",
-  name: "text-zinc-900",
-  value: "text-zinc-900 font-semibold",
-  meta: "text-zinc-400",
+  header: "hover:bg-muted",
+  name: "text-foreground",
+  value: "text-foreground font-semibold",
+  meta: "text-muted-foreground",
   chartWrap: "",
-  sliderTrack: "bg-zinc-100",
-  sliderThumb: "border-white",
+  sliderTrack: "bg-muted",
+  sliderThumb: "border-card",
 };
 
 const flatTheme: StatRowTheme = {
   shell: "",
-  header: "hover:bg-zinc-50/50",
-  name: "text-zinc-900",
-  value: "text-zinc-900 font-semibold",
-  meta: "text-zinc-400",
+  header: "hover:bg-muted/50",
+  name: "text-foreground",
+  value: "text-foreground font-semibold",
+  meta: "text-muted-foreground",
   chartWrap: "",
-  sliderTrack: "bg-zinc-200/60",
-  sliderThumb: "border-white",
+  sliderTrack: "bg-muted/60",
+  sliderThumb: "border-card",
 };
 
 export type StatStackLayout =
@@ -136,14 +136,14 @@ export function StatStack({
 
   if (layout === "sheet") {
     return (
-      <div className="overflow-hidden border border-zinc-200 bg-white">
+      <div className="overflow-hidden border border-border bg-card">
         {sections.map((section, index) => (
           <section
             key={section.title}
-            className={cn(index > 0 && "border-t border-zinc-200")}
+            className={cn(index > 0 && "border-t border-border")}
           >
             <h2
-              className="px-4 text-xs font-semibold tracking-[0.2em] text-zinc-500 uppercase"
+              className="px-4 text-xs font-semibold tracking-[0.2em] text-muted-foreground uppercase"
               style={
                 headingGap != null
                   ? { paddingTop: headingGap, paddingBottom: Math.max(2, headingGap / 2) }
@@ -152,7 +152,7 @@ export function StatStack({
             >
               {section.title}
             </h2>
-            <div className="divide-y divide-zinc-100">
+            <div className="divide-y divide-border">
               <StatRows
                 stats={section.stats}
                 theme={nestedTheme}
@@ -175,12 +175,12 @@ export function StatStack({
           return (
             <section key={section.title}>
               <h2
-                className="text-xs font-semibold tracking-[0.2em] text-zinc-500 uppercase"
+                className="text-xs font-semibold tracking-[0.2em] text-muted-foreground uppercase"
                 style={headingStyle ?? { marginBottom: 8 }}
               >
                 {section.title}
               </h2>
-              <div className="divide-y divide-zinc-100 overflow-hidden border border-zinc-200 bg-white">
+              <div className="divide-y divide-border overflow-hidden border border-border bg-card">
                 <StatRows
                   stats={section.stats}
                   theme={nestedTheme}
@@ -195,12 +195,12 @@ export function StatStack({
           return (
             <section key={section.title}>
               <h2
-                className="text-xs font-semibold tracking-[0.2em] text-zinc-500 uppercase"
+                className="text-xs font-semibold tracking-[0.2em] text-muted-foreground uppercase"
                 style={headingStyle ?? { marginBottom: 4 }}
               >
                 {section.title}
               </h2>
-              <div className="divide-y divide-zinc-200">
+              <div className="divide-y divide-border">
                 <StatRows
                   stats={section.stats}
                   theme={flushTheme}
@@ -215,7 +215,7 @@ export function StatStack({
           return (
             <section key={section.title}>
               <h2
-                className="text-xs font-semibold tracking-[0.2em] text-zinc-500 uppercase"
+                className="text-xs font-semibold tracking-[0.2em] text-muted-foreground uppercase"
                 style={headingStyle ?? { marginBottom: 4 }}
               >
                 {section.title}
@@ -233,7 +233,7 @@ export function StatStack({
 
         return (
           <section key={section.title} className="flex flex-col gap-1">
-            <h2 className="text-xs font-semibold tracking-[0.2em] text-zinc-500 uppercase">
+            <h2 className="text-xs font-semibold tracking-[0.2em] text-muted-foreground uppercase">
               {section.title}
             </h2>
             <StatRows

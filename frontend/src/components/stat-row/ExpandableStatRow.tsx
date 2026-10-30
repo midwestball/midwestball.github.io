@@ -63,7 +63,7 @@ export function ExpandableStatRow({
       className={cn(
         "w-[4.75rem] shrink-0 truncate text-left tabular-nums",
         theme.value,
-        !ready && "font-normal text-zinc-400",
+        !ready && "font-normal text-muted-foreground",
       )}
     >
       {stat.playerValue == null
@@ -105,7 +105,7 @@ export function ExpandableStatRow({
           className={cn(
             "size-4 shrink-0 transition-transform duration-300",
             open && "rotate-90",
-            !ready && "text-zinc-400",
+            !ready && "text-muted-foreground",
           )}
         />
         <span
@@ -113,7 +113,7 @@ export function ExpandableStatRow({
             "truncate font-medium",
             inline ? "w-[12.5rem] shrink-0" : "min-w-0 flex-1",
             theme.name,
-            !ready && "text-zinc-500",
+            !ready && "text-muted-foreground",
           )}
           title={open ? "Click to collapse" : "Click for more info"}
         >

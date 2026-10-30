@@ -93,16 +93,16 @@ export function PlayerPageClient({
 
   return (
     <div>
-      <div className="border-b border-zinc-200 bg-white">
+      <div className="border-b border-border bg-card">
         <div className="mx-auto flex max-w-3xl flex-col gap-3 px-4 py-5 sm:flex-row sm:items-end sm:justify-between">
           <div>
-            <p className="text-xs font-semibold tracking-[0.2em] text-zinc-500 uppercase">
+            <p className="text-xs font-semibold tracking-[0.2em] text-muted-foreground uppercase">
               Player · {groupLabel}
             </p>
             <h1 className="mt-0.5 text-3xl font-semibold tracking-tight">
               {livePlayer.name}
             </h1>
-            <p className="mt-1 max-w-xl text-sm leading-5 text-zinc-600">
+            <p className="mt-1 max-w-xl text-sm leading-5 text-text-secondary">
               Every {livePlayer.position} row from the position catalog versus the
               league.
               {status === "ready" && hasSnapshot
@@ -112,19 +112,19 @@ export function PlayerPageClient({
                   : " Loading snapshots…"}
             </p>
             {livePlayer.id === "demo-qb" ? (
-              <p className="mt-2 text-sm text-zinc-500">
+              <p className="mt-2 text-sm text-muted-foreground">
                 <Link
                   href="/lab/qb"
-                  className="font-medium text-zinc-900 underline"
+                  className="font-medium text-foreground underline"
                 >
                   QB layout experiments
                 </Link>
               </p>
             ) : null}
           </div>
-          <div className="rounded-none border border-zinc-200 bg-zinc-50 px-3 py-2">
+          <div className="rounded-none border border-border bg-muted px-3 py-2">
             <p className="text-lg font-semibold">{livePlayer.name}</p>
-            <p className="flex flex-wrap items-center gap-x-1.5 text-sm text-zinc-500">
+            <p className="flex flex-wrap items-center gap-x-1.5 text-sm text-muted-foreground">
               <PositionRankLabel
                 position={displayPosition}
                 rank={displayedPage?.player.fantasyPosRank}
@@ -135,7 +135,7 @@ export function PlayerPageClient({
               <span aria-hidden>·</span>
               <span>{season}</span>
             </p>
-            <p className="mt-1 text-xs text-zinc-400">
+            <p className="mt-1 text-xs text-muted-foreground">
               {hasSnapshot && displayedPage
                 ? `As of week ${displayedPage.asOfWeek}`
                 : "Current season · no snapshot yet"}
@@ -145,9 +145,9 @@ export function PlayerPageClient({
       </div>
 
       <main className="mx-auto max-w-3xl px-4 py-4">
-        {loadError && loadedKey === requestKey && <p role="alert" className="mb-3 text-sm text-red-700">{loadError} <button className="underline" onClick={() => { setLoadedKey(""); setRetry(n => n + 1); }}>Retry</button></p>}
+        {loadError && loadedKey === requestKey && <p role="alert" className="mb-3 text-sm text-destructive">{loadError} <button className="underline" onClick={() => { setLoadedKey(""); setRetry(n => n + 1); }}>Retry</button></p>}
         <TremorVariant stats={displayedPage ? stats : []} />
-        <div className="mt-4 rounded-none border border-zinc-200 bg-white px-3 py-2">
+        <div className="mt-4 rounded-none border border-border bg-card px-3 py-2">
           <SeasonSelect
             playerId={livePlayer.id}
             season={season}

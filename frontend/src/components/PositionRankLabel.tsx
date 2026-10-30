@@ -98,14 +98,14 @@ export function PositionRankLabel({
           setFocused(false);
           setPinned(false);
         }}
-        className="relative ml-px inline-flex cursor-pointer border-0 bg-transparent p-0 align-baseline text-zinc-500 outline-none hover:text-zinc-700 focus-visible:text-zinc-800"
+        className="relative ml-px inline-flex cursor-pointer border-0 bg-transparent p-0 align-baseline text-muted-foreground outline-none hover:text-text-secondary focus-visible:text-foreground"
       >
         <sub className="tabular-nums">{rank}</sub>
         {open ? (
           <span
             id={tooltipId}
             role="tooltip"
-            className="absolute top-full left-0 z-50 mt-1 w-max max-w-[12.5rem] rounded-none border border-zinc-200 bg-white px-2 py-1.5 text-left text-xs font-normal normal-case leading-4 tracking-normal text-zinc-600 shadow-none"
+            className="absolute top-full left-0 z-50 mt-1 w-max max-w-[12.5rem] rounded-none border border-border bg-card px-2 py-1.5 text-left text-xs font-normal normal-case leading-4 tracking-normal text-text-secondary shadow-none"
             onClick={(event) => event.stopPropagation()}
           >
             {copy}

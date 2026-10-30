@@ -15,7 +15,7 @@ export function SeasonSelect({
 
   return (
     <label className="flex items-center justify-between gap-4">
-      <span className="text-sm text-zinc-600">Season</span>
+      <span className="text-sm text-text-secondary">Season</span>
       <select
         value={season}
         onChange={(event) => {
@@ -23,7 +23,7 @@ export function SeasonSelect({
             ? `/players/${encodeURIComponent(playerId)}/?season=${event.target.value}`
             : `/players/?id=${encodeURIComponent(playerId)}&season=${event.target.value}`);
         }}
-        className="h-8 rounded-none border border-zinc-200 bg-white px-2 text-sm text-zinc-900 outline-none focus:border-zinc-400"
+        className="h-8 rounded-none border border-border bg-card px-2 text-sm text-foreground outline-none focus:border-ring"
       >
         {seasons.map((year) => (
           <option key={year} value={year}>

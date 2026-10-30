@@ -105,15 +105,15 @@ function PerformanceBlock({
 
   return (
     <div className="space-y-1">
-      <p className="text-[11px] leading-4 text-zinc-400">
-        <span className="font-medium text-zinc-600">{row.statLabel}</span>
+      <p className="text-[11px] leading-4 text-muted-foreground">
+        <span className="font-medium text-text-secondary">{row.statLabel}</span>
         <span aria-hidden> · </span>
-        <span className="tabular-nums text-zinc-700">
+        <span className="tabular-nums text-text-secondary">
           {formatHighlightValue(row)}
         </span>
       </p>
       {standing && tier != null ? (
-        <p className="text-[11px] leading-4 text-zinc-400">
+        <p className="text-[11px] leading-4 text-muted-foreground">
           {standing.prefix}
           <span
             className={cn(
@@ -127,7 +127,7 @@ function PerformanceBlock({
           {standing.rest}
         </p>
       ) : null}
-      {row.rarityMethod === "empirical-inclusive-v2" && row.favorableCount != null && <p className="text-xs text-zinc-600">{row.favorableCount} of {row.peerN} qualifying games since 2016 were at least this favorable.</p>}
+      {row.rarityMethod === "empirical-inclusive-v2" && row.favorableCount != null && <p className="text-xs text-text-secondary">{row.favorableCount} of {row.peerN} qualifying games since 2016 were at least this favorable.</p>}
       {shape?.bins?.length ? (
         <HistogramChart label={row.statLabel} bins={shape.bins} format={format} markers={[{name: row.name, value: row.value, color}]} interactive shadeColor={color} />
       ) : shape ? (
@@ -149,7 +149,7 @@ function PerformanceBlock({
           }
         />
       ) : (
-        <div className="flex min-h-16 items-center justify-center rounded-none border border-dashed border-zinc-200 bg-zinc-50 px-3 py-3 text-center text-xs leading-4 text-zinc-500">
+        <div className="flex min-h-16 items-center justify-center rounded-none border border-dashed border-border bg-muted px-3 py-3 text-center text-xs leading-4 text-muted-foreground">
           Waiting on a single-game league curve for this stat.
         </div>
       )}
@@ -171,7 +171,7 @@ function HighlightRowExpandable({
   const also = row.also ?? [];
 
   return (
-    <li className="rounded-none border border-zinc-200 bg-white">
+    <li className="rounded-none border border-border bg-card">
       <div
         role="button"
         tabIndex={0}
@@ -183,17 +183,17 @@ function HighlightRowExpandable({
             setOpen((current) => !current);
           }
         }}
-        className="flex w-full cursor-pointer items-center gap-2 px-3 py-2 text-left hover:bg-zinc-50"
+        className="flex w-full cursor-pointer items-center gap-2 px-3 py-2 text-left hover:bg-muted"
       >
         <ChevronRight
           className={cn(
-            "size-4 shrink-0 text-zinc-400 transition-transform duration-300",
+            "size-4 shrink-0 text-muted-foreground transition-transform duration-300",
             open && "rotate-90",
           )}
         />
         <div className="min-w-0 flex-1">
-          <p className="font-medium text-zinc-900">
-            <span className="mr-2 text-xs tabular-nums text-zinc-400">
+          <p className="font-medium text-foreground">
+            <span className="mr-2 text-xs tabular-nums text-muted-foreground">
               {row.rank}
             </span>
             <Link
@@ -205,7 +205,7 @@ function HighlightRowExpandable({
               {row.name}
             </Link>
           </p>
-          <p className="flex flex-wrap items-center gap-x-1.5 text-sm text-zinc-500">
+          <p className="flex flex-wrap items-center gap-x-1.5 text-sm text-muted-foreground">
             <PositionRankLabel
               position={row.position}
               rank={row.fantasyPosRank}
@@ -222,14 +222,14 @@ function HighlightRowExpandable({
             <span aria-hidden>·</span>
             <span className="truncate">{row.statLabel}</span>
             {also.length > 0 ? (
-              <span className="text-zinc-400">
+              <span className="text-muted-foreground">
                 +{also.length} more
               </span>
             ) : null}
           </p>
         </div>
         <div className="shrink-0 text-right">
-          <p className="text-sm font-semibold tabular-nums text-zinc-900">
+          <p className="text-sm font-semibold tabular-nums text-foreground">
             {formatHighlightValue(row)}
           </p>
           {tier != null ? <RarityChip tier={tier} /> : null}
@@ -246,15 +246,15 @@ function HighlightRowExpandable({
             transition={{ duration: 0.38, ease: [0.32, 0.72, 0, 1] }}
             className="overflow-hidden"
           >
-            <div className="space-y-3 border-t border-zinc-100 px-3 pb-2 pt-2">
+            <div className="space-y-3 border-t border-border px-3 pb-2 pt-2">
               <PerformanceBlock
                 row={row}
                 weeklyByGroup={weeklyByGroup}
                 chartId={`hl-${row.rank}-${row.playerId}-${row.statId}`}
               />
               {also.length > 0 ? (
-                <div className="space-y-3 border-t border-zinc-100 pt-2">
-                  <p className="text-[11px] font-semibold tracking-[0.12em] text-zinc-500 uppercase">
+                <div className="space-y-3 border-t border-border pt-2">
+                  <p className="text-[11px] font-semibold tracking-[0.12em] text-muted-foreground uppercase">
                     Also this week
                   </p>
                   {also.map((secondary) => (
@@ -291,7 +291,7 @@ export function HighlightList({
   const collapsed = collapseHighlightsByPlayer(rows);
 
   if (collapsed.length === 0) {
-    return <p className="text-sm text-zinc-500">{emptyLabel}</p>;
+    return <p className="text-sm text-muted-foreground">{emptyLabel}</p>;
   }
 
   return (
