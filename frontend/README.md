@@ -84,3 +84,7 @@ Click or keyboard-activate a Filter results row to add its player to the compari
 ## Player comparison links
 
 Player-name navigation uses `/search/?p=PLAYER_ID&season=YEAR`, selecting the clicked player in the comparison. Home highlights retain their published season. Weekly projection links use the stable player ID rather than a projection entity key. Run `npm run test -- src/lib/player-navigation.test.ts`.
+
+## Retired player profiles
+
+Player analysis lives in Search comparison. Legacy `/players/?id=ID&season=YEAR` and exported `/players/ID/?season=YEAR` links replace-navigate to Search with that player selected; no standalone profile UI or profile data request runs. Run `npm run test -- src/components/player`.

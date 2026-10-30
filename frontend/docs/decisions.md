@@ -130,3 +130,7 @@ Each result uses one full-row native button for comparison selection. Rank toolt
 ## One destination for player navigation
 
 Shared player links select a stable Ballnet player ID in canonical Search. Cross-page links start with that player, while result-row actions append to the current compatible selection. A season is preserved when the source has one; projection entity keys are never treated as player IDs.
+
+## Player profile retirement
+
+Standalone profile components are removed. Existing player paths remain only as static-export-safe compatibility redirects, retaining ID, season, tracking parameters and hash. This avoids breaking external links without keeping a second player-analysis UI.

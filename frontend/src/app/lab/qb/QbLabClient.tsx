@@ -113,14 +113,14 @@ export function QbLabClient({
             <p className="mt-1 max-w-xl text-sm leading-5 text-text-secondary">
               Same QB catalog as the player page. Every variation here puts the
               slider beside the stat name. Density sliders apply to all blocks
-              below. The live profile is unchanged.
+              below. The comparison view is unchanged.
             </p>
             <p className="mt-2 text-sm text-muted-foreground">
               <Link
-                href={`/players/${PLAYER_ID}`}
+                href={`/search/?p=${PLAYER_ID}`}
                 className="font-medium text-foreground underline"
               >
-                Back to the live QB page
+                Open QB comparison
               </Link>
             </p>
           </div>

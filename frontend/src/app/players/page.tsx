@@ -1,6 +1,6 @@
 import { Suspense } from "react";
-import { RuntimePlayerPage } from "@/components/player/RuntimePlayerPage";
+import { LegacyPlayerRedirect } from "@/components/player/LegacyPlayerRedirect";
 
 export default function PlayersPage() {
-  return <Suspense fallback={<main className="p-4">Loading player…</main>}><RuntimePlayerPage /></Suspense>;
+  return <Suspense fallback={<main className="p-4">Opening comparison…</main>}><LegacyPlayerRedirect /></Suspense>;
 }

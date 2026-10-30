@@ -1,34 +1,16 @@
 import { Suspense } from "react";
-import { notFound } from "next/navigation";
-import {
-  getPlayer,
-  loadCurrentSeasonContext,
-  loadPlayerIndex,
-} from "@/data/players";
-import { PlayerPageClient } from "@/components/player/PlayerPageClient";
+import { loadPlayerIndex } from "@/data/players";
+import { LegacyPlayerRedirect } from "@/components/player/LegacyPlayerRedirect";
 
+/** Keep old exported links usable; all player analysis now lives in Search. */
 export async function generateStaticParams() {
   const players = await loadPlayerIndex();
-  return players.map((player) => ({ id: player.id }));
+  return players.map(player => ({ id: player.id }));
 }
 
-export default async function PlayerPage({
-  params,
-}: {
-  params: Promise<{ id: string }>;
-}) {
+export default async function LegacyPlayerPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const [player, { season: currentSeason }] = await Promise.all([
-    getPlayer(id),
-    loadCurrentSeasonContext(),
-  ]);
-  if (!player) notFound();
-
-  return (
-    <Suspense
-      fallback={<div className="px-4 py-8 text-sm text-muted-foreground">Loading…</div>}
-    >
-      <PlayerPageClient player={player} currentSeason={currentSeason} />
-    </Suspense>
-  );
+  return <Suspense fallback={<main className="p-4">Opening comparison...</main>}>
+    <LegacyPlayerRedirect playerId={id} />
+  </Suspense>;
 }
