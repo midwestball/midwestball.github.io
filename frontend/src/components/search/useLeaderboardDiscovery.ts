@@ -31,6 +31,7 @@ export function useLeaderboardDiscovery({
   initialSeason, url, navigate,
 }: PlayerSearchProps) {
   const [livePlayers, setLivePlayers] = useState(() => players.filter(player => !player.id.startsWith("demo-")));
+  const [directoryReady, setDirectoryReady] = useState(false);
   const [liveSeasons, setLiveSeasons] = useState(seasons);
   const [currentSeason, setCurrentSeason] = useState(initialSeason);
   const [localQuery, setLocalQuery] = useState("");
@@ -53,6 +54,7 @@ export function useLeaderboardDiscovery({
       fetchCurrentMeta(),
     ]).then(([playerIndex, seasonMeta, current]) => {
       if (cancelled) return;
+      setDirectoryReady(true);
       if (playerIndex) {
         setLivePlayers(playerIndex.players.filter(player => !player.id.startsWith("demo-")));
       }
@@ -169,7 +171,7 @@ export function useLeaderboardDiscovery({
     }
     return max;
   }, [statRows, hasVolumeData, volumeMap]);
-  const volumeKey = `${statId ?? ""}:${floor ?? ""}`;
+  const volumeKey = `${season}:${group ?? ""}:${statId ?? ""}:${floor ?? ""}:${parsed?.minVolume ?? ""}`;
   const selectedVolume = parsed ? parsed.minVolume ?? floor : volumeChoice.key === volumeKey ? volumeChoice.value : floor;
   const minVolume = selectedVolume == null ? null : volumeMax > 0 ? Math.min(selectedVolume, volumeMax) : selectedVolume;
   const volumeDraft = volumeChoice.key === volumeKey && (selectedVolume == null || volumeMax <= 0 || selectedVolume <= volumeMax)
@@ -347,5 +349,5 @@ export function useLeaderboardDiscovery({
     sliderMax,
   );
 
-  return { query, setQuery, season, setSeason, seasonOptions, group, onSelectGroup, statId, onSelectStat, statEnabled, sortEnabled, boardGroup, statOptions, sortMode, setSortMode, volumeInteractive, volumeVisible, hasVolumeData, boardStatus, volumeMax, floor, volumeLabel, sliderMax, sliderValue, effectiveMin, setVolume, volumeDraft, setVolumeChoice, volumeKey, clampVolume, minVolume, commitVolumeDraft, showRanked, rankedRows, isFantasyRank, selectedStat, bioResults, asOfWeek, livePlayers };
+  return { query, setQuery, season, setSeason, seasonOptions, group, onSelectGroup, statId, onSelectStat, statEnabled, sortEnabled, boardGroup, statOptions, sortMode, setSortMode, volumeInteractive, volumeVisible, hasVolumeData, boardStatus, volumeMax, floor, volumeLabel, sliderMax, sliderValue, effectiveMin, setVolume, volumeDraft, setVolumeChoice, volumeKey, clampVolume, minVolume, commitVolumeDraft, showRanked, rankedRows, isFantasyRank, selectedStat, bioResults, asOfWeek, livePlayers, directoryReady };
 }

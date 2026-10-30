@@ -1,6 +1,6 @@
 "use client";
 import { useMemo } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useBrowserQuery, writeBrowserQuery } from "@/components/share/browser-query";
 import { isPositionCode, positionGroupOf } from "@/lib/catalog";
 import { parseIdList, patchQuery } from "@/lib/share-state/common";
 import { searchPlayers } from "@/lib/player-index";
@@ -11,12 +11,11 @@ import { PlayerLeaderboardFilters } from "./PlayerLeaderboardFilters";
 import { PlayerDiscoveryResults } from "./PlayerDiscoveryResults";
 import { PlayerCombobox } from "./PlayerCombobox";
 export function SearchPageClient(props: Parameters<typeof useLeaderboardDiscovery>[0]) {
-  const params = useSearchParams();
-  const router = useRouter();
+  const raw = useBrowserQuery();
+  const params = new URLSearchParams(raw);
   function navigate(updates: Record<string, string | null>, replace = false) {
     const next = patchQuery(new URLSearchParams(window.location.search), updates);
-    const href = `/search/?${next}`;
-    if (replace) window.history.replaceState(null, "", href); else router.push(href, { scroll: false });
+    writeBrowserQuery(next, replace);
   }
   const model = useLeaderboardDiscovery({ ...props, url: params.toString(), navigate });
   const rawIds = params.get("p");
@@ -27,6 +26,7 @@ export function SearchPageClient(props: Parameters<typeof useLeaderboardDiscover
     const bio = model.livePlayers.find(p => p.id === id);
     if (ids.includes(id)) return "Selected";
     if (ids.length >= 4) return "Four selected";
+    if (!compare.sameGroup) return "Different stat group";
     if (!bio || !bio.seasons.includes(model.season) || !isPositionCode(bio.position)) return "Unavailable";
     if (compare.positionGroup && positionGroupOf(bio.position) !== compare.positionGroup) return "Different stat group";
     return null;
@@ -38,10 +38,12 @@ export function SearchPageClient(props: Parameters<typeof useLeaderboardDiscover
       <p className="text-sm text-muted-foreground">Discover players and compare up to four from the same stat group.</p></header>
     <PlayerLeaderboardFilters model={model}>
       <PlayerCombobox label="Search players" query={model.query} onQueryChange={model.setQuery} onPick={add}
-        disabled={false} showWhenEmpty={ids.length === 0}
+        disabled={ids.length >= 4} showWhenEmpty={ids.length === 0}
         emptyMessage={ids.length >= 4 ? "Maximum four selected. Remove a player to add another." : "No eligible matching players for this season and stat group."}
         items={suggestions.map(p => ({ key: p.id, primary: p.name, secondary: `${p.position} / ${p.team}` }))} />
     </PlayerLeaderboardFilters>
+    {model.directoryReady && ((params.has("pos") && params.get("pos") !== model.group) || (params.has("stat") && params.get("stat") !== model.statId) || (params.has("season") && Number(params.get("season")) !== model.season)) &&
+      <p role="status" className="text-sm text-warning-foreground">Some shared filters are unavailable. <button className="underline" onClick={() => navigate({ pos: model.group, stat: model.statId, season: String(model.season), min: null }, true)}>Clear invalid filters</button></p>}
     <p className="text-xs text-muted-foreground">Published season {model.season}, through week {model.asOfWeek}. Filters apply to discovery; selected comparison columns stay selected.</p>
     <div className="flex flex-wrap gap-1">{ids.map(id => <button key={id} onClick={() => navigate({ p: ids.filter(p => p !== id).join(",") })}
       className="border border-border bg-card px-2 py-1 text-sm" aria-label={`Remove ${model.livePlayers.find(p => p.id === id)?.name ?? id}`}>

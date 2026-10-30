@@ -66,3 +66,7 @@ Player catalogs and highlight rows use the shared surface hierarchy. Rarity and 
 ## Shared and fallback chrome
 
 Public lab, loading and not-found routes share the same semantic appearance as primary screens. Shared controls do not depend on a separate dark class or competing appearance state.
+
+## Synchronous Search history
+
+Native history updates are synchronous and subscribed through the browser query store, preventing query clearing after a picker selection from overwriting a pending navigation. Popstate restores selection and filters. Snapshot fetches exclude bios unavailable in the chosen season.

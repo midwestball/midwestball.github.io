@@ -10,8 +10,8 @@ export function useCompareSelection(players: PlayerBio[], selectedIds: string[],
     () =>
       selectedIds
         .map((id) => players.find((player) => player.id === id))
-        .filter((player): player is PlayerBio => Boolean(player)),
-    [selectedIds, players],
+        .filter((player): player is PlayerBio => Boolean(player && player.seasons.includes(season))),
+    [selectedIds, players, season],
   );
 
   const groups = new Set(
@@ -36,7 +36,7 @@ export function useCompareSelection(players: PlayerBio[], selectedIds: string[],
     }
     const bios = selectedIds
       .map((id) => players.find((player) => player.id === id))
-      .filter((player): player is PlayerBio => Boolean(player));
+      .filter((player): player is PlayerBio => Boolean(player && player.seasons.includes(season)));
     if (bios.length === 0) {
       return;
     }

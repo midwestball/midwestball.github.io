@@ -1,5 +1,5 @@
 import React from "react";
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { useLeaderboardDiscovery } from "./useLeaderboardDiscovery";
 import { PlayerLeaderboardFilters } from "./PlayerLeaderboardFilters";
@@ -38,6 +38,9 @@ describe("published discovery filters", () => {
     expect(new URLSearchParams(location.search).get("utm")).toBe("kept");
     expect(new URLSearchParams(location.search).has("stat")).toBe(false);
     expect(screen.getByRole("button", { name: "Remove Wide Receiver" })).toBeTruthy();
+    act(() => { window.history.replaceState(null, "", "/search/?p=te&season=2026"); window.dispatchEvent(new PopStateEvent("popstate")); });
+    expect(screen.getByRole("button", { name: "Remove Tight End" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Remove Wide Receiver" })).toBeNull();
     window.history.replaceState(null, "", "/");
   });
   it("splits WR and TE from the same board without losing profile links", async () => {
