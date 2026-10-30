@@ -1,5 +1,5 @@
 import React from "react";
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { TradesPageClient } from "./TradesPageClient";
 import { RosProjections } from "../projections/RosProjections";
@@ -21,6 +21,19 @@ beforeEach(() => { window.history.replaceState(null, "", "/trades/"); localStora
 afterEach(cleanup);
 
 describe("ROS and roster controls", () => {
+  it("restores shared trade history and personal state without accidental storage writes", async () => {
+    const saved = JSON.stringify({ version: 1, settings: DEFAULT_SETTINGS, roster: [{ playerId: "QB", ir: false }] });
+    localStorage.setItem("midwestball-trade-roster-v1", saved);
+    history.replaceState(null, "", "/trades/?v=1&r=RB&g=RB&a=WR");
+    render(<TradesPageClient />);
+    await waitFor(() => expect(screen.getByLabelText("Status for Player RB")).toBeTruthy());
+    act(() => { history.replaceState(null, "", "/trades/?v=1&r=TE&a=WR"); window.dispatchEvent(new PopStateEvent("popstate")); });
+    expect(screen.getByLabelText("Status for Player TE")).toBeTruthy();
+    expect(localStorage.getItem("midwestball-trade-roster-v1")).toBe(saved);
+    act(() => { history.replaceState(null, "", "/trades/"); window.dispatchEvent(new PopStateEvent("popstate")); });
+    await waitFor(() => expect(screen.getByLabelText("Status for Player QB")).toBeTruthy());
+    expect(localStorage.getItem("midwestball-trade-roster-v1")).toBe(saved);
+  });
   it("opens and edits a shared roster without overwriting personal storage, then explicitly saves", async () => {
     const saved = JSON.stringify({ version: 1, settings: DEFAULT_SETTINGS, roster: [{ playerId: "QB", ir: false }] });
     localStorage.setItem("midwestball-trade-roster-v1", saved);

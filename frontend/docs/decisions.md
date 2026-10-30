@@ -90,3 +90,7 @@ Automated checks validate primary, secondary and muted ink on canvas, content, h
 ## Stable comparison subscriptions
 
 The comparison hook memoizes validated IDs from the raw selection string, independently of discovery query changes. Regression fixtures verify typing does not hydrate snapshots again.
+
+## Navigation regression evidence
+
+Hermetic component fixtures exercise weekly entity-key/threshold restoration without snapshot reload and trade navigation from one shared roster back to personal saved state without clobbering storage.
