@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { parseThemePreference, resolveTheme, THEME_BOOTSTRAP, THEME_KEY } from "./theme-preference";
 beforeEach(() => { localStorage.clear(); delete document.documentElement.dataset.theme; });
 describe("automatic theme contract", () => {
@@ -18,5 +18,12 @@ describe("automatic theme contract", () => {
     localStorage.setItem(THEME_KEY, "system"); window.dispatchEvent(new StorageEvent("storage", { key: THEME_KEY }));
     expect(document.documentElement.hasAttribute("data-theme")).toBe(false);
     expect(localStorage.getItem(THEME_KEY)).toBe("system");
+  });
+  it("falls back safely when browser storage throws", () => {
+    document.documentElement.dataset.theme = "light";
+    const spy = vi.spyOn(Storage.prototype, "getItem").mockImplementation(() => { throw new Error("disabled"); });
+    expect(() => window.eval(THEME_BOOTSTRAP)).not.toThrow();
+    expect(document.documentElement.hasAttribute("data-theme")).toBe(false);
+    spy.mockRestore();
   });
 });

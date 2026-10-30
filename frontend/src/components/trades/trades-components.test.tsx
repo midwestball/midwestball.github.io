@@ -21,6 +21,16 @@ beforeEach(() => { window.history.replaceState(null, "", "/trades/"); localStora
 afterEach(cleanup);
 
 describe("ROS and roster controls", () => {
+  it("hydrates ROS links and restores selections through navigation", () => {
+    history.replaceState(null, "", "/ballnet/?horizon=ros&p=WR,TE,missing");
+    render(<RosProjections />);
+    expect(screen.getByRole("button", { name: "Remove Player WR" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Remove Player TE" })).toBeTruthy();
+    expect(screen.getByRole("status").textContent).toContain("1 shared players");
+    act(() => { history.replaceState(null, "", "/ballnet/?horizon=ros&p=QB"); window.dispatchEvent(new PopStateEvent("popstate")); });
+    expect(screen.getByRole("button", { name: "Remove Player QB" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Remove Player WR" })).toBeNull();
+  });
   it("restores shared trade history and personal state without accidental storage writes", async () => {
     const saved = JSON.stringify({ version: 1, settings: DEFAULT_SETTINGS, roster: [{ playerId: "QB", ir: false }] });
     localStorage.setItem("midwestball-trade-roster-v1", saved);

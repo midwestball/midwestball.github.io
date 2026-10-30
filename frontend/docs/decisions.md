@@ -102,3 +102,7 @@ Active descendants identify the actual option target, with presentation-only lis
 ## Recoverable comparison failures
 
 Failed comparison hydration shows a local error and retry action while discovery controls remain available. Retrying changes only the comparison request revision and never clears selected IDs.
+
+## Recovery regression evidence
+
+ROS navigation retains player-ID semantics and reports stale selections. Theme bootstrap safely returns to CSS control if browser storage throws.
