@@ -1,3 +1,4 @@
+import { rankCandidates } from "@/lib/search/fuzzy";
 import type { PlayerBio } from "@/lib/payload";
 import {
   isPositionCode,
@@ -90,15 +91,7 @@ export function searchPlayers(
   players: PlayerBio[],
   query: string,
 ): PlayerBio[] {
-  const needle = query.trim().toLowerCase();
-  if (!needle) return players;
-  return players.filter((player) => {
-    return (
-      player.name.toLowerCase().includes(needle) ||
-      player.position.toLowerCase().includes(needle) ||
-      player.team.toLowerCase().includes(needle)
-    );
-  });
+  return rankCandidates(players, query);
 }
 
 export function filterPlayersByGroup(

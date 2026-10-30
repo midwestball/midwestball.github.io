@@ -1,4 +1,5 @@
 "use client";
+import { matchesSearch } from "@/lib/search/fuzzy";
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
@@ -159,12 +160,7 @@ function sortLeaderboardRows(
 }
 
 function matchesQuery(row: LeaderboardRow, needle: string): boolean {
-  if (!needle) return true;
-  return (
-    row.name.toLowerCase().includes(needle) ||
-    row.position.toLowerCase().includes(needle) ||
-    row.team.toLowerCase().includes(needle)
-  );
+  return matchesSearch({ ...row, id: row.playerId }, needle);
 }
 
 /** playerId → published counting-stat value for volumeStatId join. */
