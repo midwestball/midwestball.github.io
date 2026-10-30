@@ -60,3 +60,7 @@ Panels, forms, selected actions, warnings, unavailable states and keyboard focus
 ## Local feedback and motion
 
 Loading and error messages stay beside the affected data, with controls retained. Chart and row motion honors reduced-motion preference; the site has no decorative canvas dependency. Run `npm run test -- src/components`.
+
+## Home navigation
+
+Home season/week choices preserve unrelated query parameters and create navigable history entries. Back/Forward restores the published slice, with invalid weeks falling back to the available range. Run `npm run test -- src/components/highlights/highlights-navigation.test.tsx`.

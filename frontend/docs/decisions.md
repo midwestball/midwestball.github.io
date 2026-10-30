@@ -74,3 +74,7 @@ Native history updates are synchronous and subscribed through the browser query 
 ## Calm local feedback
 
 Discovery and comparison retain controls while pending data occupies a reserved local region. Reveal transitions are brief and become immediate under reduced motion; chart animations also respect that preference. Decorative lattice work is omitted because it is optional and lacks a browser performance gate in this environment.
+
+## Home history ownership
+
+Home writes only season/week on deliberate control changes, using synchronous history and explicit popstate reconciliation. There is no stale-state mirroring effect to overwrite a restored URL. Fractional and out-of-range choices are rejected.

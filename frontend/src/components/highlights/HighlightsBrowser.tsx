@@ -2,7 +2,9 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
+import { writeBrowserQuery } from "@/components/share/browser-query";
+import { patchQuery } from "@/lib/share-state/common";
 import {
   fetchCurrentMeta,
   fetchHighlightsBoard,
@@ -138,8 +140,6 @@ export function HighlightsBrowser({
   initialSeason,
   initialWeek,
 }: HighlightsBrowserProps) {
-  const router = useRouter();
-  const pathname = usePathname();
   const searchParams = useSearchParams();
   const initialQuery = useRef({
     season: searchParams.get("season"),
@@ -157,7 +157,7 @@ export function HighlightsBrowser({
 
   const parseSeason = (raw: string | null): number => {
     const n = Number(raw);
-    if (!Number.isFinite(n) || n < startSeason || n > latestSeason) {
+    if (!Number.isInteger(n) || n < startSeason || n > latestSeason) {
       return initialSeason;
     }
     return n;
@@ -174,7 +174,7 @@ export function HighlightsBrowser({
   const parseWeek = (raw: string | null, season: number): number => {
     const max = maxWeekFor(season);
     const n = Number(raw);
-    if (!Number.isFinite(n) || n < 1 || n > max) return Math.min(initialWeek, max);
+    if (!Number.isInteger(n) || n < 1 || n > max) return Math.min(initialWeek, max);
     return n;
   };
 
@@ -215,7 +215,7 @@ export function HighlightsBrowser({
       const requestedSeason = Number(initialQuery.current.season);
       const hasRequestedSeason =
         initialQuery.current.season !== null &&
-        Number.isFinite(requestedSeason) &&
+        Number.isInteger(requestedSeason) &&
         requestedSeason >= startSeason &&
         requestedSeason <= current.season;
       const selectedSeason = hasRequestedSeason
@@ -228,7 +228,7 @@ export function HighlightsBrowser({
       const requestedWeek = Number(initialQuery.current.week);
       const hasRequestedWeek =
         initialQuery.current.week !== null &&
-        Number.isFinite(requestedWeek) &&
+        Number.isInteger(requestedWeek) &&
         requestedWeek >= 1 &&
         requestedWeek <= maxWeek;
 
@@ -243,19 +243,25 @@ export function HighlightsBrowser({
     };
   }, [startSeason]);
 
-  // Keep URL in sync for shareable links (static export).
+  // Navigation restoration never writes a stale local selection over the URL.
   useEffect(() => {
-    const params = new URLSearchParams();
-    params.set("season", String(season));
-    params.set("week", String(week));
-    const next = `${pathname}?${params.toString()}`;
-    const current = `${pathname}?${searchParams.toString()}`;
-    if (next !== current) {
-      router.replace(next, { scroll: false });
-    }
-    // Intentionally omit searchParams from deps — we only push when season/week change.
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- URL mirror
-  }, [season, week, pathname, router]);
+    const restore = () => {
+      const p = new URLSearchParams(location.search);
+      const y = Number(p.get("season"));
+      const nextSeason = Number.isInteger(y) && y >= startSeason && y <= latestSeason ? y : latestSeason;
+      const w = Number(p.get("week"));
+      const max = maxWeekFor(nextSeason);
+      selectionTouched.current = true;
+      setSeason(nextSeason); setWeek(Number.isInteger(w) && w >= 1 && w <= max ? w : max);
+    };
+    window.addEventListener("popstate", restore);
+    return () => window.removeEventListener("popstate", restore);
+  }, [startSeason, latestSeason, maxWeekFor]);
+  function selectSlice(nextSeason: number, nextWeek: number) {
+    selectionTouched.current = true;
+    setSeason(nextSeason); setWeek(nextWeek);
+    writeBrowserQuery(patchQuery(new URLSearchParams(location.search), { season: String(nextSeason), week: String(nextWeek) }));
+  }
 
   useEffect(() => {
     let cancelled = false;
@@ -309,10 +315,8 @@ export function HighlightsBrowser({
               <select
                 value={season}
                 onChange={(e) => {
-                  selectionTouched.current = true;
                   const next = Number(e.target.value);
-                  setSeason(next);
-                  setWeek((w) => Math.min(w, maxWeekFor(next)));
+                  selectSlice(next, Math.min(week, maxWeekFor(next)));
                 }}
                 className={selectClass}
               >
@@ -327,7 +331,7 @@ export function HighlightsBrowser({
               Week
               <select
                 value={week}
-                onChange={(e) => { selectionTouched.current = true; setWeek(Number(e.target.value)); }}
+                onChange={(e) => selectSlice(season, Number(e.target.value))}
                 className={selectClass}
               >
                 {weekOptions.map((w) => (
