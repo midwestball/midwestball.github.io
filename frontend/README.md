@@ -88,3 +88,7 @@ Player-name navigation uses `/search/?p=PLAYER_ID&season=YEAR`, selecting the cl
 ## Retired player profiles
 
 Player analysis lives in Search comparison. Legacy `/players/?id=ID&season=YEAR` and exported `/players/ID/?season=YEAR` links replace-navigate to Search with that player selected; no standalone profile UI or profile data request runs. Run `npm run test -- src/components/player`.
+
+## Forecast and roster name navigation
+
+Player names in weekly summaries/tables, ROS tables, roster rows, trade packages and lineup results open season-scoped Search comparisons. Projection focus has its own control; defense entities without a player ID do not receive fabricated player links. Run `npm run test -- src/components/projections src/components/trades`.

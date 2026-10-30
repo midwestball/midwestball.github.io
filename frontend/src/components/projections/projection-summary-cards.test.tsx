@@ -28,6 +28,22 @@ function swatchStyles(): string[] {
 }
 
 describe("ProjectionSummaryCards", () => {
+  it("links the player name using the stable player ID while keeping projection focus separate", () => {
+    const onFocus = vi.fn();
+    render(<ProjectionSummaryCards entities={[entity()]} season={2025} focus={null} onFocus={onFocus} onRemove={() => {}} />);
+    const link = screen.getByRole("link", { name: "Example QB" });
+    const url = new URL(link.getAttribute("href")!, "https://example.test");
+    expect(url.pathname.replace(/\/$/, "")).toBe("/search");
+    expect(url.searchParams.get("p")).toBe("p-1");
+    expect(url.searchParams.get("season")).toBe("2025");
+    expect(link.closest("button")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Focus projection for Example QB" }));
+    expect(onFocus).toHaveBeenCalledWith("chi-qb-1");
+  });
+  it("does not invent a player link for a defense entity", () => {
+    render(<ProjectionSummaryCards entities={[entity({ playerId: null, entityType: "defense", position: "DST" })]} focus={null} onFocus={() => {}} onRemove={() => {}} />);
+    expect(screen.queryByRole("link")).toBeNull();
+  });
   it("renders the team color swatch next to the player name", () => {
     render(
       <ProjectionSummaryCards

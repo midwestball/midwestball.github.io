@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { PlayerComparisonLink } from "@/components/PlayerComparisonLink";
 import { useBrowserQuery, writeBrowserQuery } from "@/components/share/browser-query";
 import { decodeProjection } from "@/lib/share-state/projections";
 import { patchQuery } from "@/lib/share-state/common";
@@ -30,7 +31,7 @@ export function RosProjections() {
       {players.length ? <div className="overflow-x-auto"><table className="w-full border-collapse bg-card text-left text-sm">
         <caption className="pb-2 text-left text-xs text-muted-foreground">Compare up to four players. Percentiles describe each player’s possible ROS total.</caption>
         <thead><tr>{["Player", "Games left", "5%", "25%", "Median", "75%", "95%", "Mean", ""].map((h, i) => <th key={i} scope="col" className="border border-border px-2 py-2">{h}</th>)}</tr></thead>
-        <tbody>{players.map(p => <tr key={p.playerId}><th scope="row" className="border border-border p-2"><span className="block whitespace-nowrap">{p.name}</span><span className="text-xs font-normal text-muted-foreground">{p.position} · {p.team}</span></th>
+        <tbody>{players.map(p => <tr key={p.playerId}><th scope="row" className="border border-border p-2"><span className="block whitespace-nowrap"><PlayerComparisonLink playerId={p.playerId} season={snapshot.season}>{p.name}</PlayerComparisonLink></span><span className="text-xs font-normal text-muted-foreground">{p.position} · {p.team}</span></th>
           <td className="border border-border p-2 tabular-nums">{p.remainingTeamGames}</td>{p.quantiles.map((q, i) => <td key={i} className={`border border-border p-2 tabular-nums ${i === 2 ? "bg-muted font-semibold" : ""}`}>{q.toFixed(1)}</td>)}
           <td className="border border-border p-2 tabular-nums">{p.mean.toFixed(1)}</td><td className="border border-border p-2"><button onClick={() => setSelected(ids => ids.filter(id => id !== p.playerId))} aria-label={`Remove ${p.name}`} className="text-xs underline">Remove</button></td>
         </tr>)}</tbody>

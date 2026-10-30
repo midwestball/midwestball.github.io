@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { PlayerComparisonLink } from "@/components/PlayerComparisonLink";
 import { useMemo } from "react";
 import { RosPlayerPicker } from "@/components/projections/RosPlayerPicker";
 import { useRos } from "@/components/projections/useRos";
@@ -78,7 +79,7 @@ export function TradesPageClient() {
         }} />
         {roster.length ? <div className="overflow-x-auto"><table className="w-full text-left text-sm"><caption className="sr-only">Your roster and proposed outgoing players</caption><thead><tr>{["Player", "ROS median", "Status", "Trade action", ""].map((h, i) => <th key={i} scope="col" className="border-b border-border py-2 pr-2">{h}</th>)}</tr></thead>
           <tbody>{roster.map(entry => { const p = byId.get(entry.playerId); return <tr key={entry.playerId}>
-            <th scope="row" className="border-b border-border py-2 pr-2"><span className="block">{p?.name ?? entry.playerId}</span><span className="text-xs font-normal text-muted-foreground">{p ? `${p.position} · ${p.team}` : "Unavailable in this snapshot — remove to evaluate"}</span></th>
+            <th scope="row" className="border-b border-border py-2 pr-2"><span className="block">{p ? <PlayerComparisonLink playerId={p.playerId} season={snapshot.season}>{p.name}</PlayerComparisonLink> : entry.playerId}</span><span className="text-xs font-normal text-muted-foreground">{p ? `${p.position} · ${p.team}` : "Unavailable in this snapshot — remove to evaluate"}</span></th>
             <td className="border-b border-border pr-2 tabular-nums">{p ? rosMedian(p).toFixed(1) : "—"}</td>
             <td className="border-b border-border pr-2"><select aria-label={`Status for ${p?.name ?? entry.playerId}`} value={entry.ir ? "ir" : "active"} className={control} onChange={e => setRoster(rows => rows.map(r => r.playerId === entry.playerId ? { ...r, ir: e.target.value === "ir" } : r))}><option value="active">Active</option><option value="ir">IR</option></select></td>
             <td className="border-b border-border pr-2"><select aria-label={`Trade action for ${p?.name ?? entry.playerId}`} className={control} value={give.includes(entry.playerId) ? "give" : drops.includes(entry.playerId) ? "drop" : "keep"} onChange={e => {
@@ -93,12 +94,12 @@ export function TradesPageClient() {
     <section className="grid gap-3 sm:grid-cols-2" aria-label="Proposed trade">
       <div className="space-y-2 border border-border bg-card p-3"><h2 className="font-semibold">You give</h2>
         {rosterAware ? <p className="text-sm text-muted-foreground">Choose “Give” beside players on your roster.</p> : <RosPlayerPicker players={players} excluded={[...give, ...receive]} label="Add a player to give" onAdd={id => setGive(ids => [...ids, id])} />}
-        <Package ids={give} byId={byId} remove={id => setGive(ids => ids.filter(p => p !== id))} />
-        {drops.length > 0 && <p className="text-xs text-warning-foreground">Also dropping: {drops.map(id => byId.get(id)?.name).join(", ")}. Drops count toward roster value.</p>}
+        <Package season={snapshot.season} ids={give} byId={byId} remove={id => setGive(ids => ids.filter(p => p !== id))} />
+        {drops.length > 0 && <p className="text-xs text-warning-foreground">Also dropping: {drops.map((id, i) => <span key={id}>{i > 0 ? ", " : ""}<PlayerComparisonLink playerId={id} season={snapshot.season}>{byId.get(id)?.name ?? id}</PlayerComparisonLink></span>)}. Drops count toward roster value.</p>}
       </div>
       <div className="space-y-2 border border-border bg-card p-3"><h2 className="font-semibold">You receive</h2>
         <RosPlayerPicker players={players} excluded={[...receive, ...give, ...(rosterAware ? roster.map(p => p.playerId) : [])]} label="Add a player to receive" onAdd={id => setReceive(ids => [...ids, id])} />
-        <Package ids={receive} byId={byId} remove={id => setReceive(ids => ids.filter(p => p !== id))} />
+        <Package season={snapshot.season} ids={receive} byId={byId} remove={id => setReceive(ids => ids.filter(p => p !== id))} />
       </div>
     </section>
 
@@ -108,7 +109,7 @@ export function TradesPageClient() {
           {"lineupDelta" in calculation && <><Metric label="Starting lineup difference" value={calculation.lineupDelta} /><Metric label="Roster difference, including drops" value={calculation.rosterDelta} /></>}
         </div>
         {"before" in calculation && <><p className="mt-3 text-xs text-muted-foreground">Best fixed starting lineup by summed individual ROS medians. Empty slots score zero; this does not model weekly lineup changes, bye replacements, or waiver pickups.</p>
-          <div className="mt-3 grid gap-3 sm:grid-cols-2"><LineupTable title="Before trade" lineup={calculation.before} /><LineupTable title="After trade" lineup={calculation.after} /></div></>}
+          <div className="mt-3 grid gap-3 sm:grid-cols-2"><LineupTable season={snapshot.season} title="Before trade" lineup={calculation.before} /><LineupTable season={snapshot.season} title="After trade" lineup={calculation.after} /></div></>}
       </>}
     </section>
     <p className="text-xs text-muted-foreground">Positive differences favor the players you receive. Values sum individual medians; they are not the median outcome of a package or a probability of winning a trade. Projections exclude current injury news. <Link href="/ballnet/?horizon=ros" className="underline">View ROS ranges and scoring</Link>.</p>
@@ -118,9 +119,9 @@ export function TradesPageClient() {
 function Metric({ label, value }: { label: string; value: number }) {
   return <div><p className="text-xs text-muted-foreground">{label}</p><p className={`text-2xl font-semibold tabular-nums ${value > 0 ? "text-success" : value < 0 ? "text-destructive" : "text-foreground"}`}>{signed(value)} <span className="text-xs font-normal text-muted-foreground">ROS pts</span></p></div>;
 }
-function Package({ ids, byId, remove }: { ids: string[]; byId: Map<string, RosPlayer>; remove: (id: string) => void }) {
-  return <ul className="divide-y divide-border">{ids.map(id => { const p = byId.get(id); return <li key={id} className="flex items-center justify-between gap-2 py-2 text-sm"><span><strong>{p?.name ?? id}</strong> <span className="text-xs text-muted-foreground">{p?.position} · {p ? rosMedian(p).toFixed(1) : "—"}</span></span><button onClick={() => remove(id)} aria-label={`Remove ${p?.name ?? id} from trade`} className="text-xs underline">Remove</button></li>; })}</ul>;
+function Package({ ids, byId, remove, season }: { ids: string[]; byId: Map<string, RosPlayer>; remove: (id: string) => void; season: number }) {
+  return <ul className="divide-y divide-border">{ids.map(id => { const p = byId.get(id); return <li key={id} className="flex items-center justify-between gap-2 py-2 text-sm"><span><strong>{p ? <PlayerComparisonLink playerId={p.playerId} season={season}>{p.name}</PlayerComparisonLink> : id}</strong> <span className="text-xs text-muted-foreground">{p?.position} · {p ? rosMedian(p).toFixed(1) : "—"}</span></span><button onClick={() => remove(id)} aria-label={`Remove ${p?.name ?? id} from trade`} className="text-xs underline">Remove</button></li>; })}</ul>;
 }
-function LineupTable({ title, lineup }: { title: string; lineup: Lineup }) {
-  return <table className="w-full text-left text-sm"><caption className="border-b border-border pb-1 text-left font-semibold">{title} · {lineup.total.toFixed(1)}</caption><thead><tr><th scope="col" className="py-1">Slot</th><th scope="col">Player</th><th scope="col">ROS</th></tr></thead><tbody>{lineup.assignments.map((a, i) => <tr key={i}><th scope="row" className="border-t border-border py-1 pr-2 text-xs font-normal text-muted-foreground">{a.slot}</th><td className="border-t border-border py-1 pr-2">{a.player?.name ?? "Empty slot"}</td><td className="border-t border-border py-1 tabular-nums">{a.player ? rosMedian(a.player).toFixed(1) : "0.0"}</td></tr>)}</tbody></table>;
+function LineupTable({ title, lineup, season }: { title: string; lineup: Lineup; season: number }) {
+  return <table className="w-full text-left text-sm"><caption className="border-b border-border pb-1 text-left font-semibold">{title} · {lineup.total.toFixed(1)}</caption><thead><tr><th scope="col" className="py-1">Slot</th><th scope="col">Player</th><th scope="col">ROS</th></tr></thead><tbody>{lineup.assignments.map((a, i) => <tr key={i}><th scope="row" className="border-t border-border py-1 pr-2 text-xs font-normal text-muted-foreground">{a.slot}</th><td className="border-t border-border py-1 pr-2">{a.player ? <PlayerComparisonLink playerId={a.player.playerId} season={season}>{a.player.name}</PlayerComparisonLink> : "Empty slot"}</td><td className="border-t border-border py-1 tabular-nums">{a.player ? rosMedian(a.player).toFixed(1) : "0.0"}</td></tr>)}</tbody></table>;
 }

@@ -134,3 +134,7 @@ Shared player links select a stable Ballnet player ID in canonical Search. Cross
 ## Player profile retirement
 
 Standalone profile components are removed. Existing player paths remain only as static-export-safe compatibility redirects, retaining ID, season, tracking parameters and hash. This avoids breaking external links without keeping a second player-analysis UI.
+
+## Forecast link identity and focus
+
+Forecast name links use `playerId`, while projection focus/removal still uses `entityKey`. Summary name links are siblings of focus buttons, never nested interactive controls. Roster and lineup links carry the ROS snapshot season without changing saving or trade evaluation behavior.

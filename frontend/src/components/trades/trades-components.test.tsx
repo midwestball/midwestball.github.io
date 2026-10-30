@@ -21,11 +21,28 @@ beforeEach(() => { window.history.replaceState(null, "", "/trades/"); localStora
 afterEach(cleanup);
 
 describe("ROS and roster controls", () => {
+  it("links roster and trade-result names to season-scoped comparisons", async () => {
+    localStorage.setItem("midwestball-trade-roster-v1", JSON.stringify({ version: 1, settings: DEFAULT_SETTINGS, roster: [{ playerId: "RB", ir: false }] }));
+    render(<TradesPageClient />);
+    await waitFor(() => expect(screen.getByRole("link", { name: "Player RB" })).toBeTruthy());
+    fireEvent.focus(screen.getByLabelText("Add a player to receive"));
+    fireEvent.click(screen.getByRole("option", { name: /Player WR/ }));
+    const links = [...screen.getAllByRole("link", { name: "Player RB" }), ...screen.getAllByRole("link", { name: "Player WR" })];
+    for (const link of links) {
+      const url = new URL(link.getAttribute("href")!, "https://example.test");
+      expect(url.pathname.replace(/\/$/, "")).toBe("/search");
+      expect(url.searchParams.get("p")).toBe(link.textContent === "Player RB" ? "RB" : "WR");
+      expect(url.searchParams.get("season")).toBe("2026");
+    }
+  });
   it("hydrates ROS links and restores selections through navigation", () => {
     history.replaceState(null, "", "/ballnet/?horizon=ros&p=WR,TE,missing");
     render(<RosProjections />);
     expect(screen.getByRole("button", { name: "Remove Player WR" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Remove Player TE" })).toBeTruthy();
+    const link = new URL(screen.getByRole("link", { name: "Player WR" }).getAttribute("href")!, "https://example.test");
+    expect(link.searchParams.get("p")).toBe("WR");
+    expect(link.searchParams.get("season")).toBe("2026");
     expect(screen.getByRole("status").textContent).toContain("1 shared players");
     act(() => { history.replaceState(null, "", "/ballnet/?horizon=ros&p=QB"); window.dispatchEvent(new PopStateEvent("popstate")); });
     expect(screen.getByRole("button", { name: "Remove Player QB" })).toBeTruthy();
