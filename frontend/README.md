@@ -24,3 +24,7 @@ Discovery uses season boards, oriented percentiles, published fantasy ranks, and
 ## Share URL schemas
 
 Search uses `p,season,pos,stat,sort,min,q`; projections use route-specific `p,focus,points`. Trades use readable `v=1&r=ID,~IR_ID&g=GIVE&a=RECEIVE&d=DROP` with optional fixed-order slot settings. Invalid trade imports report errors without partial repair. Run `npm run test -- src/lib/share-state`.
+
+## Accessible player suggestions
+
+Search, weekly projections, ROS and roster pickers share focus, arrow keys, Enter, Escape and collapse behavior. Eligibility and default numerical ordering remain caller-owned. Run `npm run test -- src/components/search/player-combobox.test.tsx`.

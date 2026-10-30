@@ -11,3 +11,7 @@ Pure discovery helpers retain published ranks, null ordering and joined volume s
 ## Versioned scenario links
 
 Trade URL versioning is independent of saved roster schema v1. Pure parsers reject invalid ownership, overlap, duplicate entries, unsupported versions and oversized lists. Unknown snapshot IDs stay visible as warnings; links select current published data rather than freezing forecasts. Appearance never travels in links.
+
+## Picker interaction
+
+A shared combobox clamps keyboard navigation, closes on outside blur or selection, and keeps focus on its input during pointer selection. Catalog groups and fantasy comparison groups remain separate.

@@ -1,8 +1,9 @@
 "use client";
-import { useId, useMemo, useRef, useState } from "react";
+import { useMemo, useState } from "react";
 import type { ProjectionEntitySummary } from "@/lib/projections";
 import { canCompare, comparisonGroup, type ComparisonGroup } from "@/lib/projection-math";
-import { TeamAbbr } from "@/components/TeamAbbr";
+import { PlayerCombobox } from "@/components/search/PlayerCombobox";
+import { rankCandidates } from "@/lib/search/fuzzy";
 
 /** Noun phrase for the group a current selection locks the picker to. */
 const GROUP_LABEL: Record<ComparisonGroup, string> = {
@@ -30,14 +31,6 @@ export function ProjectionPicker({
   onAdd: (id: string) => void;
 }) {
   const [query, setQuery] = useState("");
-  // Suggestions collapse after a pick so the chart and table own the screen, and
-  // come straight back whenever the search box takes focus.
-  const [expanded, setExpanded] = useState(false);
-  const [activeIndex, setActiveIndex] = useState(0);
-  const searchRef = useRef<HTMLInputElement>(null);
-  const listId = useId();
-  const showList = expanded || selected.length === 0;
-
   const atCap = selected.length >= 4;
   const positions = useMemo(() => new Map(entities.map((e) => [e.entityKey, e.position])), [entities]);
   // First still-known selection fixes the comparison group; an empty selection offers everything.
@@ -54,85 +47,19 @@ export function ProjectionPicker({
     return anchor ? rest.filter((e) => canCompare(anchor, e.position)) : rest;
   }, [entities, selected, anchor]);
   const matches = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    return pool
-      .filter((e) => !q || `${e.name} ${e.team} ${e.position} ${e.opponent}`.toLowerCase().includes(q))
-      .sort((a, b) => b.expectedPoints - a.expectedPoints)
-      .slice(0, 8);
+    return rankCandidates([...pool].sort((a, b) => b.expectedPoints - a.expectedPoints)
+      .map(e => ({ ...e, id: e.entityKey })), query).slice(0, 8);
   }, [pool, query]);
   const helper =
     lockedGroup && pool.length === 0
       ? `Only ${GROUP_LABEL[lockedGroup]} can be compared with your current selection.`
       : null;
 
-  const pick = (id: string) => {
-    onAdd(id);
-    setQuery("");
-    setExpanded(false);
-    searchRef.current?.blur();
-  };
-
-  return (
-    <div className="border border-zinc-200 bg-white p-3" onBlur={(event) => { if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setExpanded(false); }}>
-      <label htmlFor="projection-search" className="text-sm font-semibold">
-        Add a projection
-      </label>
-      <input
-        id="projection-search"
-        ref={searchRef}
-        value={query}
-        onChange={(e) => { setQuery(e.target.value); setActiveIndex(0); setExpanded(true); }}
-        onFocus={() => setExpanded(true)}
-        onKeyDown={(event) => {
-          if (event.key === "ArrowDown" && matches.length) { event.preventDefault(); setExpanded(true); setActiveIndex(i => Math.min(i + 1, matches.length - 1)); }
-          if (event.key === "ArrowUp" && matches.length) { event.preventDefault(); setExpanded(true); setActiveIndex(i => Math.max(i - 1, 0)); }
-          if (event.key === "Enter" && showList && matches.length) { event.preventDefault(); pick(matches[Math.min(activeIndex, matches.length - 1)]!.entityKey); }
-          if (event.key === "Escape") setExpanded(false);
-        }}
-        role="combobox"
-        aria-expanded={showList}
-        aria-controls={listId}
-        aria-activedescendant={showList && matches.length ? `${listId}-${Math.min(activeIndex, matches.length - 1)}` : undefined}
-        aria-autocomplete="list"
-        disabled={atCap}
-        placeholder={
-          atCap
-            ? "Maximum four selected"
-            : lockedGroup
-              ? `Search ${GROUP_LABEL[lockedGroup]}…`
-              : "Search name, team, position, opponent"
-        }
-        className="mt-2 w-full rounded-none border border-zinc-300 px-3 py-2 text-sm"
-      />
-      {helper ? (
-        <p className="mt-2 text-sm text-zinc-500">{helper}</p>
-      ) : showList && matches.length > 0 ? (
-        <ul id={listId} role="listbox" className="mt-1 border border-zinc-200">
-          {matches.map((e, index) => (
-            <li key={e.entityKey} role="presentation">
-              <button
-                role="option"
-                id={`${listId}-${index}`}
-                aria-selected={index === activeIndex}
-                className="flex w-full items-center justify-between gap-2 px-3 py-2 text-left text-sm hover:bg-zinc-50 focus:bg-zinc-50"
-                // Keeping focus on the input stops the list from vanishing on blur
-                // before this click lands.
-                onMouseDown={(e) => e.preventDefault()}
-                onClick={() => pick(e.entityKey)}
-              >
-                <span className="flex min-w-0 flex-wrap items-center gap-x-1.5">
-                  <span className="font-medium text-zinc-900">{e.name}</span>
-                  <TeamAbbr team={e.team} />
-                  <span className="text-zinc-500">
-                    {e.position} vs {e.opponent}
-                  </span>
-                </span>
-                <span className="shrink-0 tabular-nums">{e.expectedPoints.toFixed(1)}</span>
-              </button>
-            </li>
-          ))}
-        </ul>
-      ) : null}
-    </div>
-  );
+  return <div className="border border-border bg-card p-3">
+    <PlayerCombobox label="Add a projection" query={query} onQueryChange={setQuery} onPick={onAdd}
+      disabled={atCap} showWhenEmpty={selected.length === 0}
+      placeholder={lockedGroup ? `Search ${GROUP_LABEL[lockedGroup]}` : "Search name, team, position, opponent"}
+      items={matches.map(e => ({ key: e.entityKey, primary: e.name, secondary: `${e.team} / ${e.position} vs ${e.opponent}`, meta: e.expectedPoints.toFixed(1) }))} />
+    {helper && <p className="mt-2 text-sm text-muted-foreground">{helper}</p>}
+  </div>;
 }
