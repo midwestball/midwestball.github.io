@@ -50,3 +50,7 @@ Charcoal is the root fallback; positive light media detection enables light. Val
 ## Theme surface migration
 
 Surface and text tokens carry presentation meaning rather than fixed zinc values. Selected controls use paired primary colors; warnings and deltas preserve severity with explicit text. Theme switching changes CSS only and never remounts data views.
+
+## Projection and trade contrast
+
+Forecast controls and roster warnings share semantic surfaces; signed deltas use success/error ink with text signs. No forecast or lineup arithmetic depends on theme.

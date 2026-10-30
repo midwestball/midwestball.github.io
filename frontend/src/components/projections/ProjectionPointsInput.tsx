@@ -39,7 +39,7 @@ export function ProjectionPointsInput({
 
   return (
     <div className="flex items-center gap-2">
-      <label htmlFor="projection-points" className="text-sm text-zinc-600">
+      <label htmlFor="projection-points" className="text-sm text-text-secondary">
         Fantasy points
       </label>
       <input
@@ -58,10 +58,10 @@ export function ProjectionPointsInput({
         onKeyDown={(event) => {
           if (event.key === "Enter") commit();
         }}
-        className="w-20 rounded-none border border-zinc-300 px-2 py-1 text-sm tabular-nums"
+        className="w-20 rounded-none border border-border px-2 py-1 text-sm tabular-nums"
       />
       {error ? (
-        <p id="projection-points-error" role="alert" className="text-xs text-red-700">
+        <p id="projection-points-error" role="alert" className="text-xs text-destructive">
           {error}
         </p>
       ) : null}
