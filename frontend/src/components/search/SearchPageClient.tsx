@@ -66,9 +66,7 @@ export function SearchPageClient(props: Parameters<typeof useLeaderboardDiscover
         <p role="status" className="text-sm text-warning-foreground">Some shared filters are unavailable. <button className="underline" onClick={() => navigate({ pos: model.group, stat: model.statId, season: String(model.season), min: null }, true)}>Clear invalid filters</button></p>}
       <p className="text-xs text-muted-foreground">Published season {model.season}, through week {model.asOfWeek}. Filters apply to these results; selected comparison columns stay selected.</p>
       <PlayerLeaderboardFilters model={model} />
-      <PlayerDiscoveryResults model={discovery} addAction={(id, name) => <button aria-label={`Add ${name} to comparison`}
-        disabled={!!reason(id)} title={reason(id) ?? "Add to comparison"} onClick={() => add(id)}
-        className="border border-border bg-card px-2 text-xs disabled:text-muted-foreground">{reason(id) ?? "Add"}</button>} />
+      <PlayerDiscoveryResults model={discovery} onSelect={add} selectionReason={reason} />
     </section>
   </main>;
 }

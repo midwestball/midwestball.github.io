@@ -76,3 +76,7 @@ Search fills the available page width up to its existing `max-w-6xl` limit befor
 ## Search section order
 
 Search and season controls come first, followed by selected players and their comparison. The Filter results section groups publication context, filters and the matching list so filter changes are clearly scoped to those results. Run `npm run test -- src/components/search/search-discovery.test.tsx`.
+
+## Direct comparison selection
+
+Click or keyboard-activate a Filter results row to add its player to the comparison. Rows have no separate Add button or profile navigation. Selected, unavailable and capped rows remain disabled, while published rank tooltips retain their own interaction. Run `npm run test -- src/components/search`.

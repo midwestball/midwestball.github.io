@@ -8,7 +8,7 @@ import { PlayerLeaderboardFilters } from "./PlayerLeaderboardFilters";
 import { PlayerDiscoveryResults } from "./PlayerDiscoveryResults";
 export function PlayerSearch(props: Parameters<typeof useLeaderboardDiscovery>[0]) {
   const model = useLeaderboardDiscovery(props);
-  return <div className="space-y-2"><PlayerSearchControls model={model} /><PlayerLeaderboardFilters model={model} /><PlayerDiscoveryResults model={model} /></div>;
+  return <div className="space-y-2"><PlayerSearchControls model={model} /><PlayerLeaderboardFilters model={model} /><PlayerDiscoveryResults model={model} onSelect={() => {}} selectionReason={() => null} /></div>;
 }
 
 import { SearchPageClient } from "./SearchPageClient";
@@ -30,6 +30,21 @@ vi.mock("@/lib/ballnet-store", () => ({
 }));
 afterEach(() => { cleanup(); history.replaceState(null, "", "/"); vi.clearAllMocks(); });
 describe("published discovery filters", () => {
+  it("adds a result by clicking its row without a separate Add action or profile link", async () => {
+    history.replaceState(null, "", "/search/?season=2026&pos=wr&stat=fantasy_pos_rank&utm=kept");
+    render(<SearchPageClient players={players} seasons={[{ season: 2026, asOfWeek: 8 }]} initialSeason={2026} />);
+    const row = await screen.findByRole("button", { name: "Compare Wide Receiver" });
+    expect(screen.queryByRole("link", { name: /Wide Receiver/ })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Add Wide Receiver to comparison" })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: /WR 1\. PPR finish/ }));
+    expect(new URLSearchParams(location.search).has("p")).toBe(false);
+    fireEvent.click(row);
+    await waitFor(() => expect(screen.getByRole("button", { name: "Remove Wide Receiver" })).toBeTruthy());
+    expect(new URLSearchParams(location.search).get("p")).toBe("wr");
+    expect(new URLSearchParams(location.search).get("stat")).toBe("fantasy_pos_rank");
+    expect(new URLSearchParams(location.search).get("utm")).toBe("kept");
+    expect((screen.getByRole("button", { name: "Compare Wide Receiver" }) as HTMLButtonElement).disabled).toBe(true);
+  });
   it.each(["", "wr"])("places comparison between search controls and the grouped filter results: %s", async selected => {
     history.replaceState(null, "", `/search/?season=2026&p=${selected}`);
     render(<SearchPageClient players={players} seasons={[{ season: 2026, asOfWeek: 8 }]} initialSeason={2026} />);
@@ -49,13 +64,13 @@ describe("published discovery filters", () => {
   it.each(["", "&pos=backfield&stat=fantasy_pos_rank"])("hides incompatible discovery rows until the selection is removed: %s", async filters => {
     history.replaceState(null, "", `/search/?season=2026${filters}`);
     render(<SearchPageClient players={players} seasons={[{ season: 2026, asOfWeek: 8 }]} initialSeason={2026} />);
-    await waitFor(() => expect(screen.getByRole("link", { name: /Running Back/ })).toBeTruthy());
+    await waitFor(() => expect(screen.getByRole("button", { name: /Running Back/ })).toBeTruthy());
     act(() => { history.replaceState(null, "", `/search/?season=2026&p=wr${filters}`); window.dispatchEvent(new PopStateEvent("popstate")); });
-    await waitFor(() => expect(screen.queryByRole("link", { name: /Running Back/ })).toBeNull());
+    await waitFor(() => expect(screen.queryByRole("button", { name: /Running Back/ })).toBeNull());
     expect(screen.getByRole("button", { name: "Remove Wide Receiver" })).toBeTruthy();
-    if (!filters) expect(screen.getByRole("link", { name: /Tight End/ })).toBeTruthy();
+    if (!filters) expect(screen.getByRole("button", { name: /Tight End/ })).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Remove Wide Receiver" }));
-    await waitFor(() => expect(screen.getByRole("link", { name: /Running Back/ })).toBeTruthy());
+    await waitFor(() => expect(screen.getByRole("button", { name: /Running Back/ })).toBeTruthy());
   });
   it("keeps comparison failures local and supports retry", async () => {
     vi.mocked(loadHydratedPlayerSnapshots).mockRejectedValueOnce(new Error("offline"));
@@ -85,11 +100,12 @@ describe("published discovery filters", () => {
     expect(screen.queryByRole("button", { name: "Remove Wide Receiver" })).toBeNull();
     window.history.replaceState(null, "", "/");
   });
-  it("splits WR and TE from the same board without losing profile links", async () => {
+  it("splits WR and TE from the same board with selectable rows", async () => {
     render(<PlayerSearch players={players} seasons={[{ season: 2026, asOfWeek: 8, completedWeek: 7 }]} initialSeason={2026} />);
     fireEvent.change(screen.getByLabelText("Position"), { target: { value: "wr" } });
     await waitFor(() => expect(screen.queryByText("Tight End")).toBeNull());
-    expect(screen.getByRole("link", { name: /Wide Receiver/ }).getAttribute("href")).toContain("season=2026");
+    expect(screen.getByRole("button", { name: "Compare Wide Receiver" })).toBeTruthy();
+    expect((screen.getByLabelText("Season") as HTMLSelectElement).value).toBe("2026");
     fireEvent.change(screen.getByLabelText("Position"), { target: { value: "te" } });
     await waitFor(() => expect(screen.getByText("Tight End")).toBeTruthy());
     expect(screen.queryByText("Wide Receiver")).toBeNull();

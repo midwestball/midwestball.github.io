@@ -1,10 +1,21 @@
 "use client";
-import Link from "next/link";
 import { formatStatValue } from "@/lib/catalog";
 import { TeamAbbr } from "@/components/TeamAbbr";
 import { PositionRankLabel } from "@/components/PositionRankLabel";
 import type { useLeaderboardDiscovery } from "./useLeaderboardDiscovery";
-export function PlayerDiscoveryResults({ model, addAction }: { model: ReturnType<typeof useLeaderboardDiscovery>; addAction?: (id: string, name: string) => React.ReactNode }) {
+type SelectionProps = { onSelect: (id: string) => void; selectionReason: (id: string) => string | null };
+function ResultRow({ id, name, onSelect, selectionReason, children }: SelectionProps & { id: string; name: string; children: React.ReactNode }) {
+  const reason = selectionReason(id);
+  return <li className="relative">
+    <button type="button" aria-label={`Compare ${name}`} title={reason ?? `Compare ${name}`} disabled={!!reason}
+      onClick={() => onSelect(id)} className="peer absolute inset-0 z-10 w-full cursor-pointer disabled:cursor-default" />
+    <div className="pointer-events-none flex items-center justify-between gap-3 border border-border bg-card px-3 py-2 peer-hover:bg-muted">
+      {children}
+      {reason && <span className="text-xs text-muted-foreground">{reason}</span>}
+    </div>
+  </li>;
+}
+export function PlayerDiscoveryResults({ model, onSelect, selectionReason }: { model: ReturnType<typeof useLeaderboardDiscovery> } & SelectionProps) {
   const { season, hasVolumeData, boardStatus, showRanked, rankedRows, isFantasyRank, selectedStat, bioResults } = model;
   return <>      {showRanked ? (
         boardStatus === "loading" ? (
@@ -16,19 +27,15 @@ export function PlayerDiscoveryResults({ model, addAction }: { model: ReturnType
         ) : rankedRows && rankedRows.length > 0 ? (
           <ul className="space-y-1">
             {rankedRows.map((row) => (
-              <li key={row.playerId} className="flex items-stretch gap-1">
-                <Link
-                  href={`/players/?id=${encodeURIComponent(row.playerId)}&season=${season}`}
-                  className="min-w-0 flex-1 flex items-center justify-between rounded-none border border-border bg-card px-3 py-2 hover:bg-muted"
-                >
+              <ResultRow key={row.playerId} id={row.playerId} name={row.name} onSelect={onSelect} selectionReason={selectionReason}>
                   <div>
                     <p className="font-medium text-foreground">{row.name}</p>
                     <p className="flex flex-wrap items-center gap-x-1.5 text-sm text-muted-foreground">
-                      <PositionRankLabel
+                      <span className="pointer-events-auto relative z-20"><PositionRankLabel
                         position={row.position}
                         rank={row.fantasyPosRank}
                         kind={row.fantasyPosRankKind}
-                      />
+                      /></span>
                       <span aria-hidden>·</span>
                       <TeamAbbr team={row.team} />
                     </p>
@@ -62,9 +69,7 @@ export function PlayerDiscoveryResults({ model, addAction }: { model: ReturnType
                       </>
                     )}
                   </div>
-                </Link>
-                {addAction?.(row.playerId, row.name)}
-              </li>
+              </ResultRow>
             ))}
           </ul>
         ) : (
@@ -78,27 +83,21 @@ export function PlayerDiscoveryResults({ model, addAction }: { model: ReturnType
         <>
           <ul className="space-y-1">
             {bioResults.map((player) => (
-              <li key={player.id} className="flex items-stretch gap-1">
-                <Link
-                  href={`/players/?id=${encodeURIComponent(player.id)}&season=${season}`}
-                  className="min-w-0 flex-1 flex items-center justify-between rounded-none border border-border bg-card px-3 py-2 hover:bg-muted"
-                >
+              <ResultRow key={player.id} id={player.id} name={player.name} onSelect={onSelect} selectionReason={selectionReason}>
                   <div>
                     <p className="font-medium text-foreground">{player.name}</p>
                     <p className="flex flex-wrap items-center gap-x-1.5 text-sm text-muted-foreground">
-                      <PositionRankLabel
+                      <span className="pointer-events-auto relative z-20"><PositionRankLabel
                         position={player.position}
                         rank={player.fantasyPosRank}
                         kind={player.fantasyPosRankKind}
-                      />
+                      /></span>
                       <span aria-hidden>·</span>
                       <TeamAbbr team={player.team} />
                     </p>
                   </div>
                   <span className="text-xs text-muted-foreground">{season}</span>
-                </Link>
-                {addAction?.(player.id, player.name)}
-              </li>
+              </ResultRow>
             ))}
           </ul>
           {bioResults.length === 0 ? (
