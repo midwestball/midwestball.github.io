@@ -59,7 +59,10 @@ The accepted UI lives under **`frontend/`**. Run with `cd frontend && npm ci && 
 | Search | `src/app/search/page.tsx` |
 | Player page | `src/app/players/[id]/page.tsx` + `PlayerPageClient` |
 | Projections (`/ballnet`) | `src/app/ballnet/page.tsx` |
-| Compare (`/compare`) | `src/app/compare/page.tsx`, `src/components/compare/` |
+| Search comparison | `src/components/search/SearchPageClient.tsx`, `src/components/compare/` |
+| Legacy comparison links | `src/app/compare/page.tsx`, `src/app/ffoptim/page.tsx` |
+| URL contracts | `src/lib/share-state/`, `src/components/share/browser-query.ts` |
+| Automatic appearance | `src/app/globals.css`, `src/lib/theme/` |
 | Position catalog | `src/lib/catalog/` |
 | JSON contract | `src/lib/payload.ts` |
 | Position rank label | `src/components/PositionRankLabel.tsx` |
@@ -90,3 +93,7 @@ To prevent architectural drift, the following rules apply to **`frontend/`** and
 * Do not connect PostgREST or `@supabase/supabase-js` — public Storage URLs only.
 * Do not add rounded boxes, pills, or shadows.
 * Do not reintroduce a Node server deploy (Vercel/`next start`) for this org site — Pages serves `frontend/out`.
+
+## Frontend state and appearance
+
+Search is the canonical comparison and discovery route. Pure URL codecs, fuzzy matching and leaderboard helpers live under `src/lib`; browser components own navigation and personal persistence. See [share-state ADR](../adr/2026-10-29-share-state-and-personal-rosters.md), [theme ADR](../adr/2026-10-29-system-theme.md), and [verification](../frontend-validation.md).

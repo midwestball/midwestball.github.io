@@ -27,7 +27,7 @@ Find players whose **year-to-year** (or week-to-year) percentile / value paths l
 
 ## 4. Compare player distributions
 
-**Shipped (YTD overlay):** `/compare` places up to four same-group players’ percentile sliders side by side and expands **one** league KDE with franchise-colored markers (`docs/adr/2026-09-17-compare-side-by-side.md`).
+**Shipped (YTD overlay):** `/search` places up to four same-group players’ percentile sliders side by side and expands **one** league KDE with franchise-colored markers (`docs/adr/2026-09-17-compare-side-by-side.md`).
 
 | Follow-up | Intent |
 |---|---|

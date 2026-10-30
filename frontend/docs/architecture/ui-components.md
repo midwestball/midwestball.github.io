@@ -36,6 +36,10 @@ Never claim the player is "better than N% of the league".
 
 - Chart.js, Observable Plot, or warping the chart axis to match the slider.
 - Histogram bars in the chart layer — KDE only.
-- Mixing Ballnet writeups or Projections UI into the stat stack — those are their own routes (`/ballnet`, `/compare`). Compare owns multi-player chrome under `components/compare/`.
+- Mixing Ballnet writeups or Projections UI into the stat stack — those are their own routes (`/ballnet`, `/search`). Compare owns multi-player chrome under `components/compare/`.
 - Rounded boxes, pills, or drop shadows on any UI chrome.
 - Labeling KDE density as a percent of the league.
+
+## Semantic appearance
+
+Use `bg-background`, `bg-card`, `bg-popover`, `text-foreground`, `text-text-secondary`, `text-muted-foreground`, `border-border` and `outline-ring`. Selected actions pair `bg-primary` with `text-primary-foreground`. Warning and error surfaces use semantic severity tokens. Chart grids, axes, neutral curves and labels use `--chart-*` variables. Keep team/percentile/rarity identity colors and contrast-aware badges. CSS detects effective system theme, with charcoal fallback and no visible theme control. Do not introduce class-driven dark overrides. All reveal/chart motion honors reduced motion.

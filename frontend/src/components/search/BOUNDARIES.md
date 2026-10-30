@@ -19,7 +19,6 @@
 
 - Changing the leaderboard JSON shape or Storage path.
 
-
 ## Never
 
 - Split Ballnet `pass_catcher` publish/leaderboard/league JSON for the search WR/TE filter — client-side `position` filter only.

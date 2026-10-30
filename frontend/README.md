@@ -19,7 +19,7 @@ Player discovery normalizes punctuation and diacritics and accepts conservative 
 
 ## Published leaderboard filters
 
-Discovery uses season boards, oriented percentiles, published fantasy ranks, and completed-week ramp?hold qualification. WR and TE share one pass-catcher board. Run `npm run test -- src/lib/search/leaderboards.test.ts`.
+Discovery uses season boards, oriented percentiles, published fantasy ranks, and completed-week ramp-hold qualification. WR and TE share one pass-catcher board. Run `npm run test -- src/lib/search/leaderboards.test.ts`.
 
 ## Share URL schemas
 
