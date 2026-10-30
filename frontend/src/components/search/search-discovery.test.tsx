@@ -26,8 +26,17 @@ vi.mock("@/lib/ballnet-store", () => ({
     stats: { receiving_yards: players.map((p, i) => ({ playerId: p.id, ...p, value: 300 - i, percentile: 90 - i,
       denomYtd: 40, qualified: true, fantasyPosRank: i + 1, fantasyPosRankKind: "finish" })) } }),
 }));
-afterEach(cleanup);
+afterEach(() => { cleanup(); history.replaceState(null, "", "/"); vi.clearAllMocks(); });
 describe("published discovery filters", () => {
+  it("keeps comparison failures local and supports retry", async () => {
+    vi.mocked(loadHydratedPlayerSnapshots).mockRejectedValueOnce(new Error("offline"));
+    history.replaceState(null, "", "/search/?p=wr&season=2026");
+    render(<SearchPageClient players={players} seasons={[{ season: 2026, asOfWeek: 8 }]} initialSeason={2026} />);
+    await waitFor(() => expect(screen.getByRole("alert").textContent).toContain("Could not load comparison"));
+    expect(screen.getByLabelText("Position")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Retry comparison" }));
+    await waitFor(() => expect(screen.getByText("Comparison board")).toBeTruthy());
+  });
   it("hydrates canonical selections and preserves them across discovery filters", async () => {
     window.history.replaceState(null, "", "/search/?p=wr&season=2026&pos=wr&stat=fantasy_pos_rank&utm=kept");
     const props = { players, seasons: [{ season: 2026, asOfWeek: 8 }], initialSeason: 2026 };

@@ -48,6 +48,7 @@ export function SearchPageClient(props: Parameters<typeof useLeaderboardDiscover
       className="border border-border bg-card px-2 py-1 text-sm" aria-label={`Remove ${model.livePlayers.find(p => p.id === id)?.name ?? id}`}>
       {model.livePlayers.find(p => p.id === id)?.name ?? id} {missing.includes(id) ? "(unavailable this season)" : ""} ×</button>)}</div>
     {missing.length > 0 && <p role="status" className="text-sm text-muted-foreground">Some shared players are unavailable for this season. Remove them to change the comparison.</p>}
+    {compare.error && <p role="alert" className="text-sm text-destructive">{compare.error} <button className="underline" onClick={compare.retry}>Retry comparison</button></p>}
     {!compare.sameGroup ? <p role="alert">Comparison requires the same stat group. Remove an incompatible player.</p> : compare.loading ?
       <div role="status" className="min-h-32 border border-border p-3">Loading comparison…</div> : compare.displayedColumns.length > 0 &&
       <div className="border border-border bg-card max-md:-mx-4 max-md:border-x-0"><CompareBoard columns={compare.displayedColumns} /></div>}

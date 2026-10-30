@@ -98,3 +98,7 @@ Hermetic component fixtures exercise weekly entity-key/threshold restoration wit
 ## Accessible option targets
 
 Active descendants identify the actual option target, with presentation-only list wrappers. Clicking an already-focused picker reopens suggestions after selection, without requiring an artificial blur or reopening automatically.
+
+## Recoverable comparison failures
+
+Failed comparison hydration shows a local error and retry action while discovery controls remain available. Retrying changes only the comparison request revision and never clears selected IDs.

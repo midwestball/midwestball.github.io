@@ -26,9 +26,11 @@ export function useCompareSelection(players: PlayerBio[], rawIds: string | null,
     ? ([...groups][0] as PositionGroup | undefined)
     : undefined;
 
+  const [revision, setRevision] = useState(0);
+  const [failure, setFailure] = useState({ key: "", message: "" });
   const [columns, setColumns] = useState<CompareColumn[]>([]);
   const [loadedKey, setLoadedKey] = useState("");
-  const requestKey = `${season}:${positionGroup ?? ""}:${selectedBios.map(b => `${b.id}:${b.position}`).join(",")}`;
+  const requestKey = `${season}:${positionGroup ?? ""}:${selectedBios.map(b => `${b.id}:${b.position}`).join(",")}:${revision}`;
   const loading = sameGroup && Boolean(positionGroup) && selectedBios.length > 0 && loadedKey !== requestKey;
   const displayedColumns = loadedKey === requestKey && selectedBios.length > 0 ? columns : [];
 
@@ -69,6 +71,7 @@ export function useCompareSelection(players: PlayerBio[], rawIds: string | null,
     }).catch(() => {
       if (cancelled) return;
       setColumns([]);
+      setFailure({ key: requestKey, message: "Could not load comparison data." });
       setLoadedKey(requestKey);
     });
     return () => {
@@ -76,5 +79,5 @@ export function useCompareSelection(players: PlayerBio[], rawIds: string | null,
     };
   }, [sameGroup, positionGroup, selectedIds, players, season, requestKey]);
 
-  return { selectedBios, sameGroup, positionGroup, loading, displayedColumns };
+  return { selectedBios, sameGroup, positionGroup, loading, displayedColumns, error: failure.key === requestKey ? failure.message : "", retry: () => setRevision(n => n + 1) };
 }
