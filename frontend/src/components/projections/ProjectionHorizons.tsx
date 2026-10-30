@@ -10,6 +10,7 @@ export function ProjectionHorizons() {
   const ros = search.get("horizon") === "ros";
   function choose(next: boolean) {
     const url = new URL(window.location.href);
+    for (const key of ["p", "focus", "points"]) url.searchParams.delete(key);
     if (next) url.searchParams.set("horizon", "ros"); else url.searchParams.delete("horizon");
     router.push(`${url.pathname}${url.search}`, { scroll: false });
   }

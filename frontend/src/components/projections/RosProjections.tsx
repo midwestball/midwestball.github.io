@@ -1,13 +1,20 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useBrowserQuery, writeBrowserQuery } from "@/components/share/browser-query";
+import { decodeProjection } from "@/lib/share-state/projections";
+import { patchQuery } from "@/lib/share-state/common";
 import { RosPlayerPicker } from "./RosPlayerPicker";
 import { useRos } from "./useRos";
 
 export function RosProjections() {
   const { snapshot, error, retry } = useRos();
-  const [selected, setSelected] = useState<string[]>([]);
+  const raw = useBrowserQuery();
+  const parsed = decodeProjection(new URLSearchParams(raw), new Set(snapshot?.entities.map(p => p.playerId) ?? []));
+  const selected = parsed.selected;
+  function setSelected(update: (ids: string[]) => string[]) {
+    writeBrowserQuery(patchQuery(new URLSearchParams(location.search), { p: update(selected).join(",") }));
+  }
   if (!snapshot) return <div role="status" className="mx-auto max-w-5xl border border-zinc-200 p-4 text-sm">{error || "Loading rest-of-season projections…"}{error && <button onClick={retry} className="ml-3 font-semibold underline">Retry</button>}</div>;
   const players = selected.map(id => snapshot.entities.find(p => p.playerId === id)).filter(p => p !== undefined);
   return <div>
@@ -18,6 +25,7 @@ export function RosProjections() {
       <p className="mt-1 text-sm text-zinc-600">Remaining regular-season fantasy points, including missed-game risk. Full PPR. Updated <time dateTime={snapshot.generatedAt}>{new Date(snapshot.generatedAt).toLocaleString()}</time>.</p>
     </div></header>
     <main className="mx-auto max-w-5xl space-y-4 px-4 py-4">
+      {parsed.stale > 0 && <p role="status" className="text-sm text-muted-foreground">{parsed.stale} shared players are unavailable in this snapshot.</p>}
       <RosPlayerPicker players={snapshot.entities} excluded={selected} label="Add a ROS projection" disabled={selected.length >= 4} onAdd={id => setSelected(ids => [...ids, id].slice(0, 4))} />
       {players.length ? <div className="overflow-x-auto"><table className="w-full border-collapse bg-white text-left text-sm">
         <caption className="pb-2 text-left text-xs text-zinc-500">Compare up to four players. Percentiles describe each player’s possible ROS total.</caption>

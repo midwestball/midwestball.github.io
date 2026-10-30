@@ -23,3 +23,7 @@ Board requests depend on season, published week and catalog group. Query and vol
 ## Independent Search scopes
 
 The Search shell owns one live directory and validated URL state. Discovery filters never erase comparison IDs; only selected IDs drive snapshot hydration. Unknown or unavailable selections remain removable with visible feedback.
+
+## Projection navigation
+
+Snapshot fetch lifetimes are independent of URL edits. Selection history uses discrete entries; threshold commits replace the current entry. Missing IDs report stale selections and thresholds clamp to the published grid. Horizon changes deliberately discard incompatible identity types.

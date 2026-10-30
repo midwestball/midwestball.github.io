@@ -36,3 +36,7 @@ A request-keyed discovery hook owns board loading and qualification; controlled 
 ## Canonical Search
 
 `/search/?p=A,B&season=2026&pos=wr&stat=fantasy_pos_rank` combines comparison with the complete discovery filters. Query edits replace history; discrete choices push history. Filter changes preserve selected players. Run `npm run test -- src/components/search`.
+
+## Projection links
+
+Weekly links restore entity keys, focus and optional points thresholds; ROS links restore player IDs. Back/Forward reconciles selections without restarting snapshot loading. Switching horizons clears incompatible keys. Run `npm run test -- src/components/projections src/lib/share-state`.
