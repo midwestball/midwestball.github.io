@@ -78,3 +78,7 @@ Discovery and comparison retain controls while pending data occupies a reserved 
 ## Home history ownership
 
 Home writes only season/week on deliberate control changes, using synchronous history and explicit popstate reconciliation. There is no stale-state mirroring effect to overwrite a restored URL. Fractional and out-of-range choices are rejected.
+
+## Long trade link fallback
+
+Links above 1,800 characters receive a soft warning and an intact JSON text export. No list is truncated to meet this warning threshold. Empty explicit player lists are malformed; canonical empty lists are omitted. Package previews do not offer a roster-save action.

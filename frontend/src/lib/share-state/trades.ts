@@ -10,7 +10,7 @@ export function decodeTradeShare(params: URLSearchParams, available?: ReadonlySe
     if (TRADE_KEYS.some(k => params.getAll(k).length > 1)) throw new Error("Duplicate trade fields.");
     const list = (key: string, roster = false) => {
       const raw = params.get(key);
-      if (raw === null || raw === "") return [];
+      if (raw === null) return [];
       const ids = raw.split(",");
       if (ids.length > 44 || ids.some(id => !(roster ? /^~?[A-Za-z0-9_-]{1,128}$/ : /^[A-Za-z0-9_-]{1,128}$/).test(id)) ||
         new Set(ids.map(id => id.replace(/^~/, ""))).size !== ids.length) throw new Error(`Invalid ${key} player list.`);

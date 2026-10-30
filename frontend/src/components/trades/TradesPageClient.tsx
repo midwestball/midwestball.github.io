@@ -52,13 +52,13 @@ export function TradesPageClient() {
       <p className="mt-1 max-w-3xl text-sm text-text-secondary">Compare remaining regular-season points using each player’s median projection. Add your roster to see how a trade changes your best starting lineup.</p>
     </header>
     {scenario.shared && <aside className="space-y-2 border border-border bg-muted p-3 text-sm">
-      <p>Viewing a shared trade. Your saved roster has not been changed.</p>
-      <button disabled={!validSettings(settings)} onClick={scenario.save} className={control}>Save this roster</button>{" "}
+      <p>{storageNote === "Roster saved" ? "Viewing a shared trade. This roster has been saved in this browser." : "Viewing a shared trade. Your saved roster has not been changed."}</p>
+      {rosterAware && <button disabled={!validSettings(settings)} onClick={scenario.save} className={control}>Save this roster</button>}{" "}
       <button onClick={scenario.useSaved} className={control}>Use my saved roster</button>
     </aside>}
     {scenario.warnings.length > 0 && <p role="status" className="text-sm text-warning-foreground">{scenario.warnings.join(". ")}</p>}
     {storageNote && <p role="status" className="text-sm text-warning-foreground">{storageNote}</p>}
-    <ShareLinkButton label="Share trade" getHref={scenario.shareHref} disabled={!validSettings(settings) || !!storageNote && scenario.shared && storageNote !== "Roster saved"} />
+    <ShareLinkButton label="Share trade" getHref={scenario.shareHref} disabled={!validSettings(settings)} exportText={JSON.stringify(scenario.state, null, 2)} />
     <div role="group" aria-label="Trade comparison mode" className="flex gap-1">{[true, false].map(value => <button key={String(value)} onClick={() => changeMode(value)} aria-pressed={rosterAware === value} className={`border px-3 py-2 text-sm font-semibold ${rosterAware === value ? "border-ring bg-primary text-primary-foreground" : "border-border bg-card text-text-secondary"}`}>{value ? "My roster" : "Player packages"}</button>)}</div>
 
     {rosterAware && <section className="border border-border bg-card" aria-labelledby="roster-title">
@@ -73,7 +73,6 @@ export function TradesPageClient() {
           {!validSettings(settings) && <p role="alert" className="mt-2 text-sm text-destructive">Choose 1–16 modeled starting slots and at most 32 active roster spots.</p>}
         </details>
         <p className="text-xs text-muted-foreground">FLEX: RB/WR/TE. SUPERFLEX: QB/RB/WR/TE. K and DST are reserved slots and excluded from ROS scoring. IR players cannot start.</p>
-        {storageNote && <p role="status" className="text-xs text-warning-foreground">{storageNote}</p>}
         <RosPlayerPicker players={players} excluded={roster.map(p => p.playerId)} label="Add to your roster" disabled={roster.length >= 44} onAdd={playerId => {
           scenario.change(s => ({ ...s, roster: [...s.roster, { playerId, ir: false }], receive: s.receive.filter(id => id !== playerId) }));
         }} />

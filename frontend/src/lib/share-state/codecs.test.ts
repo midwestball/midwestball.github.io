@@ -22,7 +22,7 @@ describe("share contracts", () => {
     expect(decodeTradeShare(encodeTradeShare(state)).state).toEqual(state);
     expect(decodeTradeShare(encodeTradeShare(state), new Set(["qb"])).warnings).toHaveLength(2);
   });
-  it.each(["v=2", "r=a", "v=1&r=a,~a", "v=1&r=a,,b", "v=1&r=a&g=b", "v=1&mode=packages&r=a", "v=1&a=a&g=a", "v=1&s=QB99"])("rejects malformed scenarios: %s", raw => expect(decodeTradeShare(new URLSearchParams(raw)).fatal).toBeTruthy());
+  it.each(["v=2", "r=a", "v=1&r=", "v=1&g=", "v=1&r=a,~a", "v=1&r=a,,b", "v=1&r=a&g=b", "v=1&mode=packages&r=a", "v=1&a=a&g=a", "v=1&s=QB99"])("rejects malformed scenarios: %s", raw => expect(decodeTradeShare(new URLSearchParams(raw)).fatal).toBeTruthy());
   it("omits default slots and never truncates a full roster", () => {
     const full = { ...state, settings: DEFAULT_SETTINGS, roster: Array.from({ length: 44 }, (_, i) => ({ playerId: `00-00000${i}`, ir: false })), give: [], receive: [], drops: [] };
     const encoded = encodeTradeShare(full);
