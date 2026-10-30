@@ -18,7 +18,7 @@
 ## Ask First
 
 - Changing the leaderboard JSON shape or Storage path.
-- Syncing filter state into URL query params (not shipped).
+
 
 ## Never
 
@@ -43,3 +43,7 @@
 - Slider is interactive when any resolved volume exists (`max > 0`); going below ramp–hold is allowed for exploration, but changing the selected stat resets to the baseline.
 - Number input clamps to `0…volumeMax` on blur / Enter; empty draft restores the last committed value.
 - Leaderboard fetch clears the previous board and sets `loading` so a failed request cannot leave a silent empty list.
+
+## Shareable discovery
+
+Search owns `p,season,pos,stat,sort,min,q`. Filters preserve selected comparison IDs; owned query updates retain unrelated keys. Shared picker eligibility uses season and selected catalog group independently of discovery position.

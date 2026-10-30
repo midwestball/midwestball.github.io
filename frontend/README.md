@@ -44,3 +44,7 @@ Weekly links restore entity keys, focus and optional points thresholds; ROS link
 ## Shared trade previews
 
 A shared trade opens as a temporary preview. Editing it updates its URL without autosaving over `midwestball-trade-roster-v1`; Save this roster explicitly writes the unchanged v1 schema, and Use my saved roster restores personal state. Invalid links never write storage. Run `npm run test -- src/components/trades`.
+
+## Legacy routes
+
+`/compare/` and `/ffoptim/` preserve query strings when redirecting to canonical Search in the browser. Both remain static exports; JavaScript is required. Run `npm run build` and inspect `out/search/index.html`, `out/compare/index.html`, `out/ffoptim/index.html`.

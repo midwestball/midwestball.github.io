@@ -38,3 +38,7 @@ Snapshot fetch lifetimes are independent of URL edits. Selection history uses di
 | Invalid | Visible error and recovery | None |
 
 Back to a URL without share fields restores the saved roster. Compound ownership edits are atomic. Invalid draft settings remain editable but cannot be shared. Clipboard failure exposes selectable link text.
+
+## Static legacy links
+
+Legacy routes use replacement navigation to avoid redirect loops in browser history. They remain exported files because GitHub Pages cannot run server redirects. All new comparison links target Search directly.

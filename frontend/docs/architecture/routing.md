@@ -3,11 +3,10 @@
 | Route | Role |
 |---|---|
 | `/` | Weekly highlights from `highlights/{season}/w{week}.json` (Stage H, all-time peers), offense-first then defense. Expand loads `dists/league_weekly/...` single-game KDEs. Resolves week via `index/current.json`. |
-| `/search` | Client filter over the player index, plus Filter cascade (position group → catalog stat → Best/Worst) backed by `leaderboards/{season}/w{week}/{group}.json`. Default context is current season. |
+| `/search` | Canonical comparison (up to four same-group players via `p`) and client discovery over the player index, plus Filter cascade (position group → catalog stat → Best/Worst) backed by `leaderboards/{season}/w{week}/{group}.json`. Default context is current season. |
 | `/players/[id]/?season=` | Position catalog stack + season `<select>` at the bottom. Changing season updates the query string; **client** reloads snapshots from Storage (static export cannot re-run RSC for `searchParams`). |
 | `/ballnet` | **Projections** — analyze player performance projections for the upcoming week. |
-| `/compare/` | **Compare** — up to four same-group players side by side (`?p=id1,id2&season=`). Expand opens one shared league KDE with team-colored markers (`docs/adr/2026-09-17-compare-side-by-side.md`). Selection/season are client-driven. |
-| `/ffoptim/` | Client redirect to `/compare/` (query preserved). |
+| `/compare/`, `/ffoptim/` | Static-exported client redirects to `/search/`, preserving the complete query and hash; JavaScript required. |
 
 Player pages call `loadHydratedPlayerSnapshots`: scalar `pages/{season}/w{week}/{id}.json` plus shared `league/{season}/w{week}/{group}.json` (merged before `hydratePlayerStats`). Shell HTML for every player id is generated at build via `generateStaticParams`; snapshot JSON loads in the browser.
 

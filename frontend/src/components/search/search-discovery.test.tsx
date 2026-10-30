@@ -1,7 +1,14 @@
 import React from "react";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { PlayerSearch } from "./PlayerSearch";
+import { useLeaderboardDiscovery } from "./useLeaderboardDiscovery";
+import { PlayerLeaderboardFilters } from "./PlayerLeaderboardFilters";
+import { PlayerDiscoveryResults } from "./PlayerDiscoveryResults";
+export function PlayerSearch(props: Parameters<typeof useLeaderboardDiscovery>[0]) {
+  const model = useLeaderboardDiscovery(props);
+  return <div className="space-y-2"><PlayerLeaderboardFilters model={model} /><PlayerDiscoveryResults model={model} /></div>;
+}
+
 import { SearchPageClient } from "./SearchPageClient";
 
 vi.mock("next/navigation", () => ({ useSearchParams: () => new URLSearchParams(window.location.search), useRouter: () => ({ push: (href: string) => window.history.pushState(null, "", href) }) }));

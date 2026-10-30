@@ -2,7 +2,7 @@
 
 ## Always
 
-- Cap selection at **4** players; URL state is `/compare?p=id1,id2&season=YYYY` (`/ffoptim` only redirects).
+- Cap selection at **4** players; URL state is `/search/?p=id1,id2&season=YYYY` (`/compare` and `/ffoptim` only redirect).
 - Restrict the picker to one catalog **position group** after the first player is chosen so rows align on `stat.id`.
 - Expanded rows use one shared league KDE with per-player markers. Version 2 reconstructs the curve from exact peer-value counts; version 1 uses its published curve. Slider thumbs stay percentile colored.
 - Marker labels use `shortPlayerName` (`F. Last`) and stack by descending oriented percentile.
@@ -27,6 +27,6 @@
 
 - Index `team` / `position` are latest-only; display prefers season page bio when hydrated (including fantasy position rank).
 - Unknown team abbreviations fall back to zinc (`#52525b`).
-- Players missing from the index (stale `p=` ids) are dropped silently on load.
+- Players missing from the index (stale `p=` ids) remain visible as removable unavailable selections.
 - Demo / unpublished players show gray unavailable rows; overlay omits markers without a ready curve.
 - SVG name hit-targets can be finicky — the ranked legend under the chart duplicates hover/click focus.
