@@ -15,3 +15,7 @@ Trade URL versioning is independent of saved roster schema v1. Pure parsers reje
 ## Picker interaction
 
 A shared combobox clamps keyboard navigation, closes on outside blur or selection, and keeps focus on its input during pointer selection. Catalog groups and fantasy comparison groups remain separate.
+
+## Discovery request ownership
+
+Board requests depend on season, published week and catalog group. Query and volume changes reuse loaded artifacts; obsolete requests cannot publish under a new request key.

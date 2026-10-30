@@ -28,3 +28,7 @@ Search uses `p,season,pos,stat,sort,min,q`; projections use route-specific `p,fo
 ## Accessible player suggestions
 
 Search, weekly projections, ROS and roster pickers share focus, arrow keys, Enter, Escape and collapse behavior. Eligibility and default numerical ordering remain caller-owned. Run `npm run test -- src/components/search/player-combobox.test.tsx`.
+
+## Discovery composition
+
+A request-keyed discovery hook owns board loading and qualification; controlled filter and result components render that state independently. Run `npm run test -- src/components/search/search-discovery.test.tsx`.
