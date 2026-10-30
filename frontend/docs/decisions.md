@@ -42,3 +42,7 @@ Back to a URL without share fields restores the saved roster. Compound ownership
 ## Static legacy links
 
 Legacy routes use replacement navigation to avoid redirect loops in browser history. They remain exported files because GitHub Pages cannot run server redirects. All new comparison links target Search directly.
+
+## CSS-first theme precedence
+
+Charcoal is the root fallback; positive light media detection enables light. Valid explicit `data-theme` overrides beat media detection. Bootstrap reads only the reserved preference key, catches storage failures, and never writes a preference. All app chrome uses semantic tokens; data colors remain independent.

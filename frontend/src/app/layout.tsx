@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { SiteHeader } from "@/components/layout/SiteHeader";
 import "./globals.css";
+import { THEME_BOOTSTRAP } from "@/lib/theme/theme-preference";
 
 const geistSans = Geist({
   variable: "--font-sans",
@@ -22,10 +23,12 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html
       lang="en"
+      suppressHydrationWarning
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
+      <head><script dangerouslySetInnerHTML={{ __html: THEME_BOOTSTRAP }} /></head>
       <body className="min-h-full flex flex-col">
-        <div className="flex min-h-full flex-1 flex-col bg-zinc-100 text-zinc-900">
+        <div className="flex min-h-full flex-1 flex-col bg-background text-foreground">
           <SiteHeader />
           {children}
         </div>

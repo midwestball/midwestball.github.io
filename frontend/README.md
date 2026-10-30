@@ -48,3 +48,7 @@ A shared trade opens as a temporary preview. Editing it updates its URL without 
 ## Legacy routes
 
 `/compare/` and `/ffoptim/` preserve query strings when redirecting to canonical Search in the browser. Both remain static exports; JavaScript is required. Run `npm run build` and inspect `out/search/index.html`, `out/compare/index.html`, `out/ffoptim/index.html`.
+
+## Automatic appearance
+
+CSS follows effective browser light/dark preference, defaults to charcoal when indeterminate, and updates live. No theme control is shown. The reserved `midwestball-theme-preference-v1` key accepts `system|light|dark`; explicit overrides apply before paint and synchronize across tabs. Run `npm run test -- src/lib/theme`.
