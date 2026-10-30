@@ -86,3 +86,7 @@ Links above 1,800 characters receive a soft warning and an intact JSON text expo
 ## Representative contrast gate
 
 Automated checks validate primary, secondary and muted ink on canvas, content, hover and popover surfaces at 4.5:1, with focus and input boundaries at 3:1. These token checks supplement rather than replace browser layout and composite-color review.
+
+## Stable comparison subscriptions
+
+The comparison hook memoizes validated IDs from the raw selection string, independently of discovery query changes. Regression fixtures verify typing does not hydrate snapshots again.

@@ -1,11 +1,13 @@
 "use client";
 import { useEffect, useMemo, useState } from "react";
 import { isPositionCode, positionGroupOf, type PositionGroup } from "@/lib/catalog";
+import { parseIdList } from "@/lib/share-state/common";
 import { hydratePlayerStats } from "@/lib/catalog/hydrate";
 import { loadHydratedPlayerSnapshots } from "@/lib/ballnet-store";
 import type { PlayerBio } from "@/lib/payload";
 import type { CompareColumn } from "./CompareBoard";
-export function useCompareSelection(players: PlayerBio[], selectedIds: string[], season: number) {
+export function useCompareSelection(players: PlayerBio[], rawIds: string | null, season: number) {
+  const selectedIds = useMemo(() => parseIdList(rawIds), [rawIds]);
   const selectedBios = useMemo(
     () =>
       selectedIds

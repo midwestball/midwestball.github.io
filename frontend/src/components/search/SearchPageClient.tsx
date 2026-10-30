@@ -1,5 +1,4 @@
 "use client";
-import { useMemo } from "react";
 import { useBrowserQuery, writeBrowserQuery } from "@/components/share/browser-query";
 import { isPositionCode, positionGroupOf } from "@/lib/catalog";
 import { parseIdList, patchQuery } from "@/lib/share-state/common";
@@ -19,8 +18,8 @@ export function SearchPageClient(props: Parameters<typeof useLeaderboardDiscover
   }
   const model = useLeaderboardDiscovery({ ...props, url: params.toString(), navigate });
   const rawIds = params.get("p");
-  const ids = useMemo(() => parseIdList(rawIds), [rawIds]);
-  const compare = useCompareSelection(model.livePlayers, ids, model.season);
+  const ids = parseIdList(rawIds);
+  const compare = useCompareSelection(model.livePlayers, rawIds, model.season);
   const missing = ids.filter(id => !model.livePlayers.some(p => p.id === id && p.seasons.includes(model.season)));
   function reason(id: string) {
     const bio = model.livePlayers.find(p => p.id === id);

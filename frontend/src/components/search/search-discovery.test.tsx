@@ -1,6 +1,7 @@
 import React from "react";
 import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { loadHydratedPlayerSnapshots } from "@/lib/ballnet-store";
 import { useLeaderboardDiscovery } from "./useLeaderboardDiscovery";
 import { PlayerLeaderboardFilters } from "./PlayerLeaderboardFilters";
 import { PlayerDiscoveryResults } from "./PlayerDiscoveryResults";
@@ -20,7 +21,7 @@ const players = [
 ];
 vi.mock("@/lib/ballnet-store", () => ({
   fetchPlayersIndex: async () => null, fetchSeasonsMeta: async () => null, fetchCurrentMeta: async () => null,
-  loadHydratedPlayerSnapshots: async () => ({ page: null, snapshots: [] }),
+  loadHydratedPlayerSnapshots: vi.fn(async () => ({ page: null, snapshots: [] })),
   fetchLeaderboard: async () => ({ schemaVersion: 1, season: 2026, asOfWeek: 8, completedWeek: 7,
     stats: { receiving_yards: players.map((p, i) => ({ playerId: p.id, ...p, value: 300 - i, percentile: 90 - i,
       denomYtd: 40, qualified: true, fantasyPosRank: i + 1, fantasyPosRankKind: "finish" })) } }),
@@ -32,6 +33,9 @@ describe("published discovery filters", () => {
     const props = { players, seasons: [{ season: 2026, asOfWeek: 8 }], initialSeason: 2026 };
     const { rerender } = render(<SearchPageClient {...props} />);
     await waitFor(() => expect(screen.getByText("Comparison board")).toBeTruthy());
+    const calls = vi.mocked(loadHydratedPlayerSnapshots).mock.calls.length;
+    fireEvent.change(screen.getByLabelText("Search players"), { target: { value: "end" } });
+    expect(vi.mocked(loadHydratedPlayerSnapshots).mock.calls).toHaveLength(calls);
     fireEvent.change(screen.getByLabelText("Position"), { target: { value: "te" } });
     rerender(<SearchPageClient {...props} />);
     expect(new URLSearchParams(location.search).get("p")).toBe("wr");
