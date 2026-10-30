@@ -21,17 +21,27 @@ export function SearchPageClient(props: Parameters<typeof useLeaderboardDiscover
   const ids = parseIdList(rawIds);
   const compare = useCompareSelection(model.livePlayers, rawIds, model.season);
   const missing = ids.filter(id => !model.livePlayers.some(p => p.id === id && p.seasons.includes(model.season)));
+  function differentGroup(id: string) {
+    if (ids.includes(id)) return false;
+    if (!compare.sameGroup) return true;
+    const bio = model.livePlayers.find(p => p.id === id);
+    return !!(bio && isPositionCode(bio.position) && compare.positionGroup && positionGroupOf(bio.position) !== compare.positionGroup);
+  }
   function reason(id: string) {
     const bio = model.livePlayers.find(p => p.id === id);
     if (ids.includes(id)) return "Selected";
     if (ids.length >= 4) return "Four selected";
-    if (!compare.sameGroup) return "Different stat group";
+    if (differentGroup(id)) return "Different stat group";
     if (!bio || !bio.seasons.includes(model.season) || !isPositionCode(bio.position)) return "Unavailable";
-    if (compare.positionGroup && positionGroupOf(bio.position) !== compare.positionGroup) return "Different stat group";
     return null;
   }
   function add(id: string) { if (!reason(id)) navigate({ p: [...ids, id].join(",") }); }
   const suggestions = searchPlayers(model.livePlayers.filter(p => !reason(p.id)), model.query).slice(0, 8);
+  const discovery = {
+    ...model,
+    bioResults: model.bioResults.filter(p => !differentGroup(p.id)),
+    rankedRows: model.rankedRows?.filter(row => !differentGroup(row.playerId)) ?? null,
+  };
   return <main className="mx-auto max-w-6xl space-y-3 px-4 py-5">
     <header><h1 className="text-3xl font-semibold tracking-tight">Search</h1>
       <p className="text-sm text-muted-foreground">Discover players and compare up to four from the same stat group.</p></header>
@@ -54,7 +64,7 @@ export function SearchPageClient(props: Parameters<typeof useLeaderboardDiscover
       <div className="border border-border bg-card max-md:-mx-4 max-md:border-x-0"><CompareBoard columns={compare.displayedColumns} /></div>}
     <section aria-label="Discovery results" className="min-h-32 space-y-1">
       <h2 className="text-sm font-semibold">Discovery results</h2>
-      <PlayerDiscoveryResults model={model} addAction={(id, name) => <button aria-label={`Add ${name} to comparison`}
+      <PlayerDiscoveryResults model={discovery} addAction={(id, name) => <button aria-label={`Add ${name} to comparison`}
         disabled={!!reason(id)} title={reason(id) ?? "Add to comparison"} onClick={() => add(id)}
         className="border border-border bg-card px-2 text-xs disabled:text-muted-foreground">{reason(id) ?? "Add"}</button>} />
     </section>

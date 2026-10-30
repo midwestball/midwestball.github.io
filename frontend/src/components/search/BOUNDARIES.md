@@ -46,3 +46,5 @@
 ## Shareable discovery
 
 Search owns `p,season,pos,stat,sort,min,q`. Filters preserve selected comparison IDs; owned query updates retain unrelated keys. Shared picker eligibility uses season and selected catalog group independently of discovery position.
+
+When comparison players are selected, hide incompatible catalog groups from both bio and ranked discovery results. Apply this visibility independently of the four-player cap, retaining the existing numerical order.

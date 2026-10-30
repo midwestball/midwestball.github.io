@@ -18,6 +18,7 @@ vi.mock("@/components/compare/CompareBoard", () => ({ CompareBoard: () => <div>C
 const players = [
   { id: "wr", name: "Wide Receiver", position: "WR", team: "CHI", seasons: [2026] },
   { id: "te", name: "Tight End", position: "TE", team: "GB", seasons: [2026] },
+  { id: "rb", name: "Running Back", position: "RB", team: "CHI", seasons: [2026] },
 ];
 vi.mock("@/lib/ballnet-store", () => ({
   fetchPlayersIndex: async () => null, fetchSeasonsMeta: async () => null, fetchCurrentMeta: async () => null,
@@ -28,6 +29,17 @@ vi.mock("@/lib/ballnet-store", () => ({
 }));
 afterEach(() => { cleanup(); history.replaceState(null, "", "/"); vi.clearAllMocks(); });
 describe("published discovery filters", () => {
+  it.each(["", "&pos=backfield&stat=fantasy_pos_rank"])("hides incompatible discovery rows until the selection is removed: %s", async filters => {
+    history.replaceState(null, "", `/search/?season=2026${filters}`);
+    render(<SearchPageClient players={players} seasons={[{ season: 2026, asOfWeek: 8 }]} initialSeason={2026} />);
+    await waitFor(() => expect(screen.getByRole("link", { name: /Running Back/ })).toBeTruthy());
+    act(() => { history.replaceState(null, "", `/search/?season=2026&p=wr${filters}`); window.dispatchEvent(new PopStateEvent("popstate")); });
+    await waitFor(() => expect(screen.queryByRole("link", { name: /Running Back/ })).toBeNull());
+    expect(screen.getByRole("button", { name: "Remove Wide Receiver" })).toBeTruthy();
+    if (!filters) expect(screen.getByRole("link", { name: /Tight End/ })).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Remove Wide Receiver" }));
+    await waitFor(() => expect(screen.getByRole("link", { name: /Running Back/ })).toBeTruthy());
+  });
   it("keeps comparison failures local and supports retry", async () => {
     vi.mocked(loadHydratedPlayerSnapshots).mockRejectedValueOnce(new Error("offline"));
     history.replaceState(null, "", "/search/?p=wr&season=2026");

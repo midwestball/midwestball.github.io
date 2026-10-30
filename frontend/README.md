@@ -64,3 +64,7 @@ Loading and error messages stay beside the affected data, with controls retained
 ## Home navigation
 
 Home season/week choices preserve unrelated query parameters and create navigable history entries. Back/Forward restores the published slice, with invalid weeks falling back to the available range. Run `npm run test -- src/components/highlights/highlights-navigation.test.tsx`.
+
+## Compatible discovery results
+
+Selecting comparison players hides discovery rows from other catalog groups in both bio and ranked views, without changing numerical ordering or clearing discovery filters. Removing the selection restores the full discovery scope. Run `npm run test -- src/components/search/search-discovery.test.tsx`.

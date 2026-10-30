@@ -110,3 +110,7 @@ ROS navigation retains player-ID semantics and reports stale selections. Theme b
 ## Search control alignment
 
 The season selector aligns with the query input even while its suggestion list is expanded, rather than vertically centering against the entire dropdown.
+
+## Comparison-scoped discovery visibility
+
+Incompatible discovery rows are hidden while a catalog group is selected, including at the four-player cap. WR and TE remain compatible. This is a presentation filter over existing ranked/bio results; published ordering and selected players remain unchanged.
