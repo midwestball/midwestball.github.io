@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import Link from "next/link";
+import { PlayerComparisonLink } from "@/components/PlayerComparisonLink";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { ChevronRight } from "lucide-react";
 import type { LeagueGroupJson } from "@/lib/ballnet-store";
@@ -197,14 +197,9 @@ function HighlightRowExpandable({
             <span className="mr-2 text-xs tabular-nums text-muted-foreground">
               {row.rank}
             </span>
-            <Link
-              href={`/players/?id=${encodeURIComponent(row.playerId)}&season=${season}`}
-              onClick={(e) => e.stopPropagation()}
-              onKeyDown={(e) => e.stopPropagation()}
-              className="hover:underline"
-            >
+            <PlayerComparisonLink playerId={row.playerId} season={season}>
               {row.name}
-            </Link>
+            </PlayerComparisonLink>
           </p>
           <p className="flex flex-wrap items-center gap-x-1.5 text-sm text-muted-foreground">
             <PositionRankLabel

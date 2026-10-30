@@ -80,3 +80,7 @@ Search and season controls come first, followed by selected players and their co
 ## Direct comparison selection
 
 Click or keyboard-activate a Filter results row to add its player to the comparison. Rows have no separate Add button or profile navigation. Selected, unavailable and capped rows remain disabled, while published rank tooltips retain their own interaction. Run `npm run test -- src/components/search`.
+
+## Player comparison links
+
+Player-name navigation uses `/search/?p=PLAYER_ID&season=YEAR`, selecting the clicked player in the comparison. Home highlights retain their published season. Weekly projection links use the stable player ID rather than a projection entity key. Run `npm run test -- src/lib/player-navigation.test.ts`.

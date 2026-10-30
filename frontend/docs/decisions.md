@@ -126,3 +126,7 @@ Search controls and season selection are separate from the leaderboard toolbar. 
 ## Result rows as selection targets
 
 Each result uses one full-row native button for comparison selection. Rank tooltip controls are separate targets above that button, avoiding nested interactive buttons and accidental selection. Filtering, four-player limits and compatibility rules are unchanged.
+
+## One destination for player navigation
+
+Shared player links select a stable Ballnet player ID in canonical Search. Cross-page links start with that player, while result-row actions append to the current compatible selection. A season is preserved when the source has one; projection entity keys are never treated as player IDs.
