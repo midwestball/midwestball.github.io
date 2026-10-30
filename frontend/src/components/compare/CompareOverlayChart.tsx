@@ -75,7 +75,7 @@ function XAxisValueLabel({
       x={viewBox.x}
       y={viewBox.y + viewBox.height + 14}
       textAnchor="middle"
-      fill="#52525b"
+      fill="var(--chart-axis)"
       fontSize={11}
       fontWeight={600}
     >
@@ -97,7 +97,7 @@ function YAxisValueLabel({
       x={(viewBox.x ?? 0) - 6}
       y={viewBox.y + 4}
       textAnchor="end"
-      fill="#52525b"
+      fill="var(--chart-axis)"
       fontSize={11}
       fontWeight={600}
     >
@@ -168,7 +168,7 @@ function MarkerLabel({
         y={y - 11}
         width={textW}
         height={14}
-        fill={active ? "rgba(255,255,255,0.92)" : "rgba(255,255,255,0.55)"}
+        fill="var(--chart-label-surface)"
         stroke={active ? color : "transparent"}
         strokeWidth={1}
         pointerEvents="none"
@@ -176,7 +176,7 @@ function MarkerLabel({
       <text
         x={x}
         y={y}
-        fill={color}
+        fill="var(--foreground)"
         fontSize={11}
         fontWeight={active ? 700 : 600}
         style={{ userSelect: "none" }}
@@ -253,14 +253,14 @@ export function CompareOverlayChart({
 
   if (!template || !chart || readyMarkers.length === 0) {
     return (
-      <div className="rounded-none border border-zinc-200 bg-zinc-50 px-3 py-6 text-center text-sm text-zinc-500">
+      <div className="rounded-none border border-border bg-muted px-3 py-6 text-center text-sm text-muted-foreground">
         No ready distributions for this row yet.
       </div>
     );
   }
 
   const shadeId = `compare-shade-${reactId}`;
-  const focusColor = focusMarker?.color ?? "#a1a1aa";
+  const focusColor = focusMarker?.color ?? "var(--chart-league-line)";
   const badgeColor =
     focusMarker != null ? percentileColor(focusMarker.percentile) : undefined;
   const badgeText =
@@ -273,16 +273,16 @@ export function CompareOverlayChart({
     <div className="space-y-2">
       {description ? (
         <p
-          className="text-[11px] leading-4 text-zinc-500"
+          className="text-[11px] leading-4 text-muted-foreground"
           data-testid="stat-description"
         >
           {description}
         </p>
       ) : null}
-      <p className="text-[11px] leading-4 text-zinc-400">
+      <p className="text-[11px] leading-4 text-muted-foreground">
         {focusMarker ? (
           <>
-            <span className="font-semibold text-zinc-600">
+            <span className="font-semibold text-text-secondary">
               {focusMarker.shortName}
             </span>
             {" · "}
@@ -332,14 +332,14 @@ export function CompareOverlayChart({
                 <stop offset="100%" stopColor={focusColor} stopOpacity={0.02} />
               </linearGradient>
             </defs>
-            <CartesianGrid vertical={false} stroke="#e4e4e7" />
+            <CartesianGrid vertical={false} stroke="var(--chart-grid)" />
             <XAxis
               dataKey="x"
               type="number"
               domain={[chart.xMin, chart.xMax]}
               tickLine={false}
               axisLine={false}
-              tick={{ fill: "#71717a", fontSize: 11 }}
+              tick={{ fill: "var(--chart-axis)", fontSize: 11 }}
               tickFormatter={(value: number) =>
                 formatStatValue(template.format, value)
               }
@@ -351,7 +351,7 @@ export function CompareOverlayChart({
               domain={[0, chart.yMax]}
               tickLine={false}
               axisLine={false}
-              tick={{ fill: "#71717a", fontSize: 11 }}
+              tick={{ fill: "var(--chart-axis)", fontSize: 11 }}
               tickFormatter={tickDensity}
             />
             {/* Keeps activePayload tracking without rendering the old standing/density box. */}
@@ -359,9 +359,9 @@ export function CompareOverlayChart({
             <Area
               type="linear"
               dataKey="league"
-              stroke="#a1a1aa"
+              stroke="var(--chart-league-line)"
               strokeWidth={1.5}
-              fill="rgba(244, 244, 245, 0.9)"
+              fill="var(--chart-league-fill)"
               fillOpacity={1}
               isAnimationActive
               animationDuration={450}
@@ -382,7 +382,7 @@ export function CompareOverlayChart({
               <>
                 <ReferenceLine
                   x={crosshair.x}
-                  stroke="#a1a1aa"
+                  stroke="var(--chart-league-line)"
                   strokeDasharray="3 3"
                   strokeWidth={1}
                   label={(props) => (
@@ -394,7 +394,7 @@ export function CompareOverlayChart({
                 />
                 <ReferenceLine
                   y={crosshair.y}
-                  stroke="#a1a1aa"
+                  stroke="var(--chart-league-line)"
                   strokeDasharray="3 3"
                   strokeWidth={1}
                   label={(props) => (
@@ -460,11 +460,11 @@ export function CompareOverlayChart({
               }
               className={cn(
                 "text-left text-[11px] font-semibold tabular-nums",
-                active ? "text-zinc-900" : "text-zinc-500 hover:text-zinc-800",
+                active ? "text-foreground" : "text-muted-foreground hover:text-foreground",
               )}
-              style={{ color: active ? marker.color : undefined }}
+              style={{ borderLeft: `3px solid ${marker.color}`, paddingLeft: 4 }}
             >
-              <span className="mr-1 text-zinc-400">{stackIndex + 1}.</span>
+              <span className="mr-1 text-muted-foreground">{stackIndex + 1}.</span>
               {marker.shortName}
             </button>
           );

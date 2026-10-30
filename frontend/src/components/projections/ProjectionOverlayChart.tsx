@@ -15,10 +15,10 @@ const MARGIN = { top: 26, right: 12, bottom: 10, left: 0 } as const;
 const PLOT_LEFT = YAXIS_WIDTH + MARGIN.left;
 
 /**
- * The threshold line wears near-black so it never reads as a team curve, and the
+ * The threshold line uses neutral foreground so it never reads as a team curve, and the
  * numbers underneath are badged with the same value to tie the two together.
  */
-export const THRESHOLD_COLOR = "#18181b";
+export const THRESHOLD_COLOR = "var(--chart-threshold)";
 
 /** Keep a threshold inside the published grid. */
 export function clampThreshold(value: number, min: number, max: number): number {
@@ -188,7 +188,7 @@ export function ProjectionOverlayChart({
   }
 
   return (
-    <div className="h-80 border border-zinc-200 bg-white p-2">
+    <div className="h-80 border border-border bg-card p-2">
       <div
         ref={plotRef}
         data-testid="threshold-plot"
@@ -200,12 +200,12 @@ export function ProjectionOverlayChart({
       >
         <ResponsiveContainer width="100%" height="100%">
           <ComposedChart data={data} margin={MARGIN}>
-            <CartesianGrid strokeDasharray="3 3" />
-            <XAxis dataKey="x" type="number" domain={[min, max]} tickFormatter={(v) => Number(v).toFixed(0)} label={{ value: "Fantasy points", position: "insideBottom", offset: -5 }} />
-            <YAxis tickFormatter={(v) => Number(v).toFixed(2)} width={YAXIS_WIDTH} />
+            <CartesianGrid strokeDasharray="3 3" stroke="var(--chart-grid)" />
+            <XAxis tick={{ fill: "var(--chart-axis)" }} stroke="var(--chart-axis)" dataKey="x" type="number" domain={[min, max]} tickFormatter={(v) => Number(v).toFixed(0)} label={{ value: "Fantasy points", position: "insideBottom", offset: -5, fill: "var(--chart-axis)" }} />
+            <YAxis tick={{ fill: "var(--chart-axis)" }} stroke="var(--chart-axis)" tickFormatter={(v) => Number(v).toFixed(2)} width={YAXIS_WIDTH} />
             {/* Recharts' own series tooltip is suppressed; the threshold is read from the line. */}
             <Tooltip content={() => null} cursor={false} isAnimationActive={false} />
-            <Area dataKey="shaded" stroke="none" fill="#71717a" fillOpacity={0.22} isAnimationActive={false} />
+            <Area dataKey="shaded" stroke="none" fill="var(--chart-league-line)" fillOpacity={0.22} isAnimationActive={false} />
             {entities.map((e, i) => {
               const style = projectionStyle(i);
               return (
@@ -265,7 +265,7 @@ export function ProjectionOverlayChart({
                       fontSize={11}
                       fontWeight={600}
                       fill={THRESHOLD_COLOR}
-                      stroke="#ffffff"
+                      stroke="var(--card)"
                       strokeWidth={3}
                       paintOrder="stroke"
                       aria-hidden="true"
@@ -290,7 +290,7 @@ export function ProjectionOverlayChart({
           </ComposedChart>
         </ResponsiveContainer>
       </div>
-      <p className="mt-1 px-1 text-[11px] text-zinc-500">
+      <p className="mt-1 px-1 text-[11px] text-muted-foreground">
         Drag the vertical line, or focus it and use the arrow keys, to move the focused threshold.
       </p>
     </div>

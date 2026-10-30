@@ -73,12 +73,12 @@ function DistributionTooltip({
     )?.value ?? row.league;
 
   return (
-    <div className="max-w-xs rounded-none border border-zinc-200 bg-white px-2 py-1.5 text-xs">
-      <p className="font-medium text-zinc-900">
+    <div className="max-w-xs rounded-none border border-border bg-card px-2 py-1.5 text-xs">
+      <p className="font-medium text-foreground">
         {formatStatValue(format, row.x)} {label}
       </p>
-      <p className="mt-1 leading-5 text-zinc-600">{hoverStanding(row.x)}</p>
-      <p className="mt-1 leading-5 text-zinc-500">
+      <p className="mt-1 leading-5 text-text-secondary">{hoverStanding(row.x)}</p>
+      <p className="mt-1 leading-5 text-muted-foreground">
         {relativeFrequencyCopy(densityY ?? 0)}
       </p>
     </div>
@@ -133,14 +133,14 @@ export function DistributionChart({
               <stop offset="100%" stopColor={color} stopOpacity={0.02} />
             </linearGradient>
           </defs>
-          <CartesianGrid vertical={false} stroke="#e4e4e7" />
+          <CartesianGrid vertical={false} stroke="var(--chart-grid)" />
           <XAxis
             dataKey="x"
             type="number"
             domain={[xMin, xMax]}
             tickLine={false}
             axisLine={false}
-            tick={{ fill: "#71717a", fontSize: 11 }}
+            tick={{ fill: "var(--chart-axis)", fontSize: 11 }}
             tickFormatter={(value: number) => formatStatValue(format, value)}
             minTickGap={24}
             padding={{ left: 0, right: 0 }}
@@ -150,11 +150,11 @@ export function DistributionChart({
             domain={[0, yMax]}
             tickLine={false}
             axisLine={false}
-            tick={{ fill: "#71717a", fontSize: 11 }}
+            tick={{ fill: "var(--chart-axis)", fontSize: 11 }}
             tickFormatter={tickDensity}
           />
           <Tooltip
-            cursor={{ stroke: "#d4d4d8" }}
+            cursor={{ stroke: "var(--chart-cursor)" }}
             content={
               <DistributionTooltip
                 label={label}
@@ -166,9 +166,9 @@ export function DistributionChart({
           <Area
             type="linear"
             dataKey="league"
-            stroke="#a1a1aa"
+            stroke="var(--chart-league-line)"
             strokeWidth={1.5}
-            fill="rgba(244, 244, 245, 0.9)"
+            fill="var(--chart-league-fill)"
             fillOpacity={1}
             isAnimationActive
             animationDuration={450}

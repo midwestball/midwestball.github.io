@@ -54,3 +54,7 @@ Surface and text tokens carry presentation meaning rather than fixed zinc values
 ## Projection and trade contrast
 
 Forecast controls and roster warnings share semantic surfaces; signed deltas use success/error ink with text signs. No forecast or lineup arithmetic depends on theme.
+
+## Chart support colors
+
+SVG axes, neutral curves, grids, threshold ink, labels and tooltip surfaces use CSS variables. Team and percentile fills retain their identity; labels use theme ink with team-colored outlines so dark franchise colors do not become unreadable text.

@@ -95,8 +95,8 @@ describe("threshold readout",()=>{
   spy.mockRestore();
  });
 
- it("paints the threshold line in the colour the readout below uses",()=>{
-  expect(THRESHOLD_COLOR).toMatch(/^#[0-9a-f]{6}$/i);
+ it("uses semantic neutral ink for the threshold and readout",()=>{
+  expect(THRESHOLD_COLOR).toBe("var(--chart-threshold)");
  });
 
  it("treats the cursor as on the line only inside the grab tolerance",()=>{

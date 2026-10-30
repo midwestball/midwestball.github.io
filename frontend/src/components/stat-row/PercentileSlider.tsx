@@ -28,8 +28,8 @@ export function PercentileSlider({
 }: PercentileSliderProps) {
   const percentile = stat.percentile;
   const ready = !disabled && percentile != null;
-  const color = ready ? percentileColor(percentile) : "#d4d4d8";
-  const labelColor = ready ? percentileContrastText(percentile) : "#52525b";
+  const color = ready ? percentileColor(percentile) : "var(--track)";
+  const labelColor = ready ? percentileContrastText(percentile) : "var(--muted-foreground)";
   const x = ready ? Math.min(100, Math.max(0, percentile)) : 0;
 
   return (
@@ -46,7 +46,7 @@ export function PercentileSlider({
     >
       <div
         className={cn(
-          "relative h-2 w-full rounded-none bg-black/10",
+          "relative h-2 w-full rounded-none bg-track",
           trackClassName,
         )}
         role="meter"
@@ -66,7 +66,7 @@ export function PercentileSlider({
             />
             <div
               className={cn(
-                "absolute top-1/2 z-10 flex size-6 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-none border border-white text-[10px] font-bold",
+                "absolute top-1/2 z-10 flex size-6 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-none border border-card text-[10px] font-bold",
                 thumbClassName,
               )}
               style={{
