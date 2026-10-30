@@ -72,3 +72,7 @@ Selecting comparison players hides discovery rows from other catalog groups in b
 ## Stable Search width
 
 Search fills the available page width up to its existing `max-w-6xl` limit before any distribution is opened. Expanding or closing a comparison plot changes height only; the page does not shrink-wrap its contents.
+
+## Search section order
+
+Search and season controls come first, followed by selected players and their comparison. The Filter results section groups publication context, filters and the matching list so filter changes are clearly scoped to those results. Run `npm run test -- src/components/search/search-discovery.test.tsx`.

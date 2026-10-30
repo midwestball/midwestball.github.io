@@ -6,6 +6,7 @@ import { searchPlayers } from "@/lib/player-index";
 import { CompareBoard } from "@/components/compare/CompareBoard";
 import { useCompareSelection } from "@/components/compare/useCompareSelection";
 import { useLeaderboardDiscovery } from "./useLeaderboardDiscovery";
+import { PlayerSearchControls } from "./PlayerSearchControls";
 import { PlayerLeaderboardFilters } from "./PlayerLeaderboardFilters";
 import { PlayerDiscoveryResults } from "./PlayerDiscoveryResults";
 import { PlayerCombobox } from "./PlayerCombobox";
@@ -45,15 +46,12 @@ export function SearchPageClient(props: Parameters<typeof useLeaderboardDiscover
   return <main className="mx-auto w-full min-w-0 max-w-6xl space-y-3 px-4 py-5">
     <header><h1 className="text-3xl font-semibold tracking-tight">Search</h1>
       <p className="text-sm text-muted-foreground">Discover players and compare up to four from the same stat group.</p></header>
-    <PlayerLeaderboardFilters model={model}>
+    <PlayerSearchControls model={model}>
       <PlayerCombobox label="Search players" query={model.query} onQueryChange={model.setQuery} onPick={add}
         disabled={ids.length >= 4} showWhenEmpty={ids.length === 0}
         emptyMessage={ids.length >= 4 ? "Maximum four selected. Remove a player to add another." : "No eligible matching players for this season and stat group."}
         items={suggestions.map(p => ({ key: p.id, primary: p.name, secondary: `${p.position} / ${p.team}` }))} />
-    </PlayerLeaderboardFilters>
-    {model.directoryReady && ((params.has("pos") && params.get("pos") !== model.group) || (params.has("stat") && params.get("stat") !== model.statId) || (params.has("season") && Number(params.get("season")) !== model.season)) &&
-      <p role="status" className="text-sm text-warning-foreground">Some shared filters are unavailable. <button className="underline" onClick={() => navigate({ pos: model.group, stat: model.statId, season: String(model.season), min: null }, true)}>Clear invalid filters</button></p>}
-    <p className="text-xs text-muted-foreground">Published season {model.season}, through week {model.asOfWeek}. Filters apply to discovery; selected comparison columns stay selected.</p>
+    </PlayerSearchControls>
     <div className="flex flex-wrap gap-1">{ids.map(id => <button key={id} onClick={() => navigate({ p: ids.filter(p => p !== id).join(",") })}
       className="border border-border bg-card px-2 py-1 text-sm" aria-label={`Remove ${model.livePlayers.find(p => p.id === id)?.name ?? id}`}>
       {model.livePlayers.find(p => p.id === id)?.name ?? id} {missing.includes(id) ? "(unavailable this season)" : ""} ×</button>)}</div>
@@ -62,8 +60,12 @@ export function SearchPageClient(props: Parameters<typeof useLeaderboardDiscover
     {!compare.sameGroup ? <p role="alert">Comparison requires the same stat group. Remove an incompatible player.</p> : compare.loading ?
       <div role="status" className="min-h-32 border border-border p-3">Loading comparison…</div> : compare.displayedColumns.length > 0 &&
       <div className="border border-border bg-card max-md:-mx-4 max-md:border-x-0"><CompareBoard columns={compare.displayedColumns} /></div>}
-    <section aria-label="Discovery results" className="min-h-32 space-y-1">
-      <h2 className="text-sm font-semibold">Discovery results</h2>
+    <section aria-label="Filter results" className="min-h-32 space-y-1">
+      <h2 className="text-sm font-semibold">Filter results</h2>
+      {model.directoryReady && ((params.has("pos") && params.get("pos") !== model.group) || (params.has("stat") && params.get("stat") !== model.statId) || (params.has("season") && Number(params.get("season")) !== model.season)) &&
+        <p role="status" className="text-sm text-warning-foreground">Some shared filters are unavailable. <button className="underline" onClick={() => navigate({ pos: model.group, stat: model.statId, season: String(model.season), min: null }, true)}>Clear invalid filters</button></p>}
+      <p className="text-xs text-muted-foreground">Published season {model.season}, through week {model.asOfWeek}. Filters apply to these results; selected comparison columns stay selected.</p>
+      <PlayerLeaderboardFilters model={model} />
       <PlayerDiscoveryResults model={discovery} addAction={(id, name) => <button aria-label={`Add ${name} to comparison`}
         disabled={!!reason(id)} title={reason(id) ?? "Add to comparison"} onClick={() => add(id)}
         className="border border-border bg-card px-2 text-xs disabled:text-muted-foreground">{reason(id) ?? "Add"}</button>} />

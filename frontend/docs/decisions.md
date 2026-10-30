@@ -118,3 +118,7 @@ Incompatible discovery rows are hidden while a catalog group is selected, includ
 ## Stable Search geometry
 
 The Search main has explicit full width and a zero minimum width within the flex column, capped at 72rem. Chart intrinsic sizing cannot enlarge the page from a narrower collapsed state; the wider layout is present before expansion. Existing mobile comparison tracks and overflow behavior remain intact.
+
+## Filters beside their results
+
+Search controls and season selection are separate from the leaderboard toolbar. The comparison sits between those controls and the Filter results section; the toolbar is immediately above its matching list in empty, loading, error and selected-player states. Both views retain the same shared state and request boundaries.

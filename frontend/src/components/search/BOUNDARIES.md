@@ -8,7 +8,7 @@
 - Player result links include `?season=` for the selected search year.
 - Sort on oriented percentile (100 = good); Best = descending, Worst = ascending; null percentiles last.
 - Stat dropdown may include search-only **Fantasy Rank** (`fantasy_pos_rank`) for QB / backfield / WR / TE. Not a catalog `stat.id`. Best = rank 1 first; Worst = largest published rank first. Drop players Ballnet omitted. No min-volume slider.
-- Filter row sits under the search input; Stat and Best/Worst stay visible but disabled (gray) until prerequisites are set.
+- Filter row sits directly above the Filter results list, below the selected-player comparison; Stat and Best/Worst stay visible but disabled (gray) until prerequisites are set.
 - Filter controls and min-volume may wrap independently on narrow widths (`flex-wrap` on both the outer row and the filter group).
 - Min-volume control: label **Min Volume** (specific catalog volume name in the tooltip). On a shared row it `grow`s to fill from the filters to the right edge; `basis-[12rem]` lets it wrap on small screens, then grows to full width. The range track is `flex-1`; the number input stays fixed for precision. Default = ramp–hold `minNBase × min(completedWeek, 5)` (`board.completedWeek`, else seasons.json, else `asOfWeek`); range is **0…max(volume)**.
 - Resolve volume as `board.stats[volumeStatId].value` joined by `playerId` when the catalog sets `volumeStatId`; else fall back to the rate row’s `denomYtd`. If neither yields any values, filter with `qualified` and keep the slider disabled.

@@ -4,33 +4,9 @@ import { FILTER_OPTIONS, FANTASY_RANK_BOARD_GROUPS, FANTASY_RANK_STAT_ID, type S
 const controlBase = "h-9 border border-border bg-card px-2 text-sm outline-none rounded-none";
 const controlEnabled = `${controlBase} text-foreground focus:border-ring`;
 const controlDisabled = `${controlBase} cursor-not-allowed border-border bg-muted text-muted-foreground`;
-export function PlayerLeaderboardFilters({ model, children }: { model: ReturnType<typeof useLeaderboardDiscovery>; children?: React.ReactNode }) {
-  const { query, setQuery, season, setSeason, seasonOptions, group, onSelectGroup, statId, onSelectStat, statEnabled, sortEnabled, boardGroup, statOptions, sortMode, setSortMode, volumeInteractive, volumeVisible, hasVolumeData, boardStatus, volumeMax, floor, volumeLabel, sliderMax, sliderValue, setVolume, volumeDraft, setVolumeChoice, volumeKey, clampVolume, minVolume, commitVolumeDraft } = model;
-  return <>      <div className="flex items-start gap-1.5">
-        {children ?? (
-        <input
-          type="search"
-          value={query}
-          onChange={(event) => setQuery(event.target.value)}
-          placeholder="Search players, positions, teams"
-          className="h-9 min-w-0 flex-1 rounded-none border border-border bg-card px-2 text-sm text-foreground outline-none placeholder:text-muted-foreground focus:border-ring"
-        />
-        )}
-        <select
-          value={season}
-          onChange={(event) => { setSeason(Number(event.target.value)); }}
-          aria-label="Season"
-          className={`${controlEnabled} shrink-0 ${children ? "mt-5" : ""}`}
-        >
-          {seasonOptions.map((row) => (
-            <option key={row.season} value={row.season}>
-              {row.season}
-            </option>
-          ))}
-        </select>
-      </div>
-
-      <div className="flex flex-wrap items-center gap-x-1.5 gap-y-2">
+export function PlayerLeaderboardFilters({ model }: { model: ReturnType<typeof useLeaderboardDiscovery> }) {
+  const { group, onSelectGroup, statId, onSelectStat, statEnabled, sortEnabled, boardGroup, statOptions, sortMode, setSortMode, volumeInteractive, volumeVisible, hasVolumeData, boardStatus, volumeMax, floor, volumeLabel, sliderMax, sliderValue, setVolume, volumeDraft, setVolumeChoice, volumeKey, clampVolume, minVolume, commitVolumeDraft } = model;
+  return <>      <div className="flex flex-wrap items-center gap-x-1.5 gap-y-2">
         <div className="flex flex-wrap items-center gap-1.5">
           <span className="shrink-0 text-xs font-semibold tracking-[0.15em] text-muted-foreground uppercase">
             Filter
