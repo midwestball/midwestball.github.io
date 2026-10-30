@@ -16,3 +16,7 @@ Player and comparison distributions use the original reflected Gaussian KDE; v2 
 ## Player matching
 
 Player discovery normalizes punctuation and diacritics and accepts conservative name typos; short team and position queries remain exact. Ranked results retain published numerical ordering. Run `npm run test -- src/lib/search/fuzzy.test.ts`.
+
+## Published leaderboard filters
+
+Discovery uses season boards, oriented percentiles, published fantasy ranks, and completed-week ramp?hold qualification. WR and TE share one pass-catcher board. Run `npm run test -- src/lib/search/leaderboards.test.ts`.
