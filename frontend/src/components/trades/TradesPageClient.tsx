@@ -1,49 +1,27 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useMemo } from "react";
 import { RosPlayerPicker } from "@/components/projections/RosPlayerPicker";
 import { useRos } from "@/components/projections/useRos";
 import { rosMedian, type RosPlayer } from "@/lib/ros";
-import { activeCapacity, DEFAULT_SETTINGS, evaluateTrade, restoreRoster, SLOT_TYPES, validSettings, type Lineup, type RosterEntry, type RosterSettings } from "@/lib/trades";
+import { activeCapacity, DEFAULT_SETTINGS, evaluateTrade, SLOT_TYPES, validSettings, type Lineup, type RosterSettings } from "@/lib/trades";
 
-const STORAGE_KEY = "midwestball-trade-roster-v1";
+import { useTradeScenario } from "./useTradeScenario";
+import { ShareLinkButton } from "@/components/share/ShareLinkButton";
 const control = "border border-zinc-300 bg-white px-2 py-1 text-sm";
 const signed = (n: number) => `${n > 0 ? "+" : ""}${n.toFixed(1)}`;
 
 export function TradesPageClient() {
   const { snapshot, error, retry } = useRos();
-  const [settings, setSettings] = useState<RosterSettings>({ ...DEFAULT_SETTINGS });
-  const [roster, setRoster] = useState<RosterEntry[]>([]);
-  const [ready, setReady] = useState(false);
-  const [storageNote, setStorageNote] = useState("");
-  const [rosterAware, setRosterAware] = useState(true);
-  const [give, setGive] = useState<string[]>([]);
-  const [receive, setReceive] = useState<string[]>([]);
-  const [drops, setDrops] = useState<string[]>([]);
-  useEffect(() => {
-    let cancelled = false;
-    // Restore after hydration; storage is external to the server-rendered page.
-    queueMicrotask(() => {
-      if (cancelled) return;
-      try {
-        const raw = localStorage.getItem(STORAGE_KEY);
-        if (raw) {
-          const saved = restoreRoster(JSON.parse(raw));
-          if (saved) { setSettings(saved.settings); setRoster(saved.roster); }
-          else setStorageNote("The saved roster could not be restored. Build a new roster below.");
-        }
-      } catch { setStorageNote("Browser storage is unavailable. Your roster will last for this visit."); }
-      setReady(true);
-    });
-    return () => { cancelled = true; };
-  }, []);
-  useEffect(() => {
-    if (!ready) return;
-    try { localStorage.setItem(STORAGE_KEY, JSON.stringify({ version: 1, settings, roster })); }
-    catch { /* Roster editing still works when browser storage is full or disabled. */ }
-  }, [ready, settings, roster]);
-
+  const scenario = useTradeScenario(snapshot ? new Set(snapshot.entities.map(p => p.playerId)) : undefined);
+  const { settings, roster, give, receive, drops } = scenario.state;
+  const rosterAware = scenario.state.mode === "roster";
+  const storageNote = scenario.storageNote;
+  const setSettings = (v: React.SetStateAction<RosterSettings>) => scenario.update("settings", v);
+  const setRoster = (v: React.SetStateAction<typeof roster>) => scenario.update("roster", v);
+  const setGive = (v: React.SetStateAction<string[]>) => scenario.update("give", v);
+  const setReceive = (v: React.SetStateAction<string[]>) => scenario.update("receive", v);
   const players = useMemo(() => snapshot?.entities ?? [], [snapshot]);
   const byId = useMemo(() => new Map(players.map(p => [p.playerId, p])), [players]);
   const calculation = useMemo(() => {
@@ -58,13 +36,13 @@ export function TradesPageClient() {
   }, [players, byId, roster, give, receive, drops, settings, rosterAware]);
 
   function remove(id: string) {
-    setRoster(rows => rows.filter(p => p.playerId !== id));
-    setGive(ids => ids.filter(p => p !== id)); setDrops(ids => ids.filter(p => p !== id));
+    scenario.change(s => ({ ...s, roster: s.roster.filter(p => p.playerId !== id), give: s.give.filter(p => p !== id), drops: s.drops.filter(p => p !== id) }));
   }
-  function changeMode(value: boolean) { setRosterAware(value); setGive([]); setReceive([]); setDrops([]); }
+  function changeMode(value: boolean) { scenario.change(s => ({ ...s, mode: value ? "roster" : "packages", give: [], receive: [], drops: [] })); }
   function preset(name: string) {
     setSettings({ ...DEFAULT_SETTINGS, ...(name === "superflex" ? { SUPERFLEX: 1 } : name === "two-qb" ? { QB: 2 } : {}) });
   }
+  if (scenario.fatal) return <main className="mx-auto max-w-5xl p-4"><p role="alert">{scenario.fatal}</p><button onClick={scenario.useSaved} className={control}>Return to my saved roster</button></main>;
   if (!snapshot) return <main className="mx-auto max-w-5xl px-4 py-5"><h1 className="text-3xl font-semibold">Trade analysis</h1><p role="status" className="mt-4 border border-zinc-200 p-4 text-sm">{error || "Loading rest-of-season projections…"}{error && <button onClick={retry} className="ml-3 underline">Retry</button>}</p></main>;
 
   return <main className="mx-auto max-w-5xl space-y-4 px-4 py-5">
@@ -73,6 +51,14 @@ export function TradesPageClient() {
       <p className="mt-2 border border-amber-300 bg-amber-50 p-2 text-sm text-amber-900"><strong>Experimental:</strong> Rest-of-season forecasts have not passed a separate ROS validation gate. Current injury news is not an input. Updated <time dateTime={snapshot.generatedAt}>{new Date(snapshot.generatedAt).toLocaleString()}</time>.</p>
       <p className="mt-1 max-w-3xl text-sm text-zinc-600">Compare remaining regular-season points using each player’s median projection. Add your roster to see how a trade changes your best starting lineup.</p>
     </header>
+    {scenario.shared && <aside className="space-y-2 border border-border bg-muted p-3 text-sm">
+      <p>Viewing a shared trade. Your saved roster has not been changed.</p>
+      <button disabled={!validSettings(settings)} onClick={scenario.save} className={control}>Save this roster</button>{" "}
+      <button onClick={scenario.useSaved} className={control}>Use my saved roster</button>
+    </aside>}
+    {scenario.warnings.length > 0 && <p role="status" className="text-sm text-amber-800">{scenario.warnings.join(". ")}</p>}
+    {storageNote && <p role="status" className="text-sm text-amber-800">{storageNote}</p>}
+    <ShareLinkButton label="Share trade" getHref={scenario.shareHref} disabled={!validSettings(settings) || !!storageNote && scenario.shared && storageNote !== "Roster saved"} />
     <div role="group" aria-label="Trade comparison mode" className="flex gap-1">{[true, false].map(value => <button key={String(value)} onClick={() => changeMode(value)} aria-pressed={rosterAware === value} className={`border px-3 py-2 text-sm font-semibold ${rosterAware === value ? "border-zinc-900 bg-zinc-900 text-white" : "border-zinc-300 bg-white text-zinc-600"}`}>{value ? "My roster" : "Player packages"}</button>)}</div>
 
     {rosterAware && <section className="border border-zinc-200 bg-white" aria-labelledby="roster-title">
@@ -89,7 +75,7 @@ export function TradesPageClient() {
         <p className="text-xs text-zinc-500">FLEX: RB/WR/TE. SUPERFLEX: QB/RB/WR/TE. K and DST are reserved slots and excluded from ROS scoring. IR players cannot start.</p>
         {storageNote && <p role="status" className="text-xs text-amber-800">{storageNote}</p>}
         <RosPlayerPicker players={players} excluded={roster.map(p => p.playerId)} label="Add to your roster" disabled={roster.length >= 44} onAdd={playerId => {
-          setRoster(rows => [...rows, { playerId, ir: false }]); setReceive(ids => ids.filter(id => id !== playerId));
+          scenario.change(s => ({ ...s, roster: [...s.roster, { playerId, ir: false }], receive: s.receive.filter(id => id !== playerId) }));
         }} />
         {roster.length ? <div className="overflow-x-auto"><table className="w-full text-left text-sm"><caption className="sr-only">Your roster and proposed outgoing players</caption><thead><tr>{["Player", "ROS median", "Status", "Trade action", ""].map((h, i) => <th key={i} scope="col" className="border-b border-zinc-200 py-2 pr-2">{h}</th>)}</tr></thead>
           <tbody>{roster.map(entry => { const p = byId.get(entry.playerId); return <tr key={entry.playerId}>
@@ -97,12 +83,11 @@ export function TradesPageClient() {
             <td className="border-b border-zinc-100 pr-2 tabular-nums">{p ? rosMedian(p).toFixed(1) : "—"}</td>
             <td className="border-b border-zinc-100 pr-2"><select aria-label={`Status for ${p?.name ?? entry.playerId}`} value={entry.ir ? "ir" : "active"} className={control} onChange={e => setRoster(rows => rows.map(r => r.playerId === entry.playerId ? { ...r, ir: e.target.value === "ir" } : r))}><option value="active">Active</option><option value="ir">IR</option></select></td>
             <td className="border-b border-zinc-100 pr-2"><select aria-label={`Trade action for ${p?.name ?? entry.playerId}`} className={control} value={give.includes(entry.playerId) ? "give" : drops.includes(entry.playerId) ? "drop" : "keep"} onChange={e => {
-              setGive(ids => [...ids.filter(id => id !== entry.playerId), ...(e.target.value === "give" ? [entry.playerId] : [])]);
-              setDrops(ids => [...ids.filter(id => id !== entry.playerId), ...(e.target.value === "drop" ? [entry.playerId] : [])]);
+              scenario.change(s => ({ ...s, give: [...s.give.filter(id => id !== entry.playerId), ...(e.target.value === "give" ? [entry.playerId] : [])], drops: [...s.drops.filter(id => id !== entry.playerId), ...(e.target.value === "drop" ? [entry.playerId] : [])] }));
             }}><option value="keep">Keep</option><option value="give">Give</option><option value="drop">Drop</option></select></td>
             <td className="border-b border-zinc-100"><button onClick={() => remove(entry.playerId)} aria-label={`Remove ${p?.name ?? entry.playerId} from roster`} className="text-xs underline">Remove</button></td>
           </tr>; })}</tbody></table></div> : <p className="text-sm text-zinc-500">Start with your QB, RBs, WRs and TE, then add your bench. Starting slots are filled automatically by projected ROS points.</p>}
-        <p className="text-xs text-zinc-500">Roster and settings save in this browser. Trade selections are temporary.</p>
+        <p className="text-xs text-zinc-500">{scenario.shared ? "Shared preview edits remain temporary until you save this roster." : "Roster and settings save in this browser. Trade selections are temporary."}</p>
       </div>
     </section>}
 

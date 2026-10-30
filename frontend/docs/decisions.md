@@ -27,3 +27,14 @@ The Search shell owns one live directory and validated URL state. Discovery filt
 ## Projection navigation
 
 Snapshot fetch lifetimes are independent of URL edits. Selection history uses discrete entries; threshold commits replace the current entry. Missing IDs report stale selections and thresholds clamp to the published grid. Horizon changes deliberately discard incompatible identity types.
+
+## Personal roster precedence
+
+| State | Source | Storage writes |
+| --- | --- | --- |
+| Initializing | Browser URL and saved roster | None |
+| Local | Personal saved roster, then edits | Autosave |
+| Shared | Valid versioned URL | Explicit Save only |
+| Invalid | Visible error and recovery | None |
+
+Back to a URL without share fields restores the saved roster. Compound ownership edits are atomic. Invalid draft settings remain editable but cannot be shared. Clipboard failure exposes selectable link text.
