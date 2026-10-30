@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, type ReactNode } from "react";
-import { AnimatePresence, motion } from "framer-motion";
+import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { ChevronRight } from "lucide-react";
 import { formatStatValue } from "@/lib/catalog/format";
 import { statDescription } from "@/lib/catalog/stat-descriptions";
@@ -43,6 +43,7 @@ export function ExpandableStatRow({
   sliderPlacement = "below",
   rowPaddingY,
 }: ExpandableStatRowProps) {
+  const reduceMotion = useReducedMotion();
   const [open, setOpen] = useState(defaultOpen);
   const ready = isStatReady(stat);
   const color =
@@ -141,7 +142,7 @@ export function ExpandableStatRow({
             initial={{ height: 0, opacity: 0 }}
             animate={{ height: "auto", opacity: 1 }}
             exit={{ height: 0, opacity: 0 }}
-            transition={{ duration: 0.38, ease: [0.32, 0.72, 0, 1] }}
+            transition={{ duration: reduceMotion ? 0 : 0.21, ease: [0.32, 0.72, 0, 1] }}
             className="overflow-hidden"
           >
             <div className={cn("px-2 pb-2", theme.chartWrap)}>

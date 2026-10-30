@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { AnimatePresence, motion } from "framer-motion";
+import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { ChevronRight } from "lucide-react";
 import { formatStatValue } from "@/lib/catalog/format";
 import type { StatPayload } from "@/lib/distribution";
@@ -108,6 +108,7 @@ function CompareCell({
 }
 
 export function CompareBoard({ columns }: { columns: CompareColumn[] }) {
+  const reduceMotion = useReducedMotion();
   const [openStatId, setOpenStatId] = useState<string | null>(null);
 
   const fills = useMemo(() => {
@@ -251,7 +252,7 @@ export function CompareBoard({ columns }: { columns: CompareColumn[] }) {
                           animate={{ height: "auto", opacity: 1 }}
                           exit={{ height: 0, opacity: 0 }}
                           transition={{
-                            duration: 0.38,
+                            duration: reduceMotion ? 0 : 0.21,
                             ease: [0.32, 0.72, 0, 1],
                           }}
                         >

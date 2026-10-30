@@ -1,4 +1,5 @@
 "use client";
+import { useReducedMotion } from "framer-motion";
 
 import { useMemo } from "react";
 import {
@@ -98,6 +99,7 @@ export function DistributionChart({
   color,
   hoverStanding,
 }: DistributionChartProps) {
+  const reduceMotion = useReducedMotion();
   if (curve.length === 0) return null;
 
   const shadeRight = !higherIsBetter;
@@ -170,7 +172,7 @@ export function DistributionChart({
             strokeWidth={1.5}
             fill="var(--chart-league-fill)"
             fillOpacity={1}
-            isAnimationActive
+            isAnimationActive={!reduceMotion}
             animationDuration={450}
           />
           <Area
@@ -180,7 +182,7 @@ export function DistributionChart({
             strokeWidth={2}
             fill={`url(#shade-${id})`}
             connectNulls={false}
-            isAnimationActive
+            isAnimationActive={!reduceMotion}
             animationDuration={450}
           />
           <ReferenceLine

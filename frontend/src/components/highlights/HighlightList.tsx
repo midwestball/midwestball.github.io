@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { AnimatePresence, motion } from "framer-motion";
+import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { ChevronRight } from "lucide-react";
 import type { LeagueGroupJson } from "@/lib/ballnet-store";
 import type { HighlightRow } from "@/lib/payload";
@@ -166,6 +166,7 @@ function HighlightRowExpandable({
   season: number;
   weeklyByGroup: Record<string, LeagueGroupJson | null>;
 }) {
+  const reduceMotion = useReducedMotion();
   const [open, setOpen] = useState(false);
   const tier = resolveRarityTier(row);
   const also = row.also ?? [];
@@ -243,7 +244,7 @@ function HighlightRowExpandable({
             initial={{ height: 0, opacity: 0 }}
             animate={{ height: "auto", opacity: 1 }}
             exit={{ height: 0, opacity: 0 }}
-            transition={{ duration: 0.38, ease: [0.32, 0.72, 0, 1] }}
+            transition={{ duration: reduceMotion ? 0 : 0.21, ease: [0.32, 0.72, 0, 1] }}
             className="overflow-hidden"
           >
             <div className="space-y-3 border-t border-border px-3 pb-2 pt-2">

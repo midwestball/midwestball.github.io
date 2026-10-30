@@ -70,3 +70,7 @@ Public lab, loading and not-found routes share the same semantic appearance as p
 ## Synchronous Search history
 
 Native history updates are synchronous and subscribed through the browser query store, preventing query clearing after a picker selection from overwriting a pending navigation. Popstate restores selection and filters. Snapshot fetches exclude bios unavailable in the chosen season.
+
+## Calm local feedback
+
+Discovery and comparison retain controls while pending data occupies a reserved local region. Reveal transitions are brief and become immediate under reduced motion; chart animations also respect that preference. Decorative lattice work is omitted because it is optional and lacks a browser performance gate in this environment.

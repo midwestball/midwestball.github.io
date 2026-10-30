@@ -298,3 +298,7 @@
 @media (prefers-reduced-motion: reduce) {
   :root { --motion-quick: 0ms; }
 }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { scroll-behavior: auto !important; transition-duration: 0s !important; }
+}

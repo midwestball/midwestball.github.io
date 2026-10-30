@@ -1,4 +1,5 @@
 "use client";
+import { useReducedMotion } from "framer-motion";
 
 import { useId, useMemo, useState } from "react";
 import {
@@ -195,6 +196,7 @@ export function CompareOverlayChart({
   markers: OverlayMarker[];
   fills: Map<string, string>;
 }) {
+  const reduceMotion = useReducedMotion();
   const reactId = useId().replace(/:/g, "");
   const [hoveredId, setHoveredId] = useState<string | null>(null);
   const [pinnedId, setPinnedId] = useState<string | null>(null);
@@ -363,7 +365,7 @@ export function CompareOverlayChart({
               strokeWidth={1.5}
               fill="var(--chart-league-fill)"
               fillOpacity={1}
-              isAnimationActive
+              isAnimationActive={!reduceMotion}
               animationDuration={450}
             />
             {focusMarker ? (
@@ -374,7 +376,7 @@ export function CompareOverlayChart({
                 strokeWidth={2}
                 fill={`url(#${shadeId})`}
                 connectNulls={false}
-                isAnimationActive
+                isAnimationActive={!reduceMotion}
                 animationDuration={300}
               />
             ) : null}

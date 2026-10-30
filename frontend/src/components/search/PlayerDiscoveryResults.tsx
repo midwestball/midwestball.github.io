@@ -8,9 +8,9 @@ export function PlayerDiscoveryResults({ model, addAction }: { model: ReturnType
   const { season, hasVolumeData, boardStatus, showRanked, rankedRows, isFantasyRank, selectedStat, bioResults } = model;
   return <>      {showRanked ? (
         boardStatus === "loading" ? (
-          <p className="text-sm text-muted-foreground">Loading rankings…</p>
+          <p role="status" className="min-h-24 text-sm text-muted-foreground">Loading rankings…</p>
         ) : boardStatus === "error" ? (
-          <p className="text-sm text-muted-foreground">
+          <p role="status" className="min-h-24 text-sm text-muted-foreground">
             Rankings not published for this slice yet.
           </p>
         ) : rankedRows && rankedRows.length > 0 ? (

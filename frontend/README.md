@@ -56,3 +56,7 @@ CSS follows effective browser light/dark preference, defaults to charcoal when i
 ## Semantic feature surfaces
 
 Panels, forms, selected actions, warnings, unavailable states and keyboard focus use semantic tokens across all routes; percentile and team identities retain their original colors. Run `npm run test` for feature regressions.
+
+## Local feedback and motion
+
+Loading and error messages stay beside the affected data, with controls retained. Chart and row motion honors reduced-motion preference; the site has no decorative canvas dependency. Run `npm run test -- src/components`.
