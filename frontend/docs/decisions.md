@@ -106,3 +106,7 @@ Failed comparison hydration shows a local error and retry action while discovery
 ## Recovery regression evidence
 
 ROS navigation retains player-ID semantics and reports stale selections. Theme bootstrap safely returns to CSS control if browser storage throws.
+
+## Search control alignment
+
+The season selector aligns with the query input even while its suggestion list is expanded, rather than vertically centering against the entire dropdown.
