@@ -19,3 +19,7 @@ A shared combobox clamps keyboard navigation, closes on outside blur or selectio
 ## Discovery request ownership
 
 Board requests depend on season, published week and catalog group. Query and volume changes reuse loaded artifacts; obsolete requests cannot publish under a new request key.
+
+## Independent Search scopes
+
+The Search shell owns one live directory and validated URL state. Discovery filters never erase comparison IDs; only selected IDs drive snapshot hydration. Unknown or unavailable selections remain removable with visible feedback.

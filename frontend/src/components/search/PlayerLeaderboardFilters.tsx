@@ -4,9 +4,10 @@ import { FILTER_OPTIONS, FANTASY_RANK_BOARD_GROUPS, FANTASY_RANK_STAT_ID, type S
 const controlBase = "h-9 border border-zinc-200 bg-white px-2 text-sm outline-none rounded-none";
 const controlEnabled = `${controlBase} text-zinc-900 focus:border-zinc-400`;
 const controlDisabled = `${controlBase} cursor-not-allowed border-zinc-100 bg-zinc-50 text-zinc-400`;
-export function PlayerLeaderboardFilters({ model }: { model: ReturnType<typeof useLeaderboardDiscovery> }) {
-  const { query, setQuery, season, setSeason, seasonTouched, seasonOptions, group, onSelectGroup, statId, onSelectStat, statEnabled, sortEnabled, boardGroup, statOptions, sortMode, setSortMode, volumeInteractive, volumeVisible, hasVolumeData, boardStatus, volumeMax, floor, volumeLabel, sliderMax, sliderValue, setVolume, volumeDraft, setVolumeChoice, volumeKey, clampVolume, minVolume, commitVolumeDraft } = model;
+export function PlayerLeaderboardFilters({ model, children }: { model: ReturnType<typeof useLeaderboardDiscovery>; children?: React.ReactNode }) {
+  const { query, setQuery, season, setSeason, seasonOptions, group, onSelectGroup, statId, onSelectStat, statEnabled, sortEnabled, boardGroup, statOptions, sortMode, setSortMode, volumeInteractive, volumeVisible, hasVolumeData, boardStatus, volumeMax, floor, volumeLabel, sliderMax, sliderValue, setVolume, volumeDraft, setVolumeChoice, volumeKey, clampVolume, minVolume, commitVolumeDraft } = model;
   return <>      <div className="flex items-center gap-1.5">
+        {children ?? (
         <input
           type="search"
           value={query}
@@ -14,9 +15,10 @@ export function PlayerLeaderboardFilters({ model }: { model: ReturnType<typeof u
           placeholder="Search players, positions, teams"
           className="h-9 min-w-0 flex-1 rounded-none border border-zinc-200 bg-white px-2 text-sm text-zinc-900 outline-none placeholder:text-zinc-400 focus:border-zinc-400"
         />
+        )}
         <select
           value={season}
-          onChange={(event) => { seasonTouched.current = true; setSeason(Number(event.target.value)); }}
+          onChange={(event) => { setSeason(Number(event.target.value)); }}
           aria-label="Season"
           className={`${controlEnabled} shrink-0`}
         >

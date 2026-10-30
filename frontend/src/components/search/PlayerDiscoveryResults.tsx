@@ -4,7 +4,7 @@ import { formatStatValue } from "@/lib/catalog";
 import { TeamAbbr } from "@/components/TeamAbbr";
 import { PositionRankLabel } from "@/components/PositionRankLabel";
 import type { useLeaderboardDiscovery } from "./useLeaderboardDiscovery";
-export function PlayerDiscoveryResults({ model }: { model: ReturnType<typeof useLeaderboardDiscovery> }) {
+export function PlayerDiscoveryResults({ model, addAction }: { model: ReturnType<typeof useLeaderboardDiscovery>; addAction?: (id: string, name: string) => React.ReactNode }) {
   const { season, hasVolumeData, boardStatus, showRanked, rankedRows, isFantasyRank, selectedStat, bioResults } = model;
   return <>      {showRanked ? (
         boardStatus === "loading" ? (
@@ -16,10 +16,10 @@ export function PlayerDiscoveryResults({ model }: { model: ReturnType<typeof use
         ) : rankedRows && rankedRows.length > 0 ? (
           <ul className="space-y-1">
             {rankedRows.map((row) => (
-              <li key={row.playerId}>
+              <li key={row.playerId} className="flex items-stretch gap-1">
                 <Link
                   href={`/players/?id=${encodeURIComponent(row.playerId)}&season=${season}`}
-                  className="flex items-center justify-between rounded-none border border-zinc-200 bg-white px-3 py-2 hover:bg-zinc-50"
+                  className="min-w-0 flex-1 flex items-center justify-between rounded-none border border-zinc-200 bg-white px-3 py-2 hover:bg-zinc-50"
                 >
                   <div>
                     <p className="font-medium text-zinc-900">{row.name}</p>
@@ -63,6 +63,7 @@ export function PlayerDiscoveryResults({ model }: { model: ReturnType<typeof use
                     )}
                   </div>
                 </Link>
+                {addAction?.(row.playerId, row.name)}
               </li>
             ))}
           </ul>
@@ -77,10 +78,10 @@ export function PlayerDiscoveryResults({ model }: { model: ReturnType<typeof use
         <>
           <ul className="space-y-1">
             {bioResults.map((player) => (
-              <li key={player.id}>
+              <li key={player.id} className="flex items-stretch gap-1">
                 <Link
                   href={`/players/?id=${encodeURIComponent(player.id)}&season=${season}`}
-                  className="flex items-center justify-between rounded-none border border-zinc-200 bg-white px-3 py-2 hover:bg-zinc-50"
+                  className="min-w-0 flex-1 flex items-center justify-between rounded-none border border-zinc-200 bg-white px-3 py-2 hover:bg-zinc-50"
                 >
                   <div>
                     <p className="font-medium text-zinc-900">{player.name}</p>
@@ -96,6 +97,7 @@ export function PlayerDiscoveryResults({ model }: { model: ReturnType<typeof use
                   </div>
                   <span className="text-xs text-zinc-400">{season}</span>
                 </Link>
+                {addAction?.(player.id, player.name)}
               </li>
             ))}
           </ul>

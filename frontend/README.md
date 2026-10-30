@@ -32,3 +32,7 @@ Search, weekly projections, ROS and roster pickers share focus, arrow keys, Ente
 ## Discovery composition
 
 A request-keyed discovery hook owns board loading and qualification; controlled filter and result components render that state independently. Run `npm run test -- src/components/search/search-discovery.test.tsx`.
+
+## Canonical Search
+
+`/search/?p=A,B&season=2026&pos=wr&stat=fantasy_pos_rank` combines comparison with the complete discovery filters. Query edits replace history; discrete choices push history. Filter changes preserve selected players. Run `npm run test -- src/components/search`.

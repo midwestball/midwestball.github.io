@@ -1,5 +1,6 @@
 "use client";
 
+import { decodeSearch } from "@/lib/share-state/search";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { BOARD_GROUPS, type SearchPositionFilter, boardGroupOf, matchesPositionFilter, type SortMode, type BoardStatus, type PublishedSeason, rampHoldMin, FANTASY_RANK_STAT_ID, uniqueBoardPlayers, sortFantasyRankRows, sortLeaderboardRows, matchesQuery, volumeByPlayer, resolveVolume, boardHasResolvedVolume, type SeasonAffiliation, EMPTY_AFFILIATION, affiliationFromBoard } from "@/lib/search/leaderboards";
 import {
@@ -19,23 +20,25 @@ type PlayerSearchProps = {
   players: PlayerBio[];
   seasons: PublishedSeason[];
   initialSeason: number;
+  url?: string;
+  navigate?: (updates: Record<string, string | null>, replace?: boolean) => void;
 };
 
 
 export function useLeaderboardDiscovery({
   players,
   seasons,
-  initialSeason,
+  initialSeason, url, navigate,
 }: PlayerSearchProps) {
   const [livePlayers, setLivePlayers] = useState(() => players.filter(player => !player.id.startsWith("demo-")));
   const [liveSeasons, setLiveSeasons] = useState(seasons);
   const [currentSeason, setCurrentSeason] = useState(initialSeason);
-  const [query, setQuery] = useState("");
-  const [season, setSeason] = useState(initialSeason);
+  const [localQuery, setLocalQuery] = useState("");
+  const [localSeason, setLocalSeason] = useState(initialSeason);
   const seasonTouched = useRef(false);
-  const [group, setGroup] = useState<SearchPositionFilter | null>(null);
-  const [statId, setStatId] = useState<string | null>(null);
-  const [sortMode, setSortMode] = useState<SortMode>("best");
+  const [localGroup, setGroup] = useState<SearchPositionFilter | null>(null);
+  const [localStatId, setStatId] = useState<string | null>(null);
+  const [localSortMode, setLocalSortMode] = useState<SortMode>("best");
   const [volumeChoice, setVolumeChoice] = useState<{key: string; value: number | null; draft: string}>({key: "", value: null, draft: ""});
   const [boardResult, setBoardResult] = useState<{key: string; board: LeaderboardJson | null; status: BoardStatus}>({key: "", board: null, status: "idle"});
   const [affiliationResult, setAffiliationResult] = useState<{key: string; map: Map<string, SeasonAffiliation>}>({key: "", map: EMPTY_AFFILIATION});
@@ -71,7 +74,7 @@ export function useLeaderboardDiscovery({
       }
       if (current) {
         setCurrentSeason(current.season);
-        if (!seasonTouched.current) setSeason(current.season);
+        if (!seasonTouched.current) setLocalSeason(current.season);
       }
     });
     return () => {
@@ -87,6 +90,15 @@ export function useLeaderboardDiscovery({
     ].sort((a, b) => b.season - a.season);
   }, [liveSeasons, currentSeason]);
 
+  const parsed = url === undefined ? null : decodeSearch(new URLSearchParams(url), seasonOptions.map(s => s.season), currentSeason);
+  const season = parsed?.season ?? localSeason;
+  const query = parsed?.query ?? localQuery;
+  const group = parsed ? parsed.pos : localGroup;
+  const statId = parsed ? parsed.statId : localStatId;
+  const sortMode = parsed?.sort ?? localSortMode;
+  function setSeason(value: number) { seasonTouched.current = true; setLocalSeason(value); navigate?.({ season: String(value), min: null }); }
+  function setQuery(value: string) { setLocalQuery(value); navigate?.({ q: value }, true); }
+  function setSortMode(value: SortMode) { setLocalSortMode(value); navigate?.({ sort: value === "best" ? null : value }); }
   const asOfWeek = useMemo(() => {
     return (
       seasonOptions.find((s) => s.season === season)?.asOfWeek ??
@@ -158,7 +170,7 @@ export function useLeaderboardDiscovery({
     return max;
   }, [statRows, hasVolumeData, volumeMap]);
   const volumeKey = `${statId ?? ""}:${floor ?? ""}`;
-  const selectedVolume = volumeChoice.key === volumeKey ? volumeChoice.value : floor;
+  const selectedVolume = parsed ? parsed.minVolume ?? floor : volumeChoice.key === volumeKey ? volumeChoice.value : floor;
   const minVolume = selectedVolume == null ? null : volumeMax > 0 ? Math.min(selectedVolume, volumeMax) : selectedVolume;
   const volumeDraft = volumeChoice.key === volumeKey && (selectedVolume == null || volumeMax <= 0 || selectedVolume <= volumeMax)
     ? volumeChoice.draft : minVolume == null ? "" : String(minVolume);
@@ -232,10 +244,11 @@ export function useLeaderboardDiscovery({
   function setVolume(next: number) {
     const clamped = clampVolume(next);
     setVolumeChoice({key: volumeKey, value: clamped, draft: String(clamped)});
+    navigate?.({ min: String(clamped) }, true);
   }
 
   function commitVolumeDraft() {
-    const parsed = Number(volumeDraft.trim());
+    const parsed = volumeDraft.trim() === "" ? NaN : Number(volumeDraft.trim());
     if (!Number.isFinite(parsed)) {
       setVolumeChoice({key: volumeKey, value: minVolume, draft: String(minVolume ?? floor ?? 0)});
       return;
@@ -244,6 +257,7 @@ export function useLeaderboardDiscovery({
   }
 
   function onSelectGroup(next: SearchPositionFilter | "") {
+    if (navigate) { navigate({ pos: next || null, stat: null, min: null, sort: null }); return; }
     if (!next) {
       setGroup(null);
       setStatId(null);
@@ -256,6 +270,7 @@ export function useLeaderboardDiscovery({
   }
 
   function onSelectStat(next: string) {
+    if (navigate) { navigate({ stat: next || null, min: null, sort: null }); return; }
     if (!next) {
       setStatId(null);
       setSortMode("best");
@@ -332,5 +347,5 @@ export function useLeaderboardDiscovery({
     sliderMax,
   );
 
-  return { query, setQuery, season, setSeason, seasonTouched, seasonOptions, group, onSelectGroup, statId, onSelectStat, statEnabled, sortEnabled, boardGroup, statOptions, sortMode, setSortMode, volumeInteractive, volumeVisible, hasVolumeData, boardStatus, volumeMax, floor, volumeLabel, sliderMax, sliderValue, effectiveMin, setVolume, volumeDraft, setVolumeChoice, volumeKey, clampVolume, minVolume, commitVolumeDraft, showRanked, rankedRows, isFantasyRank, selectedStat, bioResults, asOfWeek, livePlayers };
+  return { query, setQuery, season, setSeason, seasonOptions, group, onSelectGroup, statId, onSelectStat, statEnabled, sortEnabled, boardGroup, statOptions, sortMode, setSortMode, volumeInteractive, volumeVisible, hasVolumeData, boardStatus, volumeMax, floor, volumeLabel, sliderMax, sliderValue, effectiveMin, setVolume, volumeDraft, setVolumeChoice, volumeKey, clampVolume, minVolume, commitVolumeDraft, showRanked, rankedRows, isFantasyRank, selectedStat, bioResults, asOfWeek, livePlayers };
 }
