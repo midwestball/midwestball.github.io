@@ -11,7 +11,8 @@ it("opens on focus, navigates, picks, collapses, and reopens", () => {
   expect(document.getElementById(input.getAttribute("aria-activedescendant")!)?.textContent).toContain("Beta");
   fireEvent.keyDown(input, { key: "Enter" }); expect(pick).toHaveBeenCalledWith("b");
   expect(screen.queryByRole("listbox")).toBeNull();
-  fireEvent.focus(input); fireEvent.keyDown(input, { key: "Escape" });
+  fireEvent.click(input); expect(screen.getAllByRole("option")).toHaveLength(2);
+  fireEvent.keyDown(input, { key: "Escape" });
   fireEvent.keyDown(input, { key: "Enter" }); expect(pick).toHaveBeenCalledTimes(1);
 });
 it("hides suggestions and prevents picks when disabled", () => {

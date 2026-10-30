@@ -59,7 +59,7 @@ describe("ROS and roster controls", () => {
   it("shows the five ROS quantiles and mean for a selected player", () => {
     render(<RosProjections />);
     fireEvent.focus(screen.getByLabelText("Add a ROS projection"));
-    fireEvent.click(screen.getByRole("button", { name: /Player WR/ }));
+    fireEvent.click(screen.getByRole("option", { name: /Player WR/ }));
     expect(screen.getByRole("columnheader", { name: "Median" })).toBeTruthy();
     expect(screen.getByRole("columnheader", { name: "5%" })).toBeTruthy();
     expect(screen.getByRole("columnheader", { name: "95%" })).toBeTruthy();
@@ -72,10 +72,10 @@ describe("ROS and roster controls", () => {
     fireEvent.click(screen.getByRole("button", { name: "Superflex" }));
     expect((screen.getByLabelText("SUPERFLEX slots") as HTMLInputElement).value).toBe("1");
     fireEvent.focus(screen.getByLabelText("Add to your roster"));
-    fireEvent.click(screen.getByRole("button", { name: /Player RB/ }));
+    fireEvent.click(screen.getByRole("option", { name: /Player RB/ }));
     fireEvent.change(screen.getByLabelText("Trade action for Player RB"), { target: { value: "give" } });
     fireEvent.focus(screen.getByLabelText("Add a player to receive"));
-    fireEvent.click(screen.getByRole("button", { name: /Player WR/ }));
+    fireEvent.click(screen.getByRole("option", { name: /Player WR/ }));
     expect(screen.getByText("Starting lineup difference")).toBeTruthy();
     await waitFor(() => expect(JSON.parse(localStorage.getItem("midwestball-trade-roster-v1")!).roster).toEqual([{ playerId: "RB", ir: false }]));
   });
@@ -83,9 +83,9 @@ describe("ROS and roster controls", () => {
     render(<TradesPageClient />);
     fireEvent.click(screen.getByRole("button", { name: "Player packages" }));
     fireEvent.focus(screen.getByLabelText("Add a player to give"));
-    fireEvent.click(screen.getByRole("button", { name: /Player RB/ }));
+    fireEvent.click(screen.getByRole("option", { name: /Player RB/ }));
     fireEvent.focus(screen.getByLabelText("Add a player to receive"));
-    fireEvent.click(screen.getByRole("button", { name: /Player WR/ }));
+    fireEvent.click(screen.getByRole("option", { name: /Player WR/ }));
     expect(screen.getByText("Player package difference")).toBeTruthy();
     expect(screen.queryByText("Starting lineup difference")).toBeNull();
   });

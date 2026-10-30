@@ -94,3 +94,7 @@ The comparison hook memoizes validated IDs from the raw selection string, indepe
 ## Navigation regression evidence
 
 Hermetic component fixtures exercise weekly entity-key/threshold restoration without snapshot reload and trade navigation from one shared roster back to personal saved state without clobbering storage.
+
+## Accessible option targets
+
+Active descendants identify the actual option target, with presentation-only list wrappers. Clicking an already-focused picker reopens suggestions after selection, without requiring an artificial blur or reopening automatically.

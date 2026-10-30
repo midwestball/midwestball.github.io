@@ -21,7 +21,7 @@ it("hydrates entity keys and points, restores history, and never reloads metadat
   await waitFor(() => expect(screen.getByLabelText("Fantasy points threshold")).toBeTruthy());
   expect((screen.getByLabelText("Fantasy points threshold") as HTMLInputElement).value).toBe("12.5");
   fireEvent.focus(screen.getByLabelText("Add a projection"));
-  fireEvent.click(screen.getByRole("button", { name: /Player b/ }));
+  fireEvent.click(screen.getByRole("option", { name: /Player b/ }));
   expect(new URLSearchParams(location.search).get("p")).toBe("a,b");
   expect(new URLSearchParams(location.search).get("utm")).toBe("kept");
   act(() => { history.replaceState(null, "", "/ballnet/?p=b&focus=b&points=8"); window.dispatchEvent(new PopStateEvent("popstate")); });
