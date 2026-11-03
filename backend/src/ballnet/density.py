@@ -1,8 +1,9 @@
-"""Stage D — league_ytd densities (reflected Gaussian KDE for every catalog id)."""
+"""Stage D — observed league histograms and aggregated empirical value counts."""
 
 from __future__ import annotations
 
 import json
+import math
 import time
 from dataclasses import dataclass
 from typing import Any
@@ -14,6 +15,7 @@ from scipy import stats
 from ballnet.catalog.registry import stats_for_group
 from ballnet.catalog.types import StatDefinition
 from ballnet.paths import DIST_DIR, YTD_DIR, ensure_data_dirs
+from ballnet.jsonio import write_json
 
 GRID_N = 512
 
@@ -131,28 +133,55 @@ def build_league_density(
     sample: np.ndarray,
     stat: StatDefinition,
 ) -> dict[str, Any]:
-    """Reflected KDE for every catalog id. `kind` is catalog metadata, not a shape switch."""
-    x_min, x_max = _expand_domain(stat.x_min, stat.x_max, sample)
-    n_sample = int(sample.size)
-    curve = _reflected_kde_curve(
-        sample,
-        x_min=x_min,
-        x_max=x_max,
-        lower_bound=stat.lower_bound,
-        upper_bound=stat.upper_bound,
-    )
-    y_max = max((p["y"] for p in curve), default=0.0)
+    """Build an observed histogram and exact aggregate counts for midranks."""
+    values = np.asarray(sample, dtype=float)
+    values = values[np.isfinite(values)]
+    n_sample = int(values.size)
+    if not n_sample:
+        return {
+            "stat_id": stat.id, "kind": stat.kind, "representation": "histogram",
+            "x_min": stat.x_min, "x_max": stat.x_max, "y_max": 0.0,
+            "bins": [], "value_counts": [], "n_sample": 0,
+        }
+    # A width of one percentage point is 0.01 in the stored fraction scale.
+    width = 0.01 if stat.format == "percent" else 1.0
+    span = float(values.max() - values.min())
+    if span / width > 120:
+        target = span / 120
+        magnitude = 10 ** math.floor(math.log10(target))
+        width = next(step * magnitude for step in (1, 2, 5, 10) if step * magnitude >= target)
+    x_min = math.floor(float(values.min()) / width) * width
+    n_bins = max(1, math.floor((float(values.max()) - x_min) / width) + 1)
+    edges = x_min + np.arange(n_bins + 1) * width
+    counts, _ = np.histogram(values, bins=edges)
+    unique, frequencies = np.unique(values, return_counts=True)
+    bins = [
+        {"lower": float(edges[i]), "upper": float(edges[i + 1]), "count": int(count)}
+        for i, count in enumerate(counts)
+    ]
     return {
         "stat_id": stat.id,
         "kind": stat.kind,
+        "representation": "histogram",
         "x_min": x_min,
-        "x_max": x_max,
-        "y_max": float(y_max),
-        "lower_bound": stat.lower_bound,
-        "upper_bound": stat.upper_bound,
-        "curve": curve,
+        "x_max": float(edges[-1]),
+        "y_max": float(max(counts, default=0)),
+        "bins": bins,
+        "value_counts": [{"value": float(v), "count": int(c)} for v, c in zip(unique, frequencies)],
         "n_sample": n_sample,
     }
+
+
+def empirical_percentile(value: float, value_counts: list[dict[str, float]], *, higher_is_better: bool) -> float | None:
+    """Oriented midrank among observed qualified players, including ties."""
+    if not math.isfinite(value):
+        return None
+    n = sum(int(item["count"]) for item in value_counts)
+    if n < 2:
+        return None
+    worse = sum(int(item["count"]) for item in value_counts if (item["value"] < value if higher_is_better else item["value"] > value))
+    equal = sum(int(item["count"]) for item in value_counts if item["value"] == value)
+    return 100.0 * (worse + equal / 2.0) / n
 
 
 def build_densities(
@@ -161,7 +190,7 @@ def build_densities(
     *,
     position_group: str = "qb",
 ) -> DensityResult:
-    """Build league_ytd densities for a position group from Stage C parquet."""
+    """Build league_ytd histograms for a position group from Stage C parquet."""
     if position_group not in {
         "qb",
         "backfield",
@@ -183,6 +212,8 @@ def build_densities(
             f"Missing Stage C panel {ytd_path}; run `ballnet ytd` first"
         )
     long = pl.read_parquet(ytd_path)
+    if "aggregation_version" not in long.columns or (long.height and set(long["aggregation_version"].to_list()) != {"observed-v2"}):
+        raise ValueError("Stage C data predates observed-v2; rebuild the YTD panel before publishing")
     stats = stats_for_group(position_group)
 
     records: list[dict[str, Any]] = []
@@ -208,8 +239,7 @@ def build_densities(
     out_dir = DIST_DIR / f"league_ytd_{position_group}_{season}_w{as_of_week}"
     out_dir.mkdir(parents=True, exist_ok=True)
     json_path = out_dir / "distributions.json"
-    with json_path.open("w") as f:
-        json.dump(records, f)
+    write_json(json_path, records)
 
     slim = pl.DataFrame(
         [
@@ -245,4 +275,6 @@ def load_densities(
     path = DIST_DIR / f"league_ytd_{position_group}_{season}_w{as_of_week}" / "distributions.json"
     with path.open() as f:
         records = json.load(f)
+    if any(r.get("representation") != "histogram" for r in records):
+        raise ValueError("League data predates observed-v2; rebuild histograms before publishing")
     return {r["stat_id"]: r for r in records}

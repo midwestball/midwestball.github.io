@@ -43,5 +43,5 @@
 - Storage uploads (`upload-storage`) go to public bucket `knowball-public` under `index/`, `pages/`, `league/`, `highlights/`, and `dists/league_weekly/`. Free plan is ~1 GB — skip `--also-current` (duplicates the season). Dashboard drag-drops often land at bucket root; re-upload with `--index` to get `index/*.json`.
 - Service-role key lives in `backend/.env` only; the frontend fetches public object URLs (no Supabase client).
 - Never re-embed league `curve` onto player pages; league shapes live under `data/league/` only.
-- League JSON is KDE `curve[]` for every catalog id. Catalog `kind` is metadata; do not emit `bins` or `samples`.
+- Version 2 league JSON uses observed histogram `bins` and aggregate value counts. Percentiles are empirical midranks; retain version 1 KDE readers only for legacy snapshots.
 - Stage H scores oriented z vs season-of-games peers (`week <= W`) and writes allowlist KDEs under `data/dists/league_weekly/` — distinct from Stage D/G `league_ytd` / `league/`.

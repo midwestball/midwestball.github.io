@@ -136,7 +136,8 @@ def fetch_season(season: int, *, force: bool = False) -> list[FetchResult]:
         empty_key: str | None = None,
     ) -> pl.DataFrame:
         out = RAW_DIR / f"{name}.parquet"
-        if out.exists() and not force:
+        unavailable = RAW_DIR / f"{name}.unavailable"
+        if out.exists() and not force and not unavailable.exists():
             df = pl.read_parquet(out)
             results.append(
                 FetchResult(name, str(out), df.height, len(df.columns), 0.0, notes + " (cache)")
@@ -149,10 +150,20 @@ def fetch_season(season: int, *, force: bool = False) -> list[FetchResult]:
         except Exception as e:
             if not optional:
                 raise
+            if out.exists() and (not unavailable.exists() or unavailable.read_text(encoding="utf-8").startswith("stale:")):
+                cached = pl.read_parquet(out)
+                unavailable.write_text(f"stale: {type(e).__name__}: {e}", encoding="utf-8")
+                results.append(FetchResult(name, str(out), cached.height, len(cached.columns), time.perf_counter() - t0, f"{notes} UNAVAILABLE; using stale cache: {type(e).__name__}: {e}"))
+                return cached
             df = _EMPTY[empty_key] if empty_key else pl.DataFrame()
             note = f"{notes} UNAVAILABLE: {type(e).__name__}: {e}"
+            path = _write(name, df)
+            unavailable.write_text(note, encoding="utf-8")
+            results.append(FetchResult(name, str(path), df.height, len(df.columns), time.perf_counter() - t0, note))
+            return df
         elapsed = time.perf_counter() - t0
         path = _write(name, df)
+        unavailable.unlink(missing_ok=True)
         results.append(FetchResult(name, str(path), df.height, len(df.columns), elapsed, note))
         return df
 

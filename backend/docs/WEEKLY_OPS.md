@@ -43,6 +43,61 @@ uv run ballnet upload-storage --index --season $YEAR --as-of-week $W --highlight
 
 The frontend reads index/pages from **Supabase Storage** only (local `npm run dev` included). `publish-all` is not enough — `upload-storage` is what the UI sees. Do not commit Ballnet JSON into `frontend/`.
 
+### Active dataset and weekly publication
+
+`upload-storage` resolves `index/ballnet-dataset.json` once per command and uploads
+to its `prefix`, the same location the frontend reads. A missing pointer or an
+explicit empty prefix selects the legacy bucket root. An invalid pointer or a
+failed pointer read stops the upload; it must not silently publish elsewhere.
+The selected destination is printed in the upload log. Projections keep their
+separate `projections/` production prefix.
+
+When `--index` is included, pages, league shapes, leaderboards, and requested
+highlights upload first. Any reported failure prevents the index upload.
+`index/current.json` uploads after the players and seasons indexes succeed.
+Mutable uploads use zero cache lifetime so new page loads can discover updates.
+
+The historical generator must publish the observed-v2 histograms and empirical
+rarity used by the current frontend. Keep the generator changes in version
+control together with the frontend contract; a saved historical rebuild alone
+does not update the scheduled weekly generator.
+
+On November 3, 2026, the watcher and Tuesday tasks were running, but publishing
+Week 8 into the legacy root while the website read
+`migrations/ballnet-v2-20261029` at Week 7. The historical observed-v2 generator
+changes had also been left in GitHub Desktop stash commit
+`7c79f3719d2276496f10536f7529dd7edb1e9b25`. The historical generator and its tests
+were recovered without applying or deleting the stash's unrelated projection
+changes. The uploader now follows the active dataset pointer, and Week 8 was
+rebuilt with that generator.
+
+Recovery verification: the forced historical run completed at 10:45 Eastern
+with zero upload failures (1,713 pages, eight league files, eight leaderboards,
+seven highlight/weekly-distribution files, and three index files). All 14 Week 8
+games were final. The active public index reported `asOfWeek: 8` and
+`completedWeek: 8`; 28 public objects matched local bytes. The isolated backend
+suite passed 31 tests, including active-dataset uploads and early Tuesday
+launches. The scheduled Tuesday run separately published Week 9
+projections trained through Week 8. Browser UI verification was unavailable;
+public HTTP reads verified the frontend's data source.
+
+The original Tuesday wrapper subsequently reported a log-file sharing failure
+after its projection CLI had succeeded. The local PowerShell runner now retries
+brief log locks, and the promotion wrapper prints a verification summary instead
+of duplicating its entire JSON inventory. A simulated lock check confirmed that
+two failed writes are retried successfully. Recovery verifies the production
+projection manifest's public objects by hash and schema before marking the
+Tuesday slot complete; a logging failure alone must not trigger another retrain.
+
+The registered Tuesday trigger also had a fixed UTC offset: Windows reported
+November 10's next run at 09:00 Eastern, before the configured 10:00 slot.
+Updating the stored-password task was rejected with a credential error. The
+entrypoint therefore keeps an early Tuesday launch alive until the configured
+time, then reloads state and schedule so a concurrent manual completion cannot
+cause duplicate training. Future `register_tasks.ps1` registrations use a
+floating local-time boundary. The existing task account and stored credentials
+are preserved; the early-launch handling makes its current trigger usable.
+
 ## Automation options (pick later)
 
 | Option | Pros | Cons |

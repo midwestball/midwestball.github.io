@@ -13,8 +13,9 @@ import polars as pl
 from ballnet.catalog.registry import POSITION_GROUPS, stats_for_group
 from ballnet.fantasy_rank import FantasyPosRank, attach_fantasy_pos_rank, fantasy_pos_ranks
 from ballnet.paths import LEADERBOARDS_DIR, YTD_DIR, ensure_data_dirs
-from ballnet.percentiles import attach_percentiles
+from ballnet.percentiles import attach_percentiles, require_empirical_panel
 from ballnet.ramp_hold import completed_week_for
+from ballnet.jsonio import write_json
 
 # Mirror publish.PUBLISHABLE_GROUPS without importing publish (cycle risk).
 _DEFAULT_GROUPS: tuple[str, ...] = tuple(g for g in POSITION_GROUPS if g != "returner")
@@ -32,9 +33,7 @@ class LeaderboardPublishResult:
 
 
 def _write_json(path: Path, payload: Any) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("w", encoding="utf-8") as f:
-        json.dump(payload, f, **_JSON_DUMP_KW)
+    write_json(path, payload)
 
 
 def _row_sort_key(row: dict[str, Any]) -> tuple[int, float, str]:
@@ -62,6 +61,7 @@ def build_leaderboard_payload(
         if not pct_path.exists():
             attach_percentiles(season, as_of_week, position_group=position_group)
         long = pl.read_parquet(pct_path)
+    require_empirical_panel(long)
     if ranks is None:
         ranks = fantasy_pos_ranks(season, as_of_week)
 
@@ -109,7 +109,7 @@ def build_leaderboard_payload(
         rows.sort(key=_row_sort_key)
 
     return {
-        "schemaVersion": 1,
+        "schemaVersion": 2,
         "season": season,
         "asOfWeek": as_of_week,
         "completedWeek": completed_week_for(season, as_of_week),

@@ -17,8 +17,9 @@ from ballnet.density import load_densities
 from ballnet.fantasy_rank import FantasyPosRank, attach_fantasy_pos_rank, fantasy_pos_ranks
 from ballnet.leaderboard import publish_leaderboards
 from ballnet.paths import INDEX_DIR, LEAGUE_DIR, PAGES_DIR, YTD_DIR, ensure_data_dirs
-from ballnet.percentiles import attach_percentiles
+from ballnet.percentiles import attach_percentiles, require_empirical_panel
 from ballnet.ramp_hold import completed_week_for
+from ballnet.jsonio import write_json
 
 # Compact JSON — player pages are scalars only; curves live under data/league/.
 _JSON_DUMP_KW: dict[str, Any] = {"separators": (",", ":"), "ensure_ascii": False}
@@ -99,6 +100,8 @@ def _snapshot_for_row(
 
     if row.get("denom_ytd") is not None:
         snap["denomYtd"] = float(row["denom_ytd"])
+    if row.get("min_n") is not None:
+        snap["minN"] = float(row["min_n"])
 
     reason = row.get("unavailable_reason")
     if reason:
@@ -141,7 +144,7 @@ def _page_dict(
 
     cw = completed_week if completed_week is not None else completed_week_for(season, as_of_week)
     return {
-        "schemaVersion": 1,
+        "schemaVersion": 2,
         "player": player,
         "season": season,
         "asOfWeek": as_of_week,
@@ -159,6 +162,8 @@ def _league_stat_payload(dens: dict[str, Any]) -> dict[str, Any]:
         "yMax": dens["y_max"],
         "curve": dens.get("curve") or [],
     }
+    if dens.get("representation") == "histogram":
+        out.update({"representation": "histogram", "bins": dens["bins"], "valueCounts": dens["value_counts"], "peerMethod": "qualified-ytd-midrank-v2"})
     if dens.get("n_sample") is not None:
         out["nSample"] = int(dens["n_sample"])
     if dens.get("lower_bound") is not None:
@@ -182,7 +187,7 @@ def publish_league_group(
         sid: _league_stat_payload(dens) for sid, dens in dens_by_id.items()
     }
     payload = {
-        "schemaVersion": 1,
+        "schemaVersion": 2,
         "season": season,
         "asOfWeek": as_of_week,
         "completedWeek": completed_week_for(season, as_of_week),
@@ -206,9 +211,7 @@ def publish_league_slice(
 
 
 def _write_json(path: Path, payload: Any) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("w", encoding="utf-8") as f:
-        json.dump(payload, f, **_JSON_DUMP_KW)
+    write_json(path, payload)
 
 
 def publish_player_page(
@@ -229,6 +232,7 @@ def publish_player_page(
     if not pct_path.exists():
         attach_percentiles(season, as_of_week, position_group=position_group)
     long = pl.read_parquet(pct_path)
+    require_empirical_panel(long)
     player_rows = long.filter(pl.col("player_id") == player_id)
     if player_rows.height == 0:
         raise ValueError(f"player {player_id} not in YTD panel for {season} w{as_of_week}")
@@ -282,6 +286,7 @@ def publish_group(
     if not pct_path.exists():
         attach_percentiles(season, as_of_week, position_group=position_group)
     long = pl.read_parquet(pct_path)
+    require_empirical_panel(long)
     if long.height == 0:
         return (
             GroupPublishResult(

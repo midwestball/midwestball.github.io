@@ -46,7 +46,7 @@ BACKFIELD_STATS: list[StatDefinition] = [
         "broken_tackles", "discrete", True, "count", 0, 16, 5, "carries", 2018, bin_width=1
     ),
     StatDefinition(
-        "ngs_efficiency", "continuous", True, "ratio", 0, 8, 1, "ngs_rush_weeks", 2016, lower_bound=0
+        "ngs_efficiency", "continuous", False, "ratio", 0, 8, 1, "ngs_rush_weeks", 2016, lower_bound=0
     ),
     StatDefinition(
         "expected_rush_yards",

@@ -17,7 +17,8 @@ from ballnet.density import build_league_density
 from ballnet.fantasy_rank import FantasyPosRank, attach_fantasy_pos_rank, fantasy_pos_ranks
 from ballnet.paths import HIGHLIGHTS_DIR, LEAGUE_WEEKLY_DIR, SPINE_DIR, ensure_data_dirs
 from ballnet.publish import PUBLISHABLE_GROUPS, default_as_of_week
-from ballnet.scoring import MIN_PEER_N, gaussian_tail_one_in_n, oriented_z_score, snap_one_in_n
+from ballnet.scoring import MIN_PEER_N, snap_one_in_n
+from ballnet.jsonio import write_json
 
 _JSON_DUMP_KW: dict[str, Any] = {"separators": (",", ":"), "ensure_ascii": False}
 
@@ -222,11 +223,13 @@ def _score_stat(
     group: str,
     spec: HighlightStat,
 ) -> list[dict[str, Any]]:
-    """Z vs all-time qualified player-weeks; board rows are this week's games only."""
+    """Observed rarity among qualified player-weeks; board rows are this week's games."""
     peer_vals = _qualified_values(peer_df, spec)
     if peer_vals.height < MIN_PEER_N:
         return []
     peers = peer_vals["_value"].to_list()
+    sorted_peers = np.sort(np.asarray(peers, dtype=float))
+    mean, std = float(sorted_peers.mean()), float(sorted_peers.std())
     week_vals = _qualified_values(week_df, spec)
     if week_vals.is_empty():
         return []
@@ -236,10 +239,17 @@ def _score_stat(
         val = float(rec["_value"])
         if spec.min_value is not None and val < spec.min_value:
             continue
-        z = oriented_z_score(val, peers, higher_is_better=spec.higher_is_better)
-        if z is None:
+        z = (val - mean) / std if std > 1e-12 else None
+        if z is not None and not spec.higher_is_better:
+            z = -z
+        # Inclusive favorable tail, including ties and the displayed game.
+        if spec.higher_is_better:
+            favorable = len(peers) - int(np.searchsorted(sorted_peers, val, side="left"))
+        else:
+            favorable = int(np.searchsorted(sorted_peers, val, side="right"))
+        if not favorable:
             continue
-        one_in_n = gaussian_tail_one_in_n(z)
+        one_in_n = len(peers) / favorable
         rows.append(
             {
                 "playerId": rec["player_id"],
@@ -251,7 +261,10 @@ def _score_stat(
                 "statId": spec.stat_id,
                 "statLabel": spec.label,
                 "value": val,
-                "zScore": round(z, 3),
+                "zScore": round(z, 3) if z is not None else 0.0,
+                "rarityScore": 1.0 - favorable / len(peers),
+                "favorableCount": favorable,
+                "rarityMethod": "empirical-inclusive-v2",
                 "peerN": len(peers),
                 "oneInN": one_in_n,
                 "rarityTier": snap_one_in_n(one_in_n),
@@ -268,6 +281,8 @@ def _shape_payload(dens: dict[str, Any]) -> dict[str, Any]:
         "yMax": dens["y_max"],
         "curve": dens.get("curve") or [],
     }
+    if dens.get("representation") == "histogram":
+        out.update({"representation": "histogram", "bins": dens["bins"], "valueCounts": dens["value_counts"]})
     if dens.get("n_sample") is not None:
         out["nSample"] = int(dens["n_sample"])
     if dens.get("lower_bound") is not None:
@@ -296,7 +311,7 @@ def _league_weekly_group_payload(
         dens = build_league_density(np.asarray(sample, dtype=float), cat)
         stats[spec.stat_id] = _shape_payload(dens)
     return {
-        "schemaVersion": 1,
+        "schemaVersion": 2,
         "season": season,
         "asOfWeek": week,
         "positionGroup": group,
@@ -382,7 +397,7 @@ def _board_from_peers(
             spec = _resolve_spec(group, spec)
             all_rows.extend(_score_stat(peer_g, week_g, group, spec))
 
-    all_rows.sort(key=lambda r: r["zScore"], reverse=True)
+    all_rows.sort(key=lambda r: (-r["rarityScore"], r["favorableCount"], r["playerId"], r["statId"]))
 
     # Cap per-group contribution so sparse defensive events cannot crowd out offense.
     balanced: list[dict[str, Any]] = []
@@ -390,7 +405,7 @@ def _board_from_peers(
         group_rows = [r for r in all_rows if r["positionGroup"] == group]
         collapsed = _collapse_by_player(group_rows)[:PER_GROUP_N]
         balanced.extend(collapsed)
-    balanced.sort(key=lambda r: r["zScore"], reverse=True)
+    balanced.sort(key=lambda r: (-r["rarityScore"], r["favorableCount"], r["playerId"], r["statId"]))
 
     top: list[dict[str, Any]] = []
     for i, row in enumerate(balanced[:TOP_N], start=1):
@@ -409,7 +424,7 @@ def _board_from_peers(
             by_group[group].append(entry)
 
     return {
-        "schemaVersion": 1,
+        "schemaVersion": 2,
         "season": season,
         "week": week,
         "generatedAt": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
@@ -426,9 +441,7 @@ def build_highlights_board(season: int, week: int) -> dict[str, Any]:
 
 
 def _write_json(path: Path, payload: Any) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("w", encoding="utf-8") as f:
-        json.dump(payload, f, **_JSON_DUMP_KW)
+    write_json(path, payload)
 
 
 def max_week_in_spine(season: int) -> int | None:

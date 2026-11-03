@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 import time
 from dataclasses import dataclass
 from typing import Callable, Iterable
@@ -104,10 +105,7 @@ def _scale_ngs_percents(panel: pl.DataFrame) -> pl.DataFrame:
     for c in _NGS_PERCENT_COLS:
         if c in panel.columns:
             exprs.append(
-                pl.when(pl.col(c).is_not_null() & (pl.col(c) > 1.0))
-                .then(pl.col(c) / 100.0)
-                .otherwise(pl.col(c))
-                .alias(c)
+                (pl.col(c) / 100.0).alias(c)
             )
     return panel.with_columns(exprs) if exprs else panel
 
@@ -143,12 +141,13 @@ def _with_team_def_snaps(panel: pl.DataFrame) -> pl.DataFrame:
 
 
 def _share_ytd(player_col: str, share_col: str, alias: str) -> pl.Expr:
-    """Rebuild season share as sum(player) / sum(player/share) when weekly share exists."""
+    """Reconstruct only when every game has a usable implied team denominator."""
     p = pl.col(player_col)
     s = pl.col(share_col)
-    team = pl.when(s.is_not_null() & (s > 0) & p.is_not_null()).then(p / s).otherwise(None)
+    valid = (p.is_not_null() & s.is_not_null() & (s != 0) & ((p / s) > 0)).fill_null(False)
+    team = pl.when(valid).then(p / s).otherwise(None)
     return (
-        pl.when(team.sum() > 0)
+        pl.when(valid.all() & (team.sum() > 0))
         .then(p.sum() / team.sum())
         .otherwise(None)
         .alias(alias)
@@ -662,6 +661,15 @@ def _source_present(stat_id: str, row: dict, position_group: str) -> bool:
     if stat_id in {"red_zone_touches", "red_zone_targets", "route_pct"}:
         return False
 
+    # Player-only rows cannot account for team opportunities in missed games,
+    # so they cannot establish a complete season share or season WOPR.
+    if stat_id in {"target_share", "air_yards_share", "wopr"}:
+        return False
+
+    # Weekly passer ratings are nonlinear and cannot be pooled from ratings alone.
+    if stat_id == "rating_allowed":
+        return False
+
     if stat_id == "cpoe":
         return (
             (row.get("cpoe_ngs_weeks") or 0) > 0 or (row.get("cpoe_box_weeks") or 0) > 0
@@ -703,9 +711,9 @@ def _source_present(stat_id: str, row: dict, position_group: str) -> bool:
         return (row.get("receiving_air_yards") or 0) > 0 and row.get("racr") is not None
 
     if stat_id in {"broken_tackles", "yards_after_contact", "yac_per_carry", "broken_tackle_rate"}:
-        return (row.get("pfr_rush_weeks") or 0) > 0 and row.get(stat_id) is not None
+        return (row.get("pfr_rush_weeks") or 0) >= (row.get("games") or 1) and row.get(stat_id) is not None
     if stat_id in {"drops", "drop_rate"}:
-        return (row.get("pfr_rec_weeks") or 0) > 0 and row.get(stat_id) is not None
+        return (row.get("pfr_rec_weeks") or 0) >= (row.get("games") or 1) and row.get(stat_id) is not None
 
     pfr_def = {
         "missed_tackles",
@@ -723,10 +731,10 @@ def _source_present(stat_id: str, row: dict, position_group: str) -> bool:
         "adot_allowed",
     }
     if stat_id in pfr_def:
-        return (row.get("pfr_def_weeks") or 0) > 0 and row.get(stat_id) is not None
+        return (row.get("pfr_def_weeks") or 0) >= (row.get("games") or 1) and row.get(stat_id) is not None
 
     if stat_id == "expected_fantasy_points":
-        return (row.get("ffopp_weeks") or 0) > 0 and row.get(stat_id) is not None
+        return (row.get("ffopp_weeks") or 0) >= (row.get("games") or 1) and row.get(stat_id) is not None
 
     return True
 
@@ -756,6 +764,11 @@ def _qualify(
     denom = _denom_value(row, stat.denom)
     threshold = min_n(stat.min_n_base, ramp_week)
     value = _player_value(stat.id, row)
+
+    if value is not None and not math.isfinite(value):
+        value = None
+    if denom is not None and not math.isfinite(denom):
+        denom = None
 
     if denom is None or denom < threshold:
         return False, value, denom, "insufficient_sample"
@@ -802,6 +815,7 @@ def wide_to_long(
                     "season": season,
                     "as_of_week": as_of_week,
                     "completed_week": ramp,
+                    "aggregation_version": "observed-v2",
                     "stat_id": stat.id,
                     "kind": stat.kind,
                     "higher_is_better": stat.higher_is_better,
@@ -822,6 +836,7 @@ def wide_to_long(
         "season": pl.Int64,
         "as_of_week": pl.Int64,
         "completed_week": pl.Int64,
+        "aggregation_version": pl.Utf8,
         "stat_id": pl.Utf8,
         "kind": pl.Utf8,
         "higher_is_better": pl.Boolean,

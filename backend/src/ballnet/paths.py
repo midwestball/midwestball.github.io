@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-DATA_DIR = REPO_ROOT / "data"
+# A separate data root permits complete rebuilds and checks without overwriting
+# the currently published local artifacts. Credentials remain under REPO_ROOT.
+DATA_DIR = Path(os.environ.get("BALLNET_DATA_DIR", REPO_ROOT / "data")).resolve()
 RAW_DIR = DATA_DIR / "raw"
 SPINE_DIR = DATA_DIR / "spine"
 YTD_DIR = DATA_DIR / "ytd"

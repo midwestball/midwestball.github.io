@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import json
 import os
+import re
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
@@ -10,6 +12,7 @@ from pathlib import Path
 from typing import Iterable
 
 from supabase import Client, create_client
+from storage3.exceptions import StorageApiError
 
 from ballnet.highlights import HIGHLIGHT_GROUPS
 from ballnet.paths import (
@@ -82,7 +85,7 @@ def _upload_one(
     retries: int = 4,
 ) -> tuple[str, int]:
     data = local.read_bytes()
-    opts: dict[str, str] = {"content-type": "application/json"}
+    opts: dict[str, str] = {"content-type": "application/json", "cache-control": "0"}
     if upsert:
         opts["upsert"] = "true"
     last_err: Exception | None = None
@@ -98,6 +101,23 @@ def _upload_one(
     raise last_err
 
 
+def active_dataset_prefix(client: Client, bucket: str = DEFAULT_BUCKET) -> str:
+    """Follow the same dataset pointer as the website; never hide read failures."""
+    try:
+        data = client.storage.from_(bucket).download("index/ballnet-dataset.json")
+    except StorageApiError as exc:
+        if exc.code == "NoSuchKey" or str(exc.status) == "404":
+            return ""
+        raise
+    pointer = json.loads(data)
+    if not isinstance(pointer, dict) or pointer.get("schemaVersion") != 1:
+        raise ValueError("invalid Ballnet dataset pointer")
+    prefix = pointer.get("prefix")
+    if prefix != "" and (not isinstance(prefix, str) or not re.fullmatch(r"migrations/[a-z0-9-]+", prefix)):
+        raise ValueError("invalid Ballnet dataset prefix")
+    return prefix
+
+
 def upload_files(
     pairs: Iterable[tuple[str, Path]],
     *,
@@ -105,10 +125,18 @@ def upload_files(
     upsert: bool = True,
     workers: int = DEFAULT_WORKERS,
     client: Client | None = None,
+    prefix: str | None = None,
 ) -> UploadResult:
     """Upload (object_path, local_path) pairs concurrently."""
+    items = list(pairs)
+    missing = [str(path) for _, path in items if not path.is_file()]
+    if missing:
+        raise FileNotFoundError(f"missing upload files: {missing}")
     client = client or supabase_client()
-    items = [(obj, path) for obj, path in pairs if path.is_file()]
+    if prefix is None:
+        prefix = active_dataset_prefix(client, bucket)
+    if prefix:
+        items = [(f"{prefix}/{obj}", path) for obj, path in items]
     t0 = time.perf_counter()
     uploaded = 0
     failed = 0
@@ -151,12 +179,18 @@ def upload_files(
 
 def upload_index(*, bucket: str = DEFAULT_BUCKET, **kwargs) -> UploadResult:
     """Upload `index/{players,current,seasons}.json` from local data/index."""
-    names = ("players.json", "current.json", "seasons.json")
+    names = ("players.json", "seasons.json", "current.json")
     pairs = [(f"index/{name}", INDEX_DIR / name) for name in names]
     missing = [str(p) for _, p in pairs if not p.exists()]
     if missing:
         raise FileNotFoundError(f"missing index files: {missing}")
-    return upload_files(pairs, bucket=bucket, **kwargs)
+    # Publish the mutable current pointer only after the other index files succeed.
+    first = upload_files(pairs[:-1], bucket=bucket, **kwargs)
+    if first.failed:
+        return first
+    last = upload_files(pairs[-1:], bucket=bucket, **kwargs)
+    return UploadResult(bucket, first.uploaded + last.uploaded, first.failed + last.failed,
+                        first.bytes + last.bytes, first.seconds + last.seconds, first.errors + last.errors)
 
 
 def upload_season_pages(
@@ -178,6 +212,9 @@ def upload_season_pages(
         pairs.append((f"pages/{season}/w{week}/{path.name}", path))
         if also_current:
             pairs.append((f"pages/current/{path.name}", path))
+
+    if not pairs:
+        raise FileNotFoundError(f"no player pages in {week_dir}")
 
     return upload_files(pairs, bucket=bucket, **kwargs)
 
@@ -201,7 +238,7 @@ def upload_season_league(
             missing.append(str(local))
             continue
         pairs.append((f"league/{season}/w{week}/{group}.json", local))
-    if missing and not pairs:
+    if missing:
         raise FileNotFoundError(f"missing league files: {missing}")
     return upload_files(pairs, bucket=bucket, **kwargs)
 
@@ -230,7 +267,7 @@ def upload_season_highlights(
         pairs.append(
             (f"dists/league_weekly/{season}/w{week}/{group}.json", local),
         )
-    if missing and len(pairs) == 1:
+    if missing:
         raise FileNotFoundError(f"missing league_weekly files: {missing}")
     return upload_files(pairs, bucket=bucket, **kwargs)
 
@@ -285,6 +322,6 @@ def upload_season_leaderboards(
             missing.append(str(local))
             continue
         pairs.append((f"leaderboards/{season}/w{week}/{group}.json", local))
-    if missing and not pairs:
+    if missing:
         raise FileNotFoundError(f"missing leaderboard files: {missing}")
     return upload_files(pairs, bucket=bucket, **kwargs)

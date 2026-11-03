@@ -39,9 +39,9 @@ def resolve_rank_kind(
     updating_current: bool = False,
 ) -> RankKind:
     """Live pointer → consensus; every other season → PPR finish."""
-    if updating_current:
-        return "consensus"
     live = _live_season_from_index()
+    if updating_current:
+        return "finish" if live is not None and season < live else "consensus"
     if live is not None and season == live:
         return "consensus"
     return "finish"

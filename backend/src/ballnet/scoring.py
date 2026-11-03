@@ -11,22 +11,14 @@ import numpy as np
 MIN_PEER_N = 16
 
 # Order-of-magnitude display ladder (10^k). Geometric nearest snap for UI chips.
-RARITY_TIERS: tuple[int, ...] = tuple(10**k for k in range(1, 10))  # 10 .. 1_000_000_000
+RARITY_TIERS: tuple[int, ...] = tuple(m * 10**k for k in range(10) for m in (1, 2, 5))
 
 
-def snap_one_in_n(n: int | None) -> int | None:
-    """Snap a raw 1-in-N to the nearest RARITY_TIERS rung in log space."""
+def snap_one_in_n(n: float | None) -> int | None:
+    """Round rarity down, so the displayed tier never exaggerates it."""
     if n is None or not math.isfinite(n) or n < 1:
         return None
-    n = max(1, int(n))
-    best = RARITY_TIERS[0]
-    best_dist = abs(math.log(n) - math.log(best))
-    for tier in RARITY_TIERS[1:]:
-        dist = abs(math.log(n) - math.log(tier))
-        if dist < best_dist:
-            best = tier
-            best_dist = dist
-    return best
+    return max(tier for tier in RARITY_TIERS if tier <= n)
 
 
 def z_score(

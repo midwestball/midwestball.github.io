@@ -30,6 +30,8 @@ from ballnet.highlights import (
     weeks_to_publish,
 )
 from ballnet.storage_upload import (
+    active_dataset_prefix,
+    supabase_client,
     upload_all_highlights_for_season,
     upload_index,
     upload_season_highlights,
@@ -815,7 +817,12 @@ def main(argv: list[str] | None = None) -> None:
         return
 
     if args.cmd == "highlights":
-        week = args.week if args.week is not None else default_as_of_week(args.season)
+        available = weeks_to_publish(args.season)
+        if not available:
+            raise SystemExit(f"No available regular-season weeks for {args.season}")
+        week = args.week if args.week is not None else available[-1]
+        if week not in available:
+            raise SystemExit(f"Week {week} is not available in the {args.season} spine")
         print(f"=== highlights {args.season} w{week} ===", flush=True)
         result = publish_highlights(args.season, week)
         board = json.loads(result.board.read_text(encoding="utf-8"))
@@ -842,6 +849,12 @@ def main(argv: list[str] | None = None) -> None:
             raise SystemExit("--end must be >= --start")
         if args.start < HIGHLIGHTS_START_YEAR:
             raise SystemExit(f"--start must be >= {HIGHLIGHTS_START_YEAR}")
+        upload_options = {}
+        if args.upload:
+            client = supabase_client()
+            prefix = active_dataset_prefix(client, args.bucket)
+            upload_options = {"bucket": args.bucket, "workers": args.workers, "client": client, "prefix": prefix}
+            print(f"=== Ballnet upload dataset: {prefix or '(legacy root)'} ===", flush=True)
         summary: list[dict] = []
         for season in range(args.start, args.end + 1):
             weeks = weeks_to_publish(season)
@@ -870,8 +883,7 @@ def main(argv: list[str] | None = None) -> None:
                 print(f"=== upload all highlights {season} ===", flush=True)
                 r = upload_all_highlights_for_season(
                     season,
-                    bucket=args.bucket,
-                    workers=args.workers,
+                    **upload_options,
                 )
                 print(
                     f"  uploaded={r.uploaded} failed={r.failed} "
@@ -899,25 +911,11 @@ def main(argv: list[str] | None = None) -> None:
             )
         if (args.highlights or args.highlights_only) and args.season is None:
             raise SystemExit("--highlights requires --season YEAR")
+        client = supabase_client()
+        prefix = active_dataset_prefix(client, args.bucket)
+        upload_options = {"bucket": args.bucket, "workers": args.workers, "client": client, "prefix": prefix}
+        print(f"=== Ballnet upload dataset: {prefix or '(legacy root)'} ===", flush=True)
         reports: list[dict] = []
-        if args.index:
-            print("=== upload index/ ===", flush=True)
-            r = upload_index(bucket=args.bucket, workers=args.workers)
-            reports.append(
-                {
-                    "what": "index",
-                    "uploaded": r.uploaded,
-                    "failed": r.failed,
-                    "bytes": r.bytes,
-                    "seconds": round(r.seconds, 3),
-                    "errors": r.errors,
-                }
-            )
-            print(
-                f"  uploaded={r.uploaded} failed={r.failed} "
-                f"bytes={r.bytes} seconds={r.seconds:.1f}",
-                flush=True,
-            )
         if args.season is not None:
             week = (
                 args.as_of_week
@@ -949,9 +947,8 @@ def main(argv: list[str] | None = None) -> None:
                 r = upload_season_pages(
                     args.season,
                     week,
-                    bucket=args.bucket,
                     also_current=args.also_current,
-                    workers=args.workers,
+                    **upload_options,
                 )
                 reports.append(
                     {
@@ -976,8 +973,7 @@ def main(argv: list[str] | None = None) -> None:
                 r = upload_season_league(
                     args.season,
                     week,
-                    bucket=args.bucket,
-                    workers=args.workers,
+                    **upload_options,
                 )
                 reports.append(
                     {
@@ -1002,8 +998,7 @@ def main(argv: list[str] | None = None) -> None:
                 r = upload_season_leaderboards(
                     args.season,
                     week,
-                    bucket=args.bucket,
-                    workers=args.workers,
+                    **upload_options,
                 )
                 reports.append(
                     {
@@ -1029,8 +1024,7 @@ def main(argv: list[str] | None = None) -> None:
                     )
                     r = upload_all_highlights_for_season(
                         args.season,
-                        bucket=args.bucket,
-                        workers=args.workers,
+                        **upload_options,
                     )
                     what = f"highlights+league_weekly/{args.season}/*"
                 else:
@@ -1042,8 +1036,7 @@ def main(argv: list[str] | None = None) -> None:
                     r = upload_season_highlights(
                         args.season,
                         week,
-                        bucket=args.bucket,
-                        workers=args.workers,
+                        **upload_options,
                     )
                     what = f"highlights+league_weekly/{args.season}/w{week}"
                 reports.append(
@@ -1061,6 +1054,11 @@ def main(argv: list[str] | None = None) -> None:
                     f"bytes={r.bytes} seconds={r.seconds:.1f}",
                     flush=True,
                 )
+        if args.index and not any(report["failed"] for report in reports):
+            print("=== upload index/ ===", flush=True)
+            r = upload_index(**upload_options)
+            reports.append({"what": "index", "uploaded": r.uploaded, "failed": r.failed,
+                            "bytes": r.bytes, "seconds": round(r.seconds, 3), "errors": r.errors})
         print(json.dumps({"uploads": reports}, indent=2))
         failed = sum(x["failed"] for x in reports)
         if failed:

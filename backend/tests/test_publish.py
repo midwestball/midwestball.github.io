@@ -137,8 +137,16 @@ def test_publish_range_no_current_leaves_current_index_untouched(
 
 def test_publish_range_writes_current_index_only_for_latest_when_enabled(
     monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
 ) -> None:
     current_index_calls: list[tuple[int, int]] = []
+
+    pages = tmp_path / "pages"
+    (pages / "current").mkdir(parents=True)
+    (pages / "current" / "old.json").write_text("old", encoding="utf-8")
+    sentinel = tmp_path / "sentinel.json"
+    sentinel.write_text("keep", encoding="utf-8")
+    monkeypatch.setattr(publish, "PAGES_DIR", pages)
 
     monkeypatch.setattr(publish, "ensure_data_dirs", lambda: None)
     monkeypatch.setattr(
@@ -174,6 +182,8 @@ def test_publish_range_writes_current_index_only_for_latest_when_enabled(
 
     assert current_index_calls == [(2025, 3)]
     assert result.current_index_path == "current.json"
+    assert sentinel.read_text(encoding="utf-8") == "keep"
+    assert not (pages / "current" / "old.json").exists()
 
 
 def test_rebuild_index_computes_completed_week_for_each_slice(
