@@ -82,6 +82,52 @@ export type HighlightsBoardJson = {
   byGroup: Record<string, HighlightRow[]>;
 };
 
+/** One row on a play-level rarity board (`highlights/plays/{season}/w{week}.json`). */
+export type PlayHighlightRow = {
+  playerId: string;
+  name: string;
+  position: string;
+  positionGroup: string;
+  team: string;
+  opponent: string;
+  playClass: string;
+  statId: string;
+  statLabel: string;
+  value: number;
+  gameId?: string;
+  playId?: number | null;
+  quarter?: number | null;
+  /** Game clock at snap, e.g. "14:56". */
+  clock?: string | null;
+  /** Display form, e.g. "Q1 14:56". */
+  gameClock?: string | null;
+  gameSecondsRemaining?: number | null;
+  touchdown?: boolean;
+  description?: string | null;
+  zScore: number;
+  peerN: number;
+  peerKey?: string;
+  favorableCount?: number;
+  rarityScore?: number;
+  rarityMethod?: string;
+  oneInN: number | null;
+  rarityTier?: number | null;
+  rank: number;
+  also?: PlayHighlightRow[];
+};
+
+export type PlayHighlightsBoardJson = {
+  schemaVersion: 1;
+  season: number;
+  week: number;
+  generatedAt?: string;
+  scope?: "play_all_time";
+  peerWindowStartYear?: number;
+  missingPeerSeasons?: number[];
+  top: PlayHighlightRow[];
+  byClass: Record<string, PlayHighlightRow[]>;
+};
+
 /** One row on a search leaderboard (`leaderboards/{season}/w{week}/{group}.json`). */
 export type LeaderboardRow = {
   playerId: string;

@@ -22,6 +22,7 @@ from ballnet.paths import (
     LEAGUE_DIR,
     LEAGUE_WEEKLY_DIR,
     PAGES_DIR,
+    PLAY_HIGHLIGHTS_DIR,
     REPO_ROOT,
 )
 from ballnet.publish import PUBLISHABLE_GROUPS, default_as_of_week
@@ -300,6 +301,50 @@ def upload_all_highlights_for_season(
                 )
     if not pairs:
         raise FileNotFoundError(f"no uploadable highlight files for {season}")
+    return upload_files(pairs, bucket=bucket, **kwargs)
+
+
+def upload_season_play_highlights(
+    season: int,
+    as_of_week: int | None = None,
+    *,
+    bucket: str = DEFAULT_BUCKET,
+    **kwargs,
+) -> UploadResult:
+    """Upload play-level rarity board `highlights/plays/{season}/w{week}.json`."""
+    week = as_of_week if as_of_week is not None else default_as_of_week(season)
+    board = PLAY_HIGHLIGHTS_DIR / str(season) / f"w{week}.json"
+    if not board.is_file():
+        raise FileNotFoundError(f"missing local play highlights file {board}")
+    return upload_files(
+        [(f"highlights/plays/{season}/w{week}.json", board)],
+        bucket=bucket,
+        **kwargs,
+    )
+
+
+def upload_all_play_highlights_for_season(
+    season: int,
+    *,
+    bucket: str = DEFAULT_BUCKET,
+    **kwargs,
+) -> UploadResult:
+    """Upload every local `highlights/plays/{season}/w*.json`."""
+    season_dir = PLAY_HIGHLIGHTS_DIR / str(season)
+    if not season_dir.is_dir():
+        raise FileNotFoundError(f"missing play highlights dir {season_dir}")
+    boards = sorted(season_dir.glob("w*.json"))
+    if not boards:
+        raise FileNotFoundError(f"no play highlight boards under {season_dir}")
+    pairs: list[tuple[str, Path]] = []
+    for board in boards:
+        week_token = board.stem
+        if not week_token.startswith("w") or not week_token[1:].isdigit():
+            continue
+        week = int(week_token[1:])
+        pairs.append((f"highlights/plays/{season}/w{week}.json", board))
+    if not pairs:
+        raise FileNotFoundError(f"no uploadable play highlight files for {season}")
     return upload_files(pairs, bucket=bucket, **kwargs)
 
 

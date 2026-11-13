@@ -19,6 +19,10 @@ INDEX_DIR = DATA_DIR / "index"
 LEAGUE_DIR = DATA_DIR / "league"
 # Stage H weekly boards (not Stage G).
 HIGHLIGHTS_DIR = DATA_DIR / "highlights"
+# Play-grain panel (parallel to Stage B spine; not exploded into player-week).
+PLAYS_DIR = DATA_DIR / "plays"
+# Play-level rarity boards (parallel to Stage H).
+PLAY_HIGHLIGHTS_DIR = HIGHLIGHTS_DIR / "plays"
 # Stage H single-game KDEs (league_weekly scope). Not league_ytd.
 LEAGUE_WEEKLY_DIR = DIST_DIR / "league_weekly"
 # midwestball search sort boards (YTD percentiles by group/stat).
@@ -35,6 +39,8 @@ def ensure_data_dirs() -> None:
         INDEX_DIR,
         LEAGUE_DIR,
         HIGHLIGHTS_DIR,
+        PLAYS_DIR,
+        PLAY_HIGHLIGHTS_DIR,
         LEAGUE_WEEKLY_DIR,
         LEADERBOARDS_DIR,
     ):

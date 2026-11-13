@@ -4,6 +4,7 @@ import type {
   PlayerBio,
   PlayerPageJson,
   HighlightsBoardJson,
+  PlayHighlightsBoardJson,
   LeaderboardJson,
 } from "@/lib/payload";
 import type { Point } from "@/lib/distribution";
@@ -294,6 +295,34 @@ export async function fetchHighlightsBoard(
   week: number,
 ): Promise<HighlightsBoardJson | null> {
   return loadHighlightsBoard({ season, week });
+}
+
+/** Play-level rarity board (`highlights/plays/{season}/w{week}.json`). */
+export const loadPlayHighlightsBoard = cache(
+  async (opts?: {
+    season?: number;
+    week?: number;
+  }): Promise<PlayHighlightsBoardJson | null> => {
+    let season = opts?.season;
+    let week = opts?.week;
+    if (season == null || week == null) {
+      const current = await resolveCurrentPointer();
+      if (!current) return null;
+      season = season ?? current.season;
+      week = week ?? current.week;
+    }
+    return loadStorageJson<PlayHighlightsBoardJson>(
+      `highlights/plays/${season}/w${week}.json`,
+    );
+  },
+);
+
+/** Client fetch for the private play-highlights lab page. */
+export async function fetchPlayHighlightsBoard(
+  season: number,
+  week: number,
+): Promise<PlayHighlightsBoardJson | null> {
+  return loadPlayHighlightsBoard({ season, week });
 }
 
 /** Client fetch for Stage H expand curves. */

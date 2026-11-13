@@ -14,7 +14,7 @@
 
 - Changing join keys or spine grain `(player_id, season, week)`.
 - Adding Supabase / Storage publish credentials or schema migrations.
-- Expanding play-grain sources (PBP / FTN / participation) into the spine.
+- Expanding play-grain sources (PBP / FTN / participation) into the spine (play panel / play highlights are a parallel path — see `BOUNDARIES-play-highlights.md`).
 
 ## Never
 
@@ -30,7 +30,7 @@
 - nflverse uses `SAF` / `MLB` / `DL`; map them to frontend codes (`S` / `ILB` / `DT`). Long snappers (`LS`) stay unmapped (no catalog).
 - `load_player_stats` uses `passing_interceptions` / `sacks_suffered`; the spine renames to `interceptions` / `sacks_taken`.
 - Snap and PFR joins prefer `pfr_player_id` from `ff_playerids`. Rows still missing snaps (common for OL — roster/id map often has null PFR) get a **name+team+week** snap fallback in `panel._fill_snaps_by_name`; name mismatches can still leave nulls.
-- FTN, participation, and PBP are cached in `data/raw/` but not fully exploded into the spine yet (play grain).
+- FTN, participation, and PBP are cached in `data/raw/` but not exploded into the Stage B spine. Play rarity uses a parallel `data/plays/` panel + `data/highlights/plays/` boards (`BOUNDARIES-play-highlights.md`).
 - Cached parquet under `data/` is gitignored; `--force` / `--force-fetch` redownloads.
 - Stage C YTD rates use ratio-of-sums; passer rating is recomputed from YTD components.
 - Ramp–hold reads `data/raw/schedules_{season}.parquet`. Missing file falls back to `as_of_week` (historical season-end behavior). Do not use a prior YTD parquet’s `completed_week` when rebuilding Stage C — recompute from the schedule.
@@ -40,7 +40,7 @@
 - Returner `position_group` has no weekly rows (nflverse roster positions are rarely KR/PR).
 - Stage G batch (`publish-all`) writes **scalar** JSON under `data/pages/`, shared curves under `data/league/{season}/w{week}/{group}.json`, search boards under `data/leaderboards/`, and rebuilds `data/index/{players,current}.json`. The frontend must not import page JSON into the Next bundle — only the small index. Live-season pages get FantasyPros weekly ECR (`kind: consensus`); closed seasons get PPR finish among QB/WR/RB/TE (`kind: finish`). After current moves to `Y+1`, republish year `Y` at its final REG week so last year’s pages switch to finish.
 - Pre-2018 spines omit many PFR advanced columns (ingest empty stubs). Stage C null-fills expected enrichment cols before aggregate so older seasons publish with `missing_source` instead of crashing.
-- Storage uploads (`upload-storage`) go to public bucket `knowball-public` under `index/`, `pages/`, `league/`, `highlights/`, and `dists/league_weekly/`. Free plan is ~1 GB — skip `--also-current` (duplicates the season). Dashboard drag-drops often land at bucket root; re-upload with `--index` to get `index/*.json`.
+- Storage uploads (`upload-storage`) go to public bucket `knowball-public` under `index/`, `pages/`, `league/`, `highlights/`, `highlights/plays/`, and `dists/league_weekly/`. Free plan is ~1 GB — skip `--also-current` (duplicates the season). Dashboard drag-drops often land at bucket root; re-upload with `--index` to get `index/*.json`.
 - Service-role key lives in `backend/.env` only; the frontend fetches public object URLs (no Supabase client).
 - Never re-embed league `curve` onto player pages; league shapes live under `data/league/` only.
 - Version 2 league JSON uses observed histogram `bins` and aggregate value counts. Percentiles are empirical midranks; retain version 1 KDE readers only for legacy snapshots.

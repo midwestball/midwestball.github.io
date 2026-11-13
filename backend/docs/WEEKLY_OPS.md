@@ -18,8 +18,12 @@ Intended stages inside `refresh` (not a new math path — wrap what already exis
 4. **G** `publish-all --season YEAR --as-of-week W` (scalar pages + league KDE + search leaderboards + **merged** index/current/seasons)
 5. **H** `highlights --season YEAR --week W` (weekly board vs **all-time** single-game peers + `league_weekly` KDEs → `data/highlights/` + `data/dists/league_weekly/`; needs spines for `2016..YEAR`)
    - Historical backfill: `highlights-range --start 2016 --end YEAR [--upload]`
-6. Optional: `--upload` → `upload-storage --index --season YEAR --highlights` (pages + league + leaderboards + highlights + league_weekly)
+6. **Play rarity (parallel)** `play-panel --season YEAR` then `play-highlights --season YEAR --week W`
+   - Needs cached PBP (`fetch`); does **not** widen Stage B. Boards → `data/highlights/plays/`
+   - Historical: `play-panel` per season, then `play-highlights-range --start 2016 --end YEAR`
+7. Optional: `--upload` → `upload-storage --index --season YEAR --highlights --play-highlights`
    - All weeks for one year: `upload-storage --season YEAR --highlights-only --all-highlight-weeks`
+   - Play boards only: `upload-storage --season YEAR --play-highlights-only [--all-play-highlight-weeks]`
 
 Until `refresh` exists, run that sequence manually (see below).
 
@@ -36,8 +40,12 @@ uv run ballnet fetch --season $YEAR --force
 uv run ballnet spine --season $YEAR --force-fetch
 uv run ballnet publish-all --season $YEAR --as-of-week $W
 uv run ballnet highlights --season $YEAR --week $W
-uv run ballnet upload-storage --index --season $YEAR --as-of-week $W --highlights
+uv run ballnet play-panel --season $YEAR
+uv run ballnet play-highlights --season $YEAR --week $W
+uv run ballnet upload-storage --index --season $YEAR --as-of-week $W --highlights --play-highlights
 ```
+
+Private frontend preview (not in nav): `/lab/plays/?season=$YEAR&week=$W` after play boards are uploaded.
 
 `publish-all` without `--skip-pipeline` already runs C–E then G for all groups. It **merges** into the multi-season players/seasons index by default (use `--replace-index` only when intentionally wiping history).
 

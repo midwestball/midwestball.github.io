@@ -29,15 +29,23 @@ from ballnet.highlights import (
     publish_highlights,
     weeks_to_publish,
 )
+from ballnet.play_panel import build_play_panel
+from ballnet.play_highlights import (
+    PLAY_HIGHLIGHTS_START_YEAR,
+    publish_play_highlights,
+    weeks_to_publish_plays,
+)
 from ballnet.storage_upload import (
     active_dataset_prefix,
     supabase_client,
     upload_all_highlights_for_season,
+    upload_all_play_highlights_for_season,
     upload_index,
     upload_season_highlights,
     upload_season_leaderboards,
     upload_season_league,
     upload_season_pages,
+    upload_season_play_highlights,
 )
 import polars as pl
 
@@ -298,6 +306,31 @@ def main(argv: list[str] | None = None) -> None:
     p_hi_range.add_argument("--bucket", default="knowball-public")
     p_hi_range.add_argument("--workers", type=int, default=4)
 
+    p_pp = sub.add_parser(
+        "play-panel",
+        help="Build play-grain panel from cached PBP (parallel to Stage B)",
+    )
+    p_pp.add_argument("--season", type=int, required=True)
+
+    p_ph = sub.add_parser(
+        "play-highlights",
+        help="Play-level rarity board from play panels (parallel to Stage H)",
+    )
+    p_ph.add_argument("--season", type=int, required=True)
+    p_ph.add_argument(
+        "--week",
+        type=int,
+        default=None,
+        help="REG week (default: latest week present in the play panel)",
+    )
+
+    p_ph_range = sub.add_parser(
+        "play-highlights-range",
+        help="Play highlights for every available week in [start, end]",
+    )
+    p_ph_range.add_argument("--start", type=int, default=PLAY_HIGHLIGHTS_START_YEAR)
+    p_ph_range.add_argument("--end", type=int, required=True)
+
     p_up = sub.add_parser(
         "upload-storage",
         help="Upload local index/pages/league/leaderboards/highlights JSON to Supabase Storage",
@@ -348,6 +381,21 @@ def main(argv: list[str] | None = None) -> None:
         "--all-highlight-weeks",
         action="store_true",
         help="With --highlights / --highlights-only, upload every local week for --season",
+    )
+    p_up.add_argument(
+        "--play-highlights",
+        action="store_true",
+        help="Upload highlights/plays/ boards (requires --season)",
+    )
+    p_up.add_argument(
+        "--play-highlights-only",
+        action="store_true",
+        help="With --season, upload play highlight boards only",
+    )
+    p_up.add_argument(
+        "--all-play-highlight-weeks",
+        action="store_true",
+        help="With --play-highlights / --play-highlights-only, upload every local week",
     )
     p_up.add_argument(
         "--also-current",
@@ -895,6 +943,72 @@ def main(argv: list[str] | None = None) -> None:
         print(json.dumps({"boards": len(summary), "items": summary}, indent=2))
         return
 
+    if args.cmd == "play-panel":
+        print(f"=== play-panel {args.season} ===", flush=True)
+        _panel, summary = build_play_panel(args.season)
+        print(json.dumps(summary, indent=2))
+        return
+
+    if args.cmd == "play-highlights":
+        available = weeks_to_publish_plays(args.season)
+        if not available:
+            raise SystemExit(f"No available play weeks for {args.season}")
+        week = args.week if args.week is not None else available[-1]
+        if week not in available:
+            raise SystemExit(f"Week {week} is not available in the {args.season} play panel")
+        print(f"=== play-highlights {args.season} w{week} ===", flush=True)
+        result = publish_play_highlights(args.season, week)
+        board = json.loads(result.board.read_text(encoding="utf-8"))
+        print(
+            json.dumps(
+                {
+                    "path": str(result.board),
+                    "season": board["season"],
+                    "week": board["week"],
+                    "top": len(board.get("top") or []),
+                    "byClass": {
+                        c: len(rows)
+                        for c, rows in (board.get("byClass") or {}).items()
+                    },
+                    "missingPeerSeasons": board.get("missingPeerSeasons") or [],
+                },
+                indent=2,
+            )
+        )
+        return
+
+    if args.cmd == "play-highlights-range":
+        if args.end < args.start:
+            raise SystemExit("--end must be >= --start")
+        if args.start < PLAY_HIGHLIGHTS_START_YEAR:
+            raise SystemExit(f"--start must be >= {PLAY_HIGHLIGHTS_START_YEAR}")
+        summary = []
+        for season in range(args.start, args.end + 1):
+            weeks = weeks_to_publish_plays(season)
+            print(
+                f"=== play-highlights-range {season} weeks {weeks[0]}-{weeks[-1]} ===",
+                flush=True,
+            )
+            for week in weeks:
+                t0 = time.perf_counter()
+                result = publish_play_highlights(season, week)
+                board = json.loads(result.board.read_text(encoding="utf-8"))
+                print(
+                    f"  {season} w{week}: top={len(board.get('top') or [])} "
+                    f"({time.perf_counter() - t0:.1f}s)",
+                    flush=True,
+                )
+                summary.append(
+                    {
+                        "season": season,
+                        "week": week,
+                        "path": str(result.board),
+                        "top": len(board.get("top") or []),
+                    }
+                )
+        print(json.dumps({"boards": len(summary), "items": summary}, indent=2))
+        return
+
     if args.cmd == "upload-storage":
         if not args.index and args.season is None:
             raise SystemExit("Provide --index and/or --season YEAR")
@@ -903,14 +1017,17 @@ def main(argv: list[str] | None = None) -> None:
             args.league_only,
             args.leaderboards_only,
             args.highlights_only,
+            args.play_highlights_only,
         ]
         if sum(1 for x in exclusives if x) > 1:
             raise SystemExit(
                 "Use only one of --pages-only / --league-only / "
-                "--leaderboards-only / --highlights-only"
+                "--leaderboards-only / --highlights-only / --play-highlights-only"
             )
         if (args.highlights or args.highlights_only) and args.season is None:
             raise SystemExit("--highlights requires --season YEAR")
+        if (args.play_highlights or args.play_highlights_only) and args.season is None:
+            raise SystemExit("--play-highlights requires --season YEAR")
         client = supabase_client()
         prefix = active_dataset_prefix(client, args.bucket)
         upload_options = {"bucket": args.bucket, "workers": args.workers, "client": client, "prefix": prefix}
@@ -923,20 +1040,24 @@ def main(argv: list[str] | None = None) -> None:
                 else default_as_of_week(args.season)
             )
             do_highlights = args.highlights or args.highlights_only
+            do_play_highlights = args.play_highlights or args.play_highlights_only
             do_pages = (
                 not args.league_only
                 and not args.highlights_only
+                and not args.play_highlights_only
                 and not args.leaderboards_only
             )
             do_league = (
                 not args.pages_only
                 and not args.highlights_only
+                and not args.play_highlights_only
                 and not args.leaderboards_only
             )
             do_leaderboards = (
                 not args.pages_only
                 and not args.league_only
                 and not args.highlights_only
+                and not args.play_highlights_only
             ) or args.leaderboards_only
             if do_pages:
                 print(
@@ -1039,6 +1160,44 @@ def main(argv: list[str] | None = None) -> None:
                         **upload_options,
                     )
                     what = f"highlights+league_weekly/{args.season}/w{week}"
+                reports.append(
+                    {
+                        "what": what,
+                        "uploaded": r.uploaded,
+                        "failed": r.failed,
+                        "bytes": r.bytes,
+                        "seconds": round(r.seconds, 3),
+                        "errors": r.errors,
+                    }
+                )
+                print(
+                    f"  uploaded={r.uploaded} failed={r.failed} "
+                    f"bytes={r.bytes} seconds={r.seconds:.1f}",
+                    flush=True,
+                )
+            if do_play_highlights:
+                if args.all_play_highlight_weeks:
+                    print(
+                        f"=== upload all play highlights {args.season} ===",
+                        flush=True,
+                    )
+                    r = upload_all_play_highlights_for_season(
+                        args.season,
+                        **upload_options,
+                    )
+                    what = f"highlights/plays/{args.season}/*"
+                else:
+                    print(
+                        f"=== upload play highlights "
+                        f"{args.season}/w{week} ===",
+                        flush=True,
+                    )
+                    r = upload_season_play_highlights(
+                        args.season,
+                        week,
+                        **upload_options,
+                    )
+                    what = f"highlights/plays/{args.season}/w{week}"
                 reports.append(
                     {
                         "what": what,
