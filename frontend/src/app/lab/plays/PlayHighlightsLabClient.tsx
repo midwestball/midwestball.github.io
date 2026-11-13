@@ -1,11 +1,14 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { writeBrowserQuery } from "@/components/share/browser-query";
 import { patchQuery } from "@/lib/share-state/common";
-import { fetchPlayHighlightsBoard } from "@/lib/ballnet-store";
+import {
+  fetchCurrentMeta,
+  fetchPlayHighlightsBoard,
+} from "@/lib/ballnet-store";
 import type { PlayHighlightRow, PlayHighlightsBoardJson } from "@/lib/payload";
 import {
   formatOneInN,
@@ -49,7 +52,7 @@ function RarityChip({ tier }: { tier: number }) {
   return (
     <span
       className={cn(
-        "inline-block rounded-none px-1 py-0.5 text-xs font-semibold tabular-nums",
+        "inline-block rounded-none border-0 px-1 py-0.5 text-xs font-semibold tabular-nums",
         rarityTierShimmer(tier) && "rarity-chip-shimmer",
       )}
       style={{ backgroundColor: color, color: labelColor }}
@@ -158,45 +161,69 @@ export function PlayHighlightsLabClient({
   initialWeek,
 }: Props) {
   const searchParams = useSearchParams();
-  const [season, setSeason] = useState(() => {
-    const raw = Number(searchParams.get("season"));
-    if (Number.isFinite(raw) && raw >= startSeason && raw <= currentSeason) {
-      return raw;
-    }
-    return initialSeason;
+  const initialQuery = useRef({
+    season: searchParams.get("season"),
+    week: searchParams.get("week"),
   });
-  const [week, setWeek] = useState(() => {
-    const seasonRaw = Number(searchParams.get("season"));
-    const seasonForWeek =
-      Number.isFinite(seasonRaw) &&
-      seasonRaw >= startSeason &&
-      seasonRaw <= currentSeason
-        ? seasonRaw
-        : initialSeason;
-    const max =
-      seasonForWeek === currentSeason
-        ? Math.max(1, currentWeek)
-        : regWeeksInSeason(seasonForWeek);
-    const raw = Number(searchParams.get("week"));
-    if (Number.isFinite(raw) && raw >= 1 && raw <= max) return raw;
-    return Math.min(initialWeek, max);
-  });
+  const selectionTouched = useRef(false);
+
+  // Static export freezes SSR props; refresh from Storage like home highlights.
+  const [latestSeason, setLatestSeason] = useState(currentSeason);
+  const [latestWeek, setLatestWeek] = useState(Math.max(1, currentWeek));
+
+  const maxWeekFor = useCallback(
+    (season: number) => {
+      if (season === latestSeason) return Math.max(1, latestWeek);
+      return regWeeksInSeason(season);
+    },
+    [latestSeason, latestWeek],
+  );
+
+  const parseSeason = useCallback(
+    (raw: string | null): number => {
+      const n = Number(raw);
+      if (!Number.isInteger(n) || n < startSeason || n > latestSeason) {
+        return initialSeason;
+      }
+      return n;
+    },
+    [startSeason, latestSeason, initialSeason],
+  );
+
+  const parseWeek = useCallback(
+    (raw: string | null, season: number): number => {
+      const max = maxWeekFor(season);
+      const n = Number(raw);
+      if (!Number.isInteger(n) || n < 1 || n > max) {
+        return Math.min(initialWeek, max);
+      }
+      return n;
+    },
+    [maxWeekFor, initialWeek],
+  );
+
+  const [season, setSeason] = useState(() =>
+    parseSeason(searchParams.get("season")),
+  );
+  const [week, setWeek] = useState(() =>
+    parseWeek(
+      searchParams.get("week"),
+      parseSeason(searchParams.get("season")),
+    ),
+  );
   const [board, setBoard] = useState<PlayHighlightsBoardJson | null>(null);
   const [loading, setLoading] = useState(true);
 
   const seasons = useMemo(() => {
     const out: number[] = [];
-    for (let y = currentSeason; y >= startSeason; y -= 1) out.push(y);
+    for (let y = latestSeason; y >= startSeason; y -= 1) out.push(y);
     return out;
-  }, [currentSeason, startSeason]);
+  }, [latestSeason, startSeason]);
 
   const weeks = useMemo(() => {
-    const max =
-      season === currentSeason
-        ? Math.max(1, currentWeek)
-        : regWeeksInSeason(season);
+    const max = maxWeekFor(season);
     return Array.from({ length: max }, (_, i) => i + 1);
-  }, [season, currentSeason, currentWeek]);
+  }, [season, maxWeekFor]);
 
   const syncUrl = useCallback(
     (nextSeason: number, nextWeek: number) => {
@@ -209,6 +236,47 @@ export function PlayHighlightsLabClient({
     },
     [searchParams],
   );
+
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      const current = await fetchCurrentMeta();
+      if (cancelled || !current) return;
+
+      const liveWeek = Math.max(1, current.asOfWeek);
+      setLatestSeason(current.season);
+      setLatestWeek(liveWeek);
+
+      const requestedSeason = Number(initialQuery.current.season);
+      const hasRequestedSeason =
+        initialQuery.current.season !== null &&
+        Number.isInteger(requestedSeason) &&
+        requestedSeason >= startSeason &&
+        requestedSeason <= current.season;
+      const selectedSeason = hasRequestedSeason
+        ? requestedSeason
+        : current.season;
+      const maxWeek =
+        selectedSeason === current.season
+          ? liveWeek
+          : regWeeksInSeason(selectedSeason);
+      const requestedWeek = Number(initialQuery.current.week);
+      const hasRequestedWeek =
+        initialQuery.current.week !== null &&
+        Number.isInteger(requestedWeek) &&
+        requestedWeek >= 1 &&
+        requestedWeek <= maxWeek;
+
+      if (!selectionTouched.current) {
+        const nextWeek = hasRequestedWeek ? requestedWeek : maxWeek;
+        setSeason(selectedSeason);
+        setWeek(nextWeek);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [startSeason]);
 
   useEffect(() => {
     let cancelled = false;
@@ -235,9 +303,9 @@ export function PlayHighlightsLabClient({
         </h1>
         <p className="text-sm text-muted-foreground">
           Individual plays ranked within type (and position when available)
-          against all-time peers. Private preview — upload{" "}
-          <code className="text-xs">highlights/plays/</code> to Storage to
-          populate.
+          against all-time peers. Only weeks you have uploaded under{" "}
+          <code className="text-xs">highlights/plays/</code> will show rows —
+          right now that is typically just the week you published.
         </p>
         <p className="text-xs text-muted-foreground">
           <Link href="/" className="underline-offset-2 hover:underline">
@@ -253,11 +321,9 @@ export function PlayHighlightsLabClient({
             className="rounded-none border border-border bg-card px-2 py-1 text-foreground"
             value={season}
             onChange={(e) => {
+              selectionTouched.current = true;
               const nextSeason = Number(e.target.value);
-              const nextWeek =
-                nextSeason === currentSeason
-                  ? Math.min(week, currentWeek)
-                  : Math.min(week, regWeeksInSeason(nextSeason));
+              const nextWeek = Math.min(week, maxWeekFor(nextSeason));
               setSeason(nextSeason);
               setWeek(nextWeek);
               syncUrl(nextSeason, nextWeek);
@@ -276,6 +342,7 @@ export function PlayHighlightsLabClient({
             className="rounded-none border border-border bg-card px-2 py-1 text-foreground"
             value={week}
             onChange={(e) => {
+              selectionTouched.current = true;
               const nextWeek = Number(e.target.value);
               setWeek(nextWeek);
               syncUrl(season, nextWeek);
@@ -302,6 +369,19 @@ export function PlayHighlightsLabClient({
       ) : !board ? (
         <p className="text-sm text-muted-foreground">
           No play highlights published for {season} week {week} yet.
+          {season === latestSeason ? (
+            <>
+              {" "}
+              Try week {latestWeek} if that is what you uploaded, or open{" "}
+              <Link
+                href={`/lab/plays/?season=${latestSeason}&week=${latestWeek}`}
+                className="underline-offset-2 hover:underline"
+              >
+                /lab/plays/?season={latestSeason}&week={latestWeek}
+              </Link>
+              .
+            </>
+          ) : null}
         </p>
       ) : (
         <div className="space-y-8">
