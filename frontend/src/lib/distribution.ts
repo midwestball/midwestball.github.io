@@ -289,22 +289,22 @@ export function formatOneInN(tier: number): string {
 
 const RARITY_COLORS: Record<number, string> = {
   10: "rgb(112, 168, 104)", // common
-  50: "rgb(173, 130, 80)", // bronze
-  100: "rgb(168, 169, 173)", // silver
-  1_000: "rgb(212, 175, 55)", // gold
-  10_000: "rgb(126, 200, 227)", // diamond
-  100_000: "rgb(123, 94, 167)", // purple
+  20: "rgb(173, 130, 80)", // bronze
+  50: "rgb(168, 169, 173)", // silver
+  500: "rgb(212, 175, 55)", // gold
+  5_000: "rgb(126, 200, 227)", // diamond
+  50_000: "rgb(123, 94, 167)", // purple
 };
 
 /** Higher 10^k reuse purple, stepping slightly lighter. */
 export function rarityTierColor(tier: number): string {
   if (RARITY_COLORS[tier]) return RARITY_COLORS[tier]!;
-  if (tier >= 1_000_000) return "rgb(168, 140, 210)";
-  if (tier >= 100_000) return RARITY_COLORS[100_000]!;
-  if (tier >= 10_000) return RARITY_COLORS[10_000]!;
-  if (tier >= 1_000) return RARITY_COLORS[1_000]!;
-  if (tier >= 100) return RARITY_COLORS[100]!;
+  if (tier >= 500_000) return "rgb(168, 140, 210)";
+  if (tier >= 50_000) return RARITY_COLORS[50_000]!;
+  if (tier >= 5_000) return RARITY_COLORS[5_000]!;
+  if (tier >= 500) return RARITY_COLORS[500]!;
   if (tier >= 50) return RARITY_COLORS[50]!;
+  if (tier >= 20) return RARITY_COLORS[20]!;
   return RARITY_COLORS[10]!;
 }
 
@@ -314,7 +314,7 @@ export function rarityTierContrastText(tier: number): string {
 
 /** Shimmer on bronze and rarer tiers. */
 export function rarityTierShimmer(tier: number): boolean {
-  return tier >= 50;
+  return tier >= 20;
 }
 
 export function rarityStandingParts(stat: {
