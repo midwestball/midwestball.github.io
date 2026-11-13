@@ -6,6 +6,8 @@ import { HighlightList } from "./HighlightList";
 import {
   fetchHighlightsBoard,
   fetchLeagueWeeklyGroup,
+  fetchPlayHighlightsBoard,
+  fetchPlayLeagueShapes,
 } from "@/lib/ballnet-store";
 
 vi.mock("next/navigation", () => ({
@@ -15,6 +17,8 @@ vi.mock("@/lib/ballnet-store", () => ({
   fetchCurrentMeta: vi.fn(async () => null),
   fetchHighlightsBoard: vi.fn(async () => null),
   fetchLeagueWeeklyGroup: vi.fn(async () => null),
+  fetchPlayHighlightsBoard: vi.fn(async () => null),
+  fetchPlayLeagueShapes: vi.fn(async () => null),
 }));
 
 afterEach(() => {
@@ -22,6 +26,8 @@ afterEach(() => {
   history.replaceState(null, "", "/");
   vi.mocked(fetchHighlightsBoard).mockResolvedValue(null);
   vi.mocked(fetchLeagueWeeklyGroup).mockResolvedValue(null);
+  vi.mocked(fetchPlayHighlightsBoard).mockResolvedValue(null);
+  vi.mocked(fetchPlayLeagueShapes).mockResolvedValue(null);
 });
 
 it("opens a highlighted player in comparison for the highlighted season without expanding the row", () => {
@@ -86,7 +92,34 @@ it("preserves unrelated query keys and restores a home slice on navigation", asy
   ).toBe("2025");
 });
 
+it("defaults to Top Plays and can switch to Top Games", async () => {
+  render(
+    <HighlightsBrowser
+      startSeason={2024}
+      currentSeason={2026}
+      currentWeek={8}
+      initialSeason={2026}
+      initialWeek={8}
+    />,
+  );
+  expect(screen.getByRole("button", { name: "Top Plays" })).toBeTruthy();
+  expect(screen.getByRole("button", { name: "Raw Stat" })).toBeTruthy();
+  expect(
+    screen.getByText("Standout individual plays. Expand a row for more."),
+  ).toBeTruthy();
+
+  fireEvent.click(screen.getByRole("button", { name: "Top Games" }));
+  await waitFor(() =>
+    expect(
+      screen.getByText("Standout offensive games. Expand a row for more."),
+    ).toBeTruthy(),
+  );
+  expect(new URLSearchParams(location.search).get("view")).toBe("games");
+  expect(screen.queryByRole("button", { name: "Raw Stat" })).toBeNull();
+});
+
 it("keeps ranking method neutral until a board loads, then shows observed rarity", async () => {
+  history.replaceState(null, "", "/?view=games");
   render(
     <HighlightsBrowser
       startSeason={2024}
@@ -120,6 +153,7 @@ it("keeps ranking method neutral until a board loads, then shows observed rarity
 });
 
 it("describes legacy boards only after a schemaVersion 1 board loads", async () => {
+  history.replaceState(null, "", "/?view=games");
   vi.mocked(fetchHighlightsBoard).mockResolvedValue({
     schemaVersion: 1,
     season: 2026,

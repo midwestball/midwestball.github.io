@@ -9,11 +9,21 @@ import {
   fetchCurrentMeta,
   fetchHighlightsBoard,
   fetchLeagueWeeklyGroup,
+  fetchPlayHighlightsBoard,
+  fetchPlayLeagueShapes,
   type LeagueGroupJson,
+  type PlayLeagueShapesJson,
 } from "@/lib/ballnet-store";
 import { HighlightList } from "@/components/highlights/HighlightList";
+import { PlayHighlightsSections } from "@/components/highlights/PlayHighlightList";
 import { GROUP_LABEL, type PositionGroup } from "@/lib/catalog";
-import type { HighlightRow, HighlightsBoardJson } from "@/lib/payload";
+import type {
+  HighlightRow,
+  HighlightsBoardJson,
+  PlayHighlightsBoardJson,
+  PlayMetricMode,
+} from "@/lib/payload";
+import { cn } from "@/lib/utils";
 
 const OFFENSE_GROUPS: PositionGroup[] = [
   "qb",
@@ -26,6 +36,8 @@ const OFFENSE_GROUPS: PositionGroup[] = [
 const SIDE_TOP_N = 25;
 const OFFENSE_PREVIEW_N = 8;
 const GROUP_PREVIEW_N = 3;
+
+type HighlightsView = "plays" | "games";
 
 /** REG week count: 17 through 2020, 18 from 2021. */
 export function regWeeksInSeason(season: number): number {
@@ -124,6 +136,14 @@ function GroupSections({
 const selectClass =
   "h-9 rounded-none border border-border bg-card px-2 text-sm text-foreground outline-none focus:border-ring";
 
+const toggleBtnClass = (active: boolean) =>
+  cn(
+    "h-9 px-2.5 text-sm",
+    active
+      ? "bg-foreground text-background"
+      : "bg-card text-muted-foreground hover:text-foreground",
+  );
+
 export type HighlightsBrowserProps = {
   /** Earliest season with spine coverage (NGS era). */
   startSeason: number;
@@ -144,6 +164,8 @@ export function HighlightsBrowser({
   const initialQuery = useRef({
     season: searchParams.get("season"),
     week: searchParams.get("week"),
+    view: searchParams.get("view"),
+    metric: searchParams.get("metric"),
   });
   const selectionTouched = useRef(false);
   const [latestSeason, setLatestSeason] = useState(currentSeason);
@@ -184,7 +206,19 @@ export function HighlightsBrowser({
   const [week, setWeek] = useState(() =>
     parseWeek(searchParams.get("week"), parseSeason(searchParams.get("season"))),
   );
-  const [board, setBoard] = useState<HighlightsBoardJson | null>(null);
+  const [view, setView] = useState<HighlightsView>(() =>
+    searchParams.get("view") === "games" ? "games" : "plays",
+  );
+  const [metricMode, setMetricMode] = useState<PlayMetricMode>(() =>
+    searchParams.get("metric") === "epa" ? "epa" : "raw",
+  );
+  const [gameBoard, setGameBoard] = useState<HighlightsBoardJson | null>(null);
+  const [playBoard, setPlayBoard] = useState<PlayHighlightsBoardJson | null>(
+    null,
+  );
+  const [playShapes, setPlayShapes] = useState<PlayLeagueShapesJson | null>(
+    null,
+  );
   const [weeklyByGroup, setWeeklyByGroup] = useState<
     Record<string, LeagueGroupJson | null>
   >({});
@@ -192,13 +226,33 @@ export function HighlightsBrowser({
     "loading",
   );
   const [responseKey, setResponseKey] = useState("");
-  const sliceKey = `${season}-${week}`;
+  const sliceKey = `${view}-${season}-${week}-${view === "plays" ? metricMode : "games"}`;
   const status = responseKey === sliceKey ? responseStatus : "loading";
 
   const weekOptions = useMemo(() => {
     const max = maxWeekFor(season);
     return Array.from({ length: max }, (_, i) => i + 1);
   }, [season, maxWeekFor]);
+
+  const syncUrl = useCallback(
+    (
+      nextSeason: number,
+      nextWeek: number,
+      nextView: HighlightsView,
+      nextMetric: PlayMetricMode,
+    ) => {
+      writeBrowserQuery(
+        patchQuery(new URLSearchParams(location.search), {
+          season: String(nextSeason),
+          week: String(nextWeek),
+          view: nextView === "games" ? "games" : null,
+          metric:
+            nextView === "plays" && nextMetric === "epa" ? "epa" : null,
+        }),
+      );
+    },
+    [],
+  );
 
   // The page is statically exported, so its props reflect the last site build.
   // Refresh the current pointer from Storage in the browser after every page load.
@@ -235,6 +289,8 @@ export function HighlightsBrowser({
       if (!selectionTouched.current) {
         setSeason(selectedSeason);
         setWeek(hasRequestedWeek ? requestedWeek : maxWeek);
+        setView(initialQuery.current.view === "games" ? "games" : "plays");
+        setMetricMode(initialQuery.current.metric === "epa" ? "epa" : "raw");
       }
     })();
 
@@ -248,19 +304,39 @@ export function HighlightsBrowser({
     const restore = () => {
       const p = new URLSearchParams(location.search);
       const y = Number(p.get("season"));
-      const nextSeason = Number.isInteger(y) && y >= startSeason && y <= latestSeason ? y : latestSeason;
+      const nextSeason =
+        Number.isInteger(y) && y >= startSeason && y <= latestSeason
+          ? y
+          : latestSeason;
       const w = Number(p.get("week"));
       const max = maxWeekFor(nextSeason);
       selectionTouched.current = true;
-      setSeason(nextSeason); setWeek(Number.isInteger(w) && w >= 1 && w <= max ? w : max);
+      setSeason(nextSeason);
+      setWeek(Number.isInteger(w) && w >= 1 && w <= max ? w : max);
+      setView(p.get("view") === "games" ? "games" : "plays");
+      setMetricMode(p.get("metric") === "epa" ? "epa" : "raw");
     };
     window.addEventListener("popstate", restore);
     return () => window.removeEventListener("popstate", restore);
   }, [startSeason, latestSeason, maxWeekFor]);
+
   function selectSlice(nextSeason: number, nextWeek: number) {
     selectionTouched.current = true;
-    setSeason(nextSeason); setWeek(nextWeek);
-    writeBrowserQuery(patchQuery(new URLSearchParams(location.search), { season: String(nextSeason), week: String(nextWeek) }));
+    setSeason(nextSeason);
+    setWeek(nextWeek);
+    syncUrl(nextSeason, nextWeek, view, metricMode);
+  }
+
+  function selectView(nextView: HighlightsView) {
+    selectionTouched.current = true;
+    setView(nextView);
+    syncUrl(season, week, nextView, metricMode);
+  }
+
+  function selectMetric(nextMetric: PlayMetricMode) {
+    selectionTouched.current = true;
+    setMetricMode(nextMetric);
+    syncUrl(season, week, view, nextMetric);
   }
 
   useEffect(() => {
@@ -268,10 +344,27 @@ export function HighlightsBrowser({
 
     void (async () => {
       try {
+        if (view === "plays") {
+          const [nextBoard, nextShapes] = await Promise.all([
+            fetchPlayHighlightsBoard(season, week, metricMode),
+            fetchPlayLeagueShapes(season, week, metricMode),
+          ]);
+          if (cancelled) return;
+          setPlayBoard(nextBoard);
+          setPlayShapes(nextShapes);
+          setGameBoard(null);
+          setWeeklyByGroup({});
+          setStatus(nextBoard ? "ready" : "empty");
+          setResponseKey(sliceKey);
+          return;
+        }
+
         const nextBoard = await fetchHighlightsBoard(season, week);
         if (cancelled) return;
         if (!nextBoard) {
-          setBoard(null);
+          setGameBoard(null);
+          setPlayBoard(null);
+          setPlayShapes(null);
           setWeeklyByGroup({});
           setStatus("empty");
           setResponseKey(sliceKey);
@@ -284,7 +377,9 @@ export function HighlightsBrowser({
           }),
         );
         if (cancelled) return;
-        setBoard(nextBoard);
+        setGameBoard(nextBoard);
+        setPlayBoard(null);
+        setPlayShapes(null);
         setWeeklyByGroup(Object.fromEntries(entries));
         const hasRows = OFFENSE_GROUPS.some(
           (g) => (nextBoard.byGroup?.[g]?.length ?? 0) > 0,
@@ -292,18 +387,22 @@ export function HighlightsBrowser({
         setStatus(hasRows ? "ready" : "empty");
         setResponseKey(sliceKey);
       } catch {
-        if (!cancelled) { setStatus("error"); setResponseKey(sliceKey); }
+        if (!cancelled) {
+          setStatus("error");
+          setResponseKey(sliceKey);
+        }
       }
     })();
 
     return () => {
       cancelled = true;
     };
-  }, [season, week, sliceKey]);
+  }, [season, week, view, metricMode, sliceKey]);
 
-  const byGroup = board?.byGroup;
+  const byGroup = gameBoard?.byGroup;
   const offenseTop = sideTop(byGroup, OFFENSE_GROUPS);
   const hasBoard = status === "ready";
+  const aboutBoard = view === "plays" ? playBoard : gameBoard;
 
   return (
     <div>
@@ -341,29 +440,88 @@ export function HighlightsBrowser({
                 ))}
               </select>
             </label>
+            <div
+              className="flex items-center rounded-none border border-border"
+              role="group"
+              aria-label="Highlights view"
+            >
+              {(
+                [
+                  ["plays", "Top Plays"],
+                  ["games", "Top Games"],
+                ] as const
+              ).map(([mode, label]) => (
+                <button
+                  key={mode}
+                  type="button"
+                  className={toggleBtnClass(view === mode)}
+                  onClick={() => selectView(mode)}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+            {view === "plays" ? (
+              <div
+                className="flex items-center rounded-none border border-border"
+                role="group"
+                aria-label="Metric mode"
+              >
+                {(
+                  [
+                    ["raw", "Raw Stat"],
+                    ["epa", "EPA"],
+                  ] as const
+                ).map(([mode, label]) => (
+                  <button
+                    key={mode}
+                    type="button"
+                    className={toggleBtnClass(metricMode === mode)}
+                    onClick={() => selectMetric(mode)}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+            ) : null}
           </div>
           <h1 className="mt-2 text-3xl font-semibold tracking-tight">
             Highlights
           </h1>
           <p className="mt-1 max-w-xl text-sm leading-5 text-text-secondary">
-            Standout offensive games. Expand a row for more.
+            {view === "plays"
+              ? "Standout individual plays. Expand a row for more."
+              : "Standout offensive games. Expand a row for more."}
           </p>
           <details className="mt-1 max-w-xl text-xs text-muted-foreground">
             <summary className="cursor-pointer font-medium text-text-secondary">
               About rankings
             </summary>
-            {board ? (
-              <>
-                <p className="mt-2 leading-5">
-                  {board.schemaVersion === 2
-                    ? "Ranked by observed rarity among qualifying games since 2016."
-                    : "Legacy boards are ranked by standardized scores among qualifying games since 2016."}
-                </p>
-                <p className="mt-1 leading-5">
-                  Expand a player to see the peer distribution and other standout
-                  stats.
-                </p>
-              </>
+            {aboutBoard ? (
+              view === "plays" ? (
+                <>
+                  <p className="mt-2 leading-5">
+                    Ranked by observed rarity among similar plays since{" "}
+                    {playBoard?.peerWindowStartYear ?? 2016}.
+                  </p>
+                  <p className="mt-1 leading-5">
+                    Expand a play to see the peer distribution
+                    {metricMode === "epa" ? " in EPA" : ""}.
+                  </p>
+                </>
+              ) : (
+                <>
+                  <p className="mt-2 leading-5">
+                    {gameBoard?.schemaVersion === 2
+                      ? "Ranked by observed rarity among qualifying games since 2016."
+                      : "Legacy boards are ranked by standardized scores among qualifying games since 2016."}
+                  </p>
+                  <p className="mt-1 leading-5">
+                    Expand a player to see the peer distribution and other
+                    standout stats.
+                  </p>
+                </>
+              )
             ) : (
               <p className="mt-2 leading-5">
                 Ranking method loads with the board.
@@ -388,7 +546,24 @@ export function HighlightsBrowser({
           </p>
         ) : null}
 
-        {hasBoard ? (
+        {hasBoard && view === "plays" && playBoard ? (
+          <>
+            {playBoard.missingPeerSeasons?.length ? (
+              <p className="text-xs text-muted-foreground">
+                Peer window missing seasons:{" "}
+                {playBoard.missingPeerSeasons.join(", ")} (build older play
+                panels to widen rarity).
+              </p>
+            ) : null}
+            <PlayHighlightsSections
+              board={playBoard}
+              season={season}
+              shapes={playShapes}
+            />
+          </>
+        ) : null}
+
+        {hasBoard && view === "games" ? (
           <>
             <section className="space-y-2">
               <h2 className="text-xs font-semibold tracking-[0.15em] text-muted-foreground uppercase">
