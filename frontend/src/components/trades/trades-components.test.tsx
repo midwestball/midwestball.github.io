@@ -85,6 +85,8 @@ describe("ROS and roster controls", () => {
   });
   it("shows the five ROS quantiles and mean for a selected player", () => {
     render(<RosProjections />);
+    expect(screen.getByRole("heading", { name: "Rest-of-season forecasts" })).toBeTruthy();
+    expect(screen.getByText(/ROS forecasts have not passed a separate validation gate/)).toBeTruthy();
     fireEvent.focus(screen.getByLabelText("Add a ROS projection"));
     fireEvent.click(screen.getByRole("option", { name: /Player WR/ }));
     expect(screen.getByRole("columnheader", { name: "Median" })).toBeTruthy();

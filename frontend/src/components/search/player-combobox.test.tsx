@@ -19,3 +19,7 @@ it("hides suggestions and prevents picks when disabled", () => {
   const pick = vi.fn(); render(<PlayerCombobox label="Player" items={[{ key: "a", primary: "Alpha", secondary: "" }]} onPick={pick} disabled showWhenEmpty />);
   expect(screen.queryByRole("listbox")).toBeNull(); fireEvent.keyDown(screen.getByRole("combobox"), { key: "Enter" }); expect(pick).not.toHaveBeenCalled();
 });
+it("exposes the Find players label used on Search", () => {
+  render(<PlayerCombobox label="Find players" items={[]} onPick={() => {}} />);
+  expect(screen.getByLabelText("Find players")).toBeTruthy();
+});

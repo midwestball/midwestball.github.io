@@ -15,6 +15,12 @@ vi.mock("@/lib/projections", async importOriginal => ({
   loadProjectionEntity: vi.fn(async (_path: string, _index: unknown, summary: ProjectionEntitySummary) => ({ entityKey: summary.entityKey, pdf: [0, 1, 0], cdf: [0, .5, 1], lowerBound: null })),
 }));
 afterEach(() => { cleanup(); history.replaceState(null, "", "/"); vi.clearAllMocks(); });
+it("shows the weekly forecast heading and empty-state add prompt", async () => {
+  history.replaceState(null, "", "/ballnet/");
+  render(<ProjectionsPageClient />);
+  await waitFor(() => expect(screen.getByRole("heading", { name: "Weekly fantasy forecasts" })).toBeTruthy());
+  expect(screen.getByText("Add up to four players or defenses.")).toBeTruthy();
+});
 it("hydrates entity keys and points, restores history, and never reloads metadata for selection edits", async () => {
   history.replaceState(null, "", "/ballnet/?p=a&focus=a&points=12.5&utm=kept");
   render(<ProjectionsPageClient />);
