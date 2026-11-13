@@ -53,12 +53,47 @@ function isEpaMode(row: PlayHighlightRow): boolean {
   return row.metricMode === "epa" || row.statId === "epa";
 }
 
+/** Raw-outcome labels for EPA rows (boards store rawValue separately). */
+const RAW_OUTCOME_LABEL: Record<string, string> = {
+  completion: "yard pass",
+  pass: "passing yards",
+  reception: "receiving yards",
+  rush: "rushing yards",
+  interception: "INT return yards",
+  sack: "sack yards",
+  kick_return: "yard kick return",
+  punt_return: "yard punt return",
+  field_goal: "yard field goal",
+  punt: "yard punt",
+  tackle_for_loss: "yard TFL",
+  fumble_recovery: "yard fumble return",
+};
+
 function formatPlayValue(row: PlayHighlightRow): string {
   if (isEpaMode(row) || row.playClass === "forced_fumble") {
     return row.value.toFixed(2);
   }
   if (Number.isInteger(row.value)) return String(row.value);
   return row.value.toFixed(1);
+}
+
+function formatRawNumber(value: number): string {
+  if (Number.isInteger(value)) return String(value);
+  return value.toFixed(1);
+}
+
+/** e.g. "66 yard pass" — for EPA rows that still have a yards/etc. outcome. */
+function formatRawOutcome(row: PlayHighlightRow): string | null {
+  if (!isEpaMode(row)) return null;
+  if (row.playClass === "forced_fumble") return null;
+  const raw = row.rawValue;
+  if (raw == null || !Number.isFinite(raw)) return null;
+  const label = RAW_OUTCOME_LABEL[row.playClass];
+  if (!label) return null;
+  if (label.startsWith("yard ")) {
+    return `${formatRawNumber(raw)} ${label}`;
+  }
+  return `${formatRawNumber(raw)} ${label}`;
 }
 
 function valueFormat(row: PlayHighlightRow): "count" | "one_decimal" {
@@ -99,7 +134,9 @@ function CompletionTitle({
 
 function formatHeadline(row: PlayHighlightRow): string {
   if (isEpaMode(row)) {
-    return `${formatPlayValue(row)} EPA`;
+    const outcome = formatRawOutcome(row);
+    const epa = `${formatPlayValue(row)} EPA`;
+    return outcome ? `${outcome} · ${epa}` : epa;
   }
   if (isCompletion(row) || row.statLabel.startsWith("yard ")) {
     return `${formatPlayValue(row)} ${row.statLabel}`;
@@ -328,6 +365,7 @@ function PlayRowExpandable({
   const tier = resolveRarityTier(row);
   const clock = row.gameClock ?? (row.clock ? `Q? ${row.clock}` : null);
   const also = row.also ?? [];
+  const rawOutcome = formatRawOutcome(row);
 
   return (
     <li className="rounded-none border border-border bg-card">
@@ -369,6 +407,14 @@ function PlayRowExpandable({
                 ? `${row.passerPosition || "QB"} → ${row.receiverPosition || row.position || "—"}`
                 : row.position || "—"}
             </span>
+            {rawOutcome ? (
+              <>
+                <span aria-hidden>·</span>
+                <span className="font-medium text-foreground/85 tabular-nums">
+                  {rawOutcome}
+                </span>
+              </>
+            ) : null}
             <span aria-hidden>·</span>
             <TeamAbbr team={row.team} />
             {row.opponent ? (

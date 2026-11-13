@@ -393,6 +393,13 @@ def _combine_completion(pas: dict[str, Any], rec: dict[str, Any]) -> dict[str, A
             "statId": "epa" if mode == "epa" else "completion_yards",
             "statLabel": "EPA" if mode == "epa" else "yard pass",
             "value": scored,
+            "rawValue": (
+                float(pas["rawValue"])
+                if pas.get("rawValue") is not None
+                else float(rec["rawValue"])
+                if rec.get("rawValue") is not None
+                else None
+            ),
             "metricMode": mode,
             "passerId": pas["playerId"],
             "passerName": pas.get("name") or "",
