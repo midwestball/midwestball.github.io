@@ -392,8 +392,6 @@ function PlayRowExpandable({
                 <TeamAbbr team={row.opponent} />
               </>
             ) : null}
-            <span aria-hidden>·</span>
-            <span className="truncate">{formatHeadline(row)}</span>
             {clock ? (
               <>
                 <span aria-hidden>·</span>
@@ -412,8 +410,11 @@ function PlayRowExpandable({
           </p>
         </div>
         <div className="shrink-0 text-right">
-          <p className="text-sm font-semibold tabular-nums text-foreground">
-            {formatPlayValue(row)}
+          <p className="text-sm font-semibold text-foreground">
+            <span className="tabular-nums">{formatPlayValue(row)}</span>{" "}
+            <span className="font-medium text-muted-foreground">
+              {isEpaMode(row) ? "EPA" : row.statLabel}
+            </span>
           </p>
           {tier != null ? <RarityChip tier={tier} /> : null}
         </div>

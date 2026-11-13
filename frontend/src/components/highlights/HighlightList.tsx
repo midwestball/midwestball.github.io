@@ -215,8 +215,6 @@ function HighlightRowExpandable({
                 <TeamAbbr team={row.opponent} />
               </>
             ) : null}
-            <span aria-hidden>·</span>
-            <span className="truncate">{row.statLabel}</span>
             {also.length > 0 ? (
               <span className="text-muted-foreground">
                 +{also.length} more
@@ -225,8 +223,11 @@ function HighlightRowExpandable({
           </p>
         </div>
         <div className="shrink-0 text-right">
-          <p className="text-sm font-semibold tabular-nums text-foreground">
-            {formatHighlightValue(row)}
+          <p className="text-sm font-semibold text-foreground">
+            <span className="tabular-nums">{formatHighlightValue(row)}</span>{" "}
+            <span className="font-medium text-muted-foreground">
+              {row.statLabel}
+            </span>
           </p>
           {tier != null ? <RarityChip tier={tier} /> : null}
         </div>
