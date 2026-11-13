@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { SiteHeader } from "@/components/layout/SiteHeader";
+import { FloatyInteractions } from "@/components/motion/FloatyInteractions";
 import "./globals.css";
 import { THEME_BOOTSTRAP } from "@/lib/theme/theme-preference";
 
@@ -29,6 +30,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       <head><script dangerouslySetInnerHTML={{ __html: THEME_BOOTSTRAP }} /></head>
       <body className="min-h-full flex flex-col">
         <div className="flex min-h-full flex-1 flex-col bg-background text-foreground">
+          <FloatyInteractions />
           <SiteHeader />
           {children}
         </div>
