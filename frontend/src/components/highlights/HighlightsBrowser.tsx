@@ -34,8 +34,7 @@ const OFFENSE_GROUPS: PositionGroup[] = [
 
 /** Defense boards still publish; UI hidden until distribution issues are fixed. */
 const SIDE_TOP_N = 25;
-const OFFENSE_PREVIEW_N = 8;
-const GROUP_PREVIEW_N = 3;
+const SECTION_PREVIEW_N = 5;
 
 type HighlightsView = "plays" | "games";
 
@@ -123,7 +122,7 @@ function GroupSections({
               rows={rows}
               season={season}
               weeklyByGroup={weeklyByGroup}
-              initialVisible={GROUP_PREVIEW_N}
+              initialVisible={SECTION_PREVIEW_N}
               resetKey={`${resetKey}-${group}`}
             />
           </section>
@@ -559,6 +558,7 @@ export function HighlightsBrowser({
               board={playBoard}
               season={season}
               shapes={playShapes}
+              resetKey={sliceKey}
             />
           </>
         ) : null}
@@ -573,7 +573,7 @@ export function HighlightsBrowser({
                 rows={offenseTop}
                 season={season}
                 weeklyByGroup={weeklyByGroup}
-                initialVisible={OFFENSE_PREVIEW_N}
+                initialVisible={SECTION_PREVIEW_N}
                 resetKey={`${sliceKey}-offense`}
               />
             </section>

@@ -298,6 +298,7 @@ export function PlayHighlightsLabClient({
           board={board}
           season={season}
           shapes={shapes}
+          resetKey={`${season}-${week}-${metricMode}`}
         />
       )}
     </main>

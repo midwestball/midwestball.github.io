@@ -488,6 +488,8 @@ function PlayRowExpandable({
   );
 }
 
+const SECTION_PREVIEW_N = 5;
+
 type PlayHighlightListProps = {
   rows: PlayHighlightRow[];
   season: number;
@@ -518,6 +520,50 @@ export function PlayHighlightList({
   );
 }
 
+function PlayHighlightListPreview({
+  rows,
+  season,
+  shapes,
+  emptyLabel,
+  resetKey,
+  initialVisible = SECTION_PREVIEW_N,
+}: PlayHighlightListProps & {
+  resetKey: string;
+  initialVisible?: number;
+}) {
+  const [expansion, setExpansion] = useState({ key: resetKey, expanded: false });
+  const expanded = expansion.key === resetKey && expansion.expanded;
+  const visible =
+    expanded || rows.length <= initialVisible
+      ? rows
+      : rows.slice(0, initialVisible);
+  const hiddenCount = rows.length - initialVisible;
+
+  if (!rows.length) {
+    return <p className="text-sm text-muted-foreground">{emptyLabel}</p>;
+  }
+
+  return (
+    <div className="space-y-1">
+      <PlayHighlightList
+        rows={visible}
+        season={season}
+        shapes={shapes}
+        emptyLabel={emptyLabel}
+      />
+      {hiddenCount > 0 ? (
+        <button
+          type="button"
+          onClick={() => setExpansion({ key: resetKey, expanded: !expanded })}
+          className="text-xs text-muted-foreground hover:text-text-secondary"
+        >
+          {expanded ? "See less" : "See more"}
+        </button>
+      ) : null}
+    </div>
+  );
+}
+
 type PlayHighlightsSectionsProps = {
   board: {
     top: PlayHighlightRow[];
@@ -525,12 +571,15 @@ type PlayHighlightsSectionsProps = {
   };
   season: number;
   shapes: PlayLeagueShapesJson | null;
+  /** Change when season/week/metric changes so “see more” collapses again. */
+  resetKey?: string;
 };
 
 export function PlayHighlightsSections({
   board,
   season,
   shapes,
+  resetKey = "plays",
 }: PlayHighlightsSectionsProps) {
   return (
     <div className="space-y-8">
@@ -538,11 +587,12 @@ export function PlayHighlightsSections({
         <h2 className="text-xs font-semibold tracking-[0.15em] text-muted-foreground uppercase">
           Top plays
         </h2>
-        <PlayHighlightList
+        <PlayHighlightListPreview
           rows={board.top}
           season={season}
           shapes={shapes}
           emptyLabel="No rare plays for this week."
+          resetKey={`${resetKey}-top`}
         />
       </section>
       {PLAY_BOARD_CLASSES.map((playClass) => (
@@ -550,11 +600,12 @@ export function PlayHighlightsSections({
           <h2 className="text-xs font-semibold tracking-[0.15em] text-muted-foreground uppercase">
             {PLAY_CLASS_LABEL[playClass] ?? playClass}
           </h2>
-          <PlayHighlightList
+          <PlayHighlightListPreview
             rows={board.byClass?.[playClass] ?? []}
             season={season}
             shapes={shapes}
             emptyLabel={`No ${PLAY_CLASS_LABEL[playClass]?.toLowerCase() ?? playClass} yet.`}
+            resetKey={`${resetKey}-${playClass}`}
           />
         </section>
       ))}
