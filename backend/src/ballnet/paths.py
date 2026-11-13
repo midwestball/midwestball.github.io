@@ -25,6 +25,8 @@ PLAYS_DIR = DATA_DIR / "plays"
 PLAY_HIGHLIGHTS_DIR = HIGHLIGHTS_DIR / "plays"
 # Stage H single-game KDEs (league_weekly scope). Not league_ytd.
 LEAGUE_WEEKLY_DIR = DIST_DIR / "league_weekly"
+# Play-level peer histograms (scope play_all_time). Parallel to league_weekly.
+LEAGUE_PLAYS_DIR = DIST_DIR / "league_plays"
 # midwestball search sort boards (YTD percentiles by group/stat).
 LEADERBOARDS_DIR = DATA_DIR / "leaderboards"
 
@@ -42,6 +44,7 @@ def ensure_data_dirs() -> None:
         PLAYS_DIR,
         PLAY_HIGHLIGHTS_DIR,
         LEAGUE_WEEKLY_DIR,
+        LEAGUE_PLAYS_DIR,
         LEADERBOARDS_DIR,
     ):
         d.mkdir(parents=True, exist_ok=True)

@@ -19,11 +19,11 @@ Intended stages inside `refresh` (not a new math path — wrap what already exis
 5. **H** `highlights --season YEAR --week W` (weekly board vs **all-time** single-game peers + `league_weekly` KDEs → `data/highlights/` + `data/dists/league_weekly/`; needs spines for `2016..YEAR`)
    - Historical backfill: `highlights-range --start 2016 --end YEAR [--upload]`
 6. **Play rarity (parallel)** `play-panel --season YEAR` then `play-highlights --season YEAR --week W`
-   - Needs cached PBP (`fetch`); does **not** widen Stage B. Boards → `data/highlights/plays/`
+   - Needs cached PBP (`fetch`); does **not** widen Stage B. Boards → `data/highlights/plays/` + peer histograms → `data/dists/league_plays/`
    - Historical: `play-panel` per season, then `play-highlights-range --start 2016 --end YEAR`
 7. Optional: `--upload` → `upload-storage --index --season YEAR --highlights --play-highlights`
    - All weeks for one year: `upload-storage --season YEAR --highlights-only --all-highlight-weeks`
-   - Play boards only: `upload-storage --season YEAR --play-highlights-only [--all-play-highlight-weeks]`
+   - Play boards + histograms: `upload-storage --season YEAR --play-highlights-only [--all-play-highlight-weeks]`
 
 Until `refresh` exists, run that sequence manually (see below).
 

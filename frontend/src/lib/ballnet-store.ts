@@ -325,6 +325,43 @@ export async function fetchPlayHighlightsBoard(
   return loadPlayHighlightsBoard({ season, week });
 }
 
+/** Play-level peer histograms (`dists/league_plays/{season}/w{week}.json`). */
+export type PlayLeagueShapesJson = {
+  schemaVersion: 1;
+  season: number;
+  asOfWeek: number;
+  scope?: "play_all_time";
+  peerWindowStartYear?: number;
+  /** Keyed by board `peerKey` (e.g. `reception|pos:WR`). */
+  stats: Record<string, LeagueStatShape>;
+};
+
+export const loadPlayLeagueShapes = cache(
+  async (opts?: {
+    season?: number;
+    week?: number;
+  }): Promise<PlayLeagueShapesJson | null> => {
+    let season = opts?.season;
+    let week = opts?.week;
+    if (season == null || week == null) {
+      const current = await resolveCurrentPointer();
+      if (!current) return null;
+      season = season ?? current.season;
+      week = week ?? current.week;
+    }
+    return loadStorageJson<PlayLeagueShapesJson>(
+      `dists/league_plays/${season}/w${week}.json`,
+    );
+  },
+);
+
+export async function fetchPlayLeagueShapes(
+  season: number,
+  week: number,
+): Promise<PlayLeagueShapesJson | null> {
+  return loadPlayLeagueShapes({ season, week });
+}
+
 /** Client fetch for Stage H expand curves. */
 export async function fetchLeagueWeeklyGroup(
   positionGroup: PositionGroup | string,

@@ -963,6 +963,7 @@ def main(argv: list[str] | None = None) -> None:
             json.dumps(
                 {
                     "path": str(result.board),
+                    "dist": str(result.dist) if result.dist else None,
                     "season": board["season"],
                     "week": board["week"],
                     "top": len(board.get("top") or []),

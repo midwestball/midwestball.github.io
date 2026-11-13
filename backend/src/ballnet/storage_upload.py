@@ -20,6 +20,7 @@ from ballnet.paths import (
     INDEX_DIR,
     LEADERBOARDS_DIR,
     LEAGUE_DIR,
+    LEAGUE_PLAYS_DIR,
     LEAGUE_WEEKLY_DIR,
     PAGES_DIR,
     PLAY_HIGHLIGHTS_DIR,
@@ -311,16 +312,19 @@ def upload_season_play_highlights(
     bucket: str = DEFAULT_BUCKET,
     **kwargs,
 ) -> UploadResult:
-    """Upload play-level rarity board `highlights/plays/{season}/w{week}.json`."""
+    """Upload play board + peer histograms under `dists/league_plays/`."""
     week = as_of_week if as_of_week is not None else default_as_of_week(season)
     board = PLAY_HIGHLIGHTS_DIR / str(season) / f"w{week}.json"
     if not board.is_file():
         raise FileNotFoundError(f"missing local play highlights file {board}")
-    return upload_files(
-        [(f"highlights/plays/{season}/w{week}.json", board)],
-        bucket=bucket,
-        **kwargs,
-    )
+    pairs: list[tuple[str, Path]] = [
+        (f"highlights/plays/{season}/w{week}.json", board),
+    ]
+    dist = LEAGUE_PLAYS_DIR / str(season) / f"w{week}.json"
+    if not dist.is_file():
+        raise FileNotFoundError(f"missing local play league shapes {dist}")
+    pairs.append((f"dists/league_plays/{season}/w{week}.json", dist))
+    return upload_files(pairs, bucket=bucket, **kwargs)
 
 
 def upload_all_play_highlights_for_season(
@@ -329,7 +333,7 @@ def upload_all_play_highlights_for_season(
     bucket: str = DEFAULT_BUCKET,
     **kwargs,
 ) -> UploadResult:
-    """Upload every local `highlights/plays/{season}/w*.json`."""
+    """Upload every local play board + matching `dists/league_plays/` curves."""
     season_dir = PLAY_HIGHLIGHTS_DIR / str(season)
     if not season_dir.is_dir():
         raise FileNotFoundError(f"missing play highlights dir {season_dir}")
@@ -343,6 +347,9 @@ def upload_all_play_highlights_for_season(
             continue
         week = int(week_token[1:])
         pairs.append((f"highlights/plays/{season}/w{week}.json", board))
+        dist = LEAGUE_PLAYS_DIR / str(season) / f"w{week}.json"
+        if dist.is_file():
+            pairs.append((f"dists/league_plays/{season}/w{week}.json", dist))
     if not pairs:
         raise FileNotFoundError(f"no uploadable play highlight files for {season}")
     return upload_files(pairs, bucket=bucket, **kwargs)

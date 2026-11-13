@@ -3,13 +3,13 @@
 ## Always
 
 - Load every viz artifact from public Supabase Storage (`NEXT_PUBLIC_SUPABASE_URL` or `VIZ_STORAGE_BASE_URL`). Local `npm run dev` and GitHub Pages share this path. Do not bundle Ballnet JSON in the frontend git tree.
-- Load `index/{players,current,seasons}.json`, `highlights/{season}/w{week}.json`, `highlights/plays/{season}/w{week}.json`, `leaderboards/{season}/w{week}/{group}.json`, and `dists/league_weekly/{season}/w{week}/{group}.json` via `fetch` — do not statically import large boards into the Next bundle.
+- Load `index/{players,current,seasons}.json`, `highlights/{season}/w{week}.json`, `highlights/plays/{season}/w{week}.json`, `leaderboards/{season}/w{week}/{group}.json`, `dists/league_weekly/{season}/w{week}/{group}.json`, and `dists/league_plays/{season}/w{week}.json` via `fetch` — do not statically import large boards into the Next bundle.
 - Merge `league/{season}/w{week}/{group}.json` into player snapshots before hydration so `ready` rows have `curve[]`.
 - Keep the frontend free of Supabase clients / service keys — public object fetches only.
 
 ## Ask First
 
-- Changing Storage path layout (`pages/`, `league/`, `index/`, `highlights/`, `highlights/plays/`, `leaderboards/`, `dists/league_weekly/`).
+- Changing Storage path layout (`pages/`, `league/`, `index/`, `highlights/`, `highlights/plays/`, `leaderboards/`, `dists/league_weekly/`, `dists/league_plays/`).
 - Surfacing `/lab/plays` in site navigation.
 - Adding any disk / `backend/data` read path (forbidden by `docs/adr/2026-09-18-storage-only-loader.md`).
 

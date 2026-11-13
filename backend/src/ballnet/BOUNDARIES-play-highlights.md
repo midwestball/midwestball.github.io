@@ -6,13 +6,13 @@
 - Classify actor-centric plays from cached REG PBP: `reception`, `rush`, `pass`, `interception`, `sack`. Attach weekly roster `position_code` / `position_group` (season fallback when the week row is missing).
 - Score rarity with the same empirical-inclusive favorable-tail method as Stage H (`empirical-inclusive-v2`), peering within `(play_class, position_code)` and falling back to position_group then class-wide when `peerN < MIN_PEER_N`.
 - Publish boards to `data/highlights/plays/{season}/w{week}.json` (Storage: `highlights/plays/...`). Include game clock (`quarter`, `clock`, `gameClock`) on every row.
+- Publish peer histograms for board `peerKey`s to `data/dists/league_plays/{season}/w{week}.json` (`scope: "play_all_time"`). Upload board + dist together; do not embed `curve`/`bins` on board rows.
 - Tolerate missing historical play panels for years in `PLAY_HIGHLIGHTS_START_YEAR..S-1`; record them as `missingPeerSeasons`. Require the current season panel.
 
 ## Ask First
 
 - Exploding PBP into Stage B / Stage C catalog ids (`red_zone_*`, `route_pct`).
 - Changing play class definitions or peer-key fallback order.
-- Adding play-level KDE / expand curves (not in v1).
 - Surfacing `/lab/plays` in site navigation.
 
 ## Never

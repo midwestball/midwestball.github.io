@@ -15,8 +15,10 @@ from typing import Any
 import numpy as np
 import polars as pl
 
+from ballnet.catalog.types import StatDefinition
+from ballnet.density import build_league_density
 from ballnet.jsonio import write_json
-from ballnet.paths import PLAY_HIGHLIGHTS_DIR, ensure_data_dirs
+from ballnet.paths import LEAGUE_PLAYS_DIR, PLAY_HIGHLIGHTS_DIR, ensure_data_dirs
 from ballnet.play_panel import (
     PLAY_CLASSES,
     load_play_panel,
@@ -45,14 +47,38 @@ _METRIC_LABELS: dict[str, str] = {
     "sack_yards": "sack yards",
 }
 
+# Synthetic defs for histogram binning only — not frontend catalog ids.
+_PLAY_STATS: dict[str, StatDefinition] = {
+    "reception": StatDefinition(
+        "receiving_yards", "discrete", True, "count", 0, 100, None, "plays", 2016, bin_width=1
+    ),
+    "rush": StatDefinition(
+        "rushing_yards", "discrete", True, "count", -20, 100, None, "plays", 2016, bin_width=1
+    ),
+    "pass": StatDefinition(
+        "passing_yards", "discrete", True, "count", 0, 100, None, "plays", 2016, bin_width=1
+    ),
+    "interception": StatDefinition(
+        "return_yards", "discrete", True, "count", 0, 100, None, "plays", 2016, bin_width=1
+    ),
+    "sack": StatDefinition(
+        "sack_yards", "discrete", True, "count", 0, 40, None, "plays", 2016, bin_width=1
+    ),
+}
+
 
 @dataclass(frozen=True)
 class PlayHighlightsPublishResult:
     board: Path
+    dist: Path | None = None
 
 
 def play_highlights_board_path(season: int, week: int) -> Path:
     return PLAY_HIGHLIGHTS_DIR / str(season) / f"w{week}.json"
+
+
+def play_highlights_dist_path(season: int, week: int) -> Path:
+    return LEAGUE_PLAYS_DIR / str(season) / f"w{week}.json"
 
 
 def _fallback_keys(play_class: str, position_code: str | None, position_group: str | None) -> list[str]:
@@ -229,7 +255,7 @@ def _board_from_peers(
     week: int,
     *,
     missing_peer_seasons: list[int] | None = None,
-) -> dict[str, Any]:
+) -> tuple[dict[str, Any], dict[str, np.ndarray]]:
     this_week = peers.filter((pl.col("season") == season) & (pl.col("week") == week))
     peer_map = _peer_value_map(peers)
 
@@ -275,12 +301,86 @@ def _board_from_peers(
     }
     if missing_peer_seasons:
         payload["missingPeerSeasons"] = list(missing_peer_seasons)
-    return payload
+    return payload, peer_map
+
+
+def _shape_payload(dens: dict[str, Any]) -> dict[str, Any]:
+    out: dict[str, Any] = {
+        "kind": dens["kind"],
+        "xMin": dens["x_min"],
+        "xMax": dens["x_max"],
+        "yMax": dens["y_max"],
+        "curve": dens.get("curve") or [],
+    }
+    if dens.get("representation") == "histogram":
+        out.update(
+            {
+                "representation": "histogram",
+                "bins": dens["bins"],
+                "valueCounts": dens["value_counts"],
+            }
+        )
+    if dens.get("n_sample") is not None:
+        out["nSample"] = int(dens["n_sample"])
+    return out
+
+
+def _peer_keys_on_board(payload: dict[str, Any]) -> set[str]:
+    keys: set[str] = set()
+
+    def walk(rows: list[dict[str, Any]]) -> None:
+        for row in rows:
+            key = row.get("peerKey")
+            if isinstance(key, str) and key:
+                keys.add(key)
+            also = row.get("also") or []
+            if isinstance(also, list):
+                walk(also)
+
+    walk(list(payload.get("top") or []))
+    for rows in (payload.get("byClass") or {}).values():
+        walk(list(rows or []))
+    return keys
+
+
+def _play_class_from_peer_key(peer_key: str) -> str:
+    return peer_key.split("|", 1)[0]
+
+
+def build_play_league_shapes(
+    season: int,
+    week: int,
+    peer_map: dict[str, np.ndarray],
+    peer_keys: set[str],
+) -> dict[str, Any]:
+    """Observed histograms for peer keys present on the board (expand charts)."""
+    stats: dict[str, Any] = {}
+    for key in sorted(peer_keys):
+        sample = peer_map.get(key)
+        if sample is None or sample.size < MIN_PEER_N:
+            continue
+        play_class = _play_class_from_peer_key(key)
+        cat = _PLAY_STATS.get(play_class)
+        if cat is None:
+            continue
+        dens = build_league_density(np.asarray(sample, dtype=float), cat)
+        stats[key] = _shape_payload(dens)
+    return {
+        "schemaVersion": 1,
+        "season": season,
+        "asOfWeek": week,
+        "scope": "play_all_time",
+        "peerWindowStartYear": PLAY_HIGHLIGHTS_START_YEAR,
+        "stats": stats,
+    }
 
 
 def build_play_highlights_board(season: int, week: int) -> dict[str, Any]:
     peers, missing = _load_all_time_play_peers(season, week)
-    return _board_from_peers(peers, season, week, missing_peer_seasons=missing)
+    payload, _peer_map = _board_from_peers(
+        peers, season, week, missing_peer_seasons=missing
+    )
+    return payload
 
 
 def weeks_to_publish_plays(season: int) -> list[int]:
@@ -296,10 +396,19 @@ def weeks_to_publish_plays(season: int) -> list[int]:
 
 def publish_play_highlights(season: int, week: int) -> PlayHighlightsPublishResult:
     ensure_data_dirs()
-    payload = build_play_highlights_board(season, week)
+    peers, missing = _load_all_time_play_peers(season, week)
+    payload, peer_map = _board_from_peers(
+        peers, season, week, missing_peer_seasons=missing
+    )
     board = play_highlights_board_path(season, week)
     write_json(board, payload)
-    return PlayHighlightsPublishResult(board=board)
+
+    shapes = build_play_league_shapes(
+        season, week, peer_map, _peer_keys_on_board(payload)
+    )
+    dist = play_highlights_dist_path(season, week)
+    write_json(dist, shapes)
+    return PlayHighlightsPublishResult(board=board, dist=dist)
 
 
 def publish_play_highlights_range(

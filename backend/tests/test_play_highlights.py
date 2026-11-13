@@ -8,8 +8,10 @@ import polars as pl
 from ballnet.play_highlights import (
     _board_from_peers,
     _fallback_keys,
+    _peer_keys_on_board,
     _score_play,
     _with_peer_keys,
+    build_play_league_shapes,
 )
 from ballnet.play_panel import _classify_plays
 from ballnet.scoring import snap_one_in_n
@@ -98,8 +100,9 @@ def test_play_rarity_empirical_inclusive_and_game_clock():
             }
         )
     )
-    board = _board_from_peers(peers, 2026, 2)
+    board, peer_map = _board_from_peers(peers, 2026, 2)
     assert board["top"]
+    assert "reception|pos:WR" in peer_map
     row = board["top"][0]
     assert row["value"] == 80.0
     assert row["peerN"] == 20
@@ -139,3 +142,39 @@ def test_score_play_falls_back_when_position_bucket_is_thin():
     assert row is not None
     assert row["peerKey"] == "reception|all"
     assert row["gameClock"] == "Q4 2:00"
+
+
+def test_play_league_shapes_include_board_peer_keys():
+    peers = _with_peer_keys(
+        pl.DataFrame(
+            {
+                "season": [2026] * 20,
+                "week": [1] * 19 + [2],
+                "game_id": ["g"] * 20,
+                "play_id": list(range(20)),
+                "play_class": ["reception"] * 20,
+                "metric_id": ["receiving_yards"] * 20,
+                "value": [10.0] * 19 + [80.0],
+                "player_id": ["p"] * 20,
+                "player_display_name": ["Star"] * 20,
+                "team": ["ARI"] * 20,
+                "opponent_team": ["LAC"] * 20,
+                "position_code": ["WR"] * 20,
+                "position_group": ["pass_catcher"] * 20,
+                "quarter": [1] * 20,
+                "clock": ["12:00"] * 20,
+                "game_seconds_remaining": [3400.0] * 20,
+                "touchdown": [False] * 20,
+                "desc": ["catch"] * 20,
+            }
+        )
+    )
+    board, peer_map = _board_from_peers(peers, 2026, 2)
+    keys = _peer_keys_on_board(board)
+    shapes = build_play_league_shapes(2026, 2, peer_map, keys)
+    assert shapes["scope"] == "play_all_time"
+    assert "reception|pos:WR" in shapes["stats"]
+    hist = shapes["stats"]["reception|pos:WR"]
+    assert hist["representation"] == "histogram"
+    assert hist["bins"]
+    assert hist["nSample"] == 20
