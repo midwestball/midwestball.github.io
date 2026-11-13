@@ -13,6 +13,7 @@ from ballnet.play_highlights import (
     _peer_keys_on_board,
     _score_play,
     _with_peer_keys,
+    _with_score_column,
     build_play_league_shapes,
 )
 from ballnet.play_panel import _classify_plays
@@ -240,6 +241,20 @@ def test_play_league_shapes_include_board_peer_keys():
     assert hist["representation"] == "histogram"
     assert hist["bins"]
     assert hist["nSample"] == 20
+
+
+def test_epa_mode_flips_defense_and_punt_return():
+    frame = pl.DataFrame(
+        {
+            "play_class": ["rush", "sack", "punt_return", "kick_return"],
+            "value": [10.0, 8.0, 20.0, 30.0],
+            "epa": [1.5, -2.0, -3.0, 2.5],
+        }
+    )
+    scored = _with_score_column(frame, "epa")
+    assert scored["_score"].to_list() == [1.5, 2.0, 3.0, 2.5]
+    raw = _with_score_column(frame, "raw")
+    assert raw["_score"].to_list() == [10.0, 8.0, 20.0, 30.0]
 
 
 def test_pass_and_reception_merge_into_one_completion_card():

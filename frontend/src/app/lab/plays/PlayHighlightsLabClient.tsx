@@ -14,7 +14,11 @@ import {
   type LeagueStatShape,
   type PlayLeagueShapesJson,
 } from "@/lib/ballnet-store";
-import type { PlayHighlightRow, PlayHighlightsBoardJson } from "@/lib/payload";
+import type {
+  PlayHighlightRow,
+  PlayHighlightsBoardJson,
+  PlayMetricMode,
+} from "@/lib/payload";
 import {
   formatOneInN,
   rarityStandingParts,
@@ -60,14 +64,22 @@ function regWeeksInSeason(season: number): number {
   return season >= 2021 ? 18 : 17;
 }
 
+function isEpaMode(row: PlayHighlightRow): boolean {
+  return row.metricMode === "epa" || row.statId === "epa";
+}
+
 function formatPlayValue(row: PlayHighlightRow): string {
-  if (row.playClass === "forced_fumble") return row.value.toFixed(1);
+  if (isEpaMode(row) || row.playClass === "forced_fumble") {
+    return row.value.toFixed(2);
+  }
   if (Number.isInteger(row.value)) return String(row.value);
   return row.value.toFixed(1);
 }
 
 function valueFormat(row: PlayHighlightRow): "count" | "one_decimal" {
-  return row.playClass === "forced_fumble" ? "one_decimal" : "count";
+  return isEpaMode(row) || row.playClass === "forced_fumble"
+    ? "one_decimal"
+    : "count";
 }
 
 function isCompletion(row: PlayHighlightRow): boolean {
@@ -101,6 +113,9 @@ function CompletionTitle({
 }
 
 function formatHeadline(row: PlayHighlightRow): string {
+  if (isEpaMode(row)) {
+    return `${formatPlayValue(row)} EPA`;
+  }
   if (isCompletion(row) || row.statLabel.startsWith("yard ")) {
     return `${formatPlayValue(row)} ${row.statLabel}`;
   }
@@ -534,6 +549,10 @@ export function PlayHighlightsLabClient({
       parseSeason(searchParams.get("season")),
     ),
   );
+  const [metricMode, setMetricMode] = useState<PlayMetricMode>(() => {
+    const raw = searchParams.get("metric");
+    return raw === "epa" ? "epa" : "raw";
+  });
   const [board, setBoard] = useState<PlayHighlightsBoardJson | null>(null);
   const [shapes, setShapes] = useState<PlayLeagueShapesJson | null>(null);
   const [loading, setLoading] = useState(true);
@@ -550,11 +569,12 @@ export function PlayHighlightsLabClient({
   }, [season, maxWeekFor]);
 
   const syncUrl = useCallback(
-    (nextSeason: number, nextWeek: number) => {
+    (nextSeason: number, nextWeek: number, nextMode: PlayMetricMode) => {
       writeBrowserQuery(
         patchQuery(searchParams, {
           season: String(nextSeason),
           week: String(nextWeek),
+          metric: nextMode === "epa" ? "epa" : null,
         }),
       );
     },
@@ -607,8 +627,8 @@ export function PlayHighlightsLabClient({
     setLoading(true);
     void (async () => {
       const [nextBoard, nextShapes] = await Promise.all([
-        fetchPlayHighlightsBoard(season, week),
-        fetchPlayLeagueShapes(season, week),
+        fetchPlayHighlightsBoard(season, week, metricMode),
+        fetchPlayLeagueShapes(season, week, metricMode),
       ]);
       if (cancelled) return;
       setBoard(nextBoard);
@@ -618,7 +638,7 @@ export function PlayHighlightsLabClient({
     return () => {
       cancelled = true;
     };
-  }, [season, week]);
+  }, [season, week, metricMode]);
 
   return (
     <main className="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-6 px-4 py-8">
@@ -653,7 +673,7 @@ export function PlayHighlightsLabClient({
               const nextWeek = Math.min(week, maxWeekFor(nextSeason));
               setSeason(nextSeason);
               setWeek(nextWeek);
-              syncUrl(nextSeason, nextWeek);
+              syncUrl(nextSeason, nextWeek, metricMode);
             }}
           >
             {seasons.map((y) => (
@@ -672,7 +692,7 @@ export function PlayHighlightsLabClient({
               selectionTouched.current = true;
               const nextWeek = Number(e.target.value);
               setWeek(nextWeek);
-              syncUrl(season, nextWeek);
+              syncUrl(season, nextWeek, metricMode);
             }}
           >
             {weeks.map((w) => (
@@ -682,6 +702,36 @@ export function PlayHighlightsLabClient({
             ))}
           </select>
         </label>
+        <div
+          className="flex items-center rounded-none border border-border"
+          role="group"
+          aria-label="Metric mode"
+        >
+          {(
+            [
+              ["raw", "Raw stat"],
+              ["epa", "EPA"],
+            ] as const
+          ).map(([mode, label]) => (
+            <button
+              key={mode}
+              type="button"
+              className={cn(
+                "px-2 py-1 text-sm",
+                metricMode === mode
+                  ? "bg-foreground text-background"
+                  : "bg-card text-muted-foreground hover:text-foreground",
+              )}
+              onClick={() => {
+                selectionTouched.current = true;
+                setMetricMode(mode);
+                syncUrl(season, week, mode);
+              }}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
       </div>
 
       {board?.missingPeerSeasons?.length ? (

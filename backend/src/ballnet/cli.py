@@ -964,6 +964,8 @@ def main(argv: list[str] | None = None) -> None:
                 {
                     "path": str(result.board),
                     "dist": str(result.dist) if result.dist else None,
+                    "pathEpa": str(result.board_epa) if result.board_epa else None,
+                    "distEpa": str(result.dist_epa) if result.dist_epa else None,
                     "season": board["season"],
                     "week": board["week"],
                     "top": len(board.get("top") or []),

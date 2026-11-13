@@ -33,6 +33,22 @@ PLAY_HIGHLIGHTS_START_YEAR = 2016
 
 TOP_N = 25
 PER_CLASS_N = 8
+ScoreMode = str  # "raw" | "epa"
+SCORE_MODES: tuple[str, ...] = ("raw", "epa")
+# Actor benefits when offense EPA falls — rank with -epa.
+_EPA_FLIP_CLASSES: frozenset[str] = frozenset(
+    {
+        "interception",
+        "sack",
+        "tackle_for_loss",
+        "fumble_recovery",
+        "forced_fumble",
+        "punt_return",
+    }
+)
+_EPA_STAT = StatDefinition(
+    "epa", "continuous", True, "one_decimal", -10, 10, None, "plays", 2016
+)
 # Board sections after pass+reception are paired into one completion card.
 BOARD_CLASSES: tuple[str, ...] = (
     "completion",
@@ -125,14 +141,18 @@ _PLAY_STATS: dict[str, StatDefinition] = {
 class PlayHighlightsPublishResult:
     board: Path
     dist: Path | None = None
+    board_epa: Path | None = None
+    dist_epa: Path | None = None
 
 
-def play_highlights_board_path(season: int, week: int) -> Path:
-    return PLAY_HIGHLIGHTS_DIR / str(season) / f"w{week}.json"
+def play_highlights_board_path(season: int, week: int, *, mode: ScoreMode = "raw") -> Path:
+    suffix = ".epa" if mode == "epa" else ""
+    return PLAY_HIGHLIGHTS_DIR / str(season) / f"w{week}{suffix}.json"
 
 
-def play_highlights_dist_path(season: int, week: int) -> Path:
-    return LEAGUE_PLAYS_DIR / str(season) / f"w{week}.json"
+def play_highlights_dist_path(season: int, week: int, *, mode: ScoreMode = "raw") -> Path:
+    suffix = ".epa" if mode == "epa" else ""
+    return LEAGUE_PLAYS_DIR / str(season) / f"w{week}{suffix}.json"
 
 
 def _fallback_keys(play_class: str, position_code: str | None, position_group: str | None) -> list[str]:
@@ -168,6 +188,23 @@ def _with_peer_keys(plays: pl.DataFrame) -> pl.DataFrame:
     )
 
 
+def _with_score_column(plays: pl.DataFrame, mode: ScoreMode) -> pl.DataFrame:
+    """Attach `_score` used for rarity: raw yards/etc. or actor-oriented EPA."""
+    if "epa" not in plays.columns:
+        plays = plays.with_columns(pl.lit(None).cast(pl.Float64).alias("epa"))
+    if mode == "raw":
+        return plays.with_columns(pl.col("value").cast(pl.Float64).alias("_score"))
+    # Actor-oriented EPA: flip for defense / punt returner.
+    return plays.with_columns(
+        pl.when(pl.col("epa").is_null() | ~pl.col("epa").is_finite())
+        .then(None)
+        .when(pl.col("play_class").is_in(sorted(_EPA_FLIP_CLASSES)))
+        .then(-pl.col("epa"))
+        .otherwise(pl.col("epa"))
+        .alias("_score")
+    )
+
+
 def _load_all_time_play_peers(season: int, week: int) -> tuple[pl.DataFrame, list[int]]:
     if season < PLAY_HIGHLIGHTS_START_YEAR:
         raise ValueError(
@@ -193,12 +230,13 @@ def _load_all_time_play_peers(season: int, week: int) -> tuple[pl.DataFrame, lis
 
 
 def _peer_value_map(peers: pl.DataFrame) -> dict[str, np.ndarray]:
-    """Sorted peer values for primary / group / all keys."""
+    """Sorted peer `_score` values for primary / group / all keys."""
     out: dict[str, np.ndarray] = {}
+    score_col = "_score" if "_score" in peers.columns else "value"
     for key_col in ("_peer_key_primary", "_peer_key_group", "_peer_key_all"):
         for key, group in peers.group_by(key_col):
             k = key[0] if isinstance(key, tuple) else key
-            vals = group["value"].drop_nulls().to_numpy().astype(float)
+            vals = group[score_col].drop_nulls().to_numpy().astype(float)
             if vals.size:
                 out[str(k)] = np.sort(vals)
     return out
@@ -207,14 +245,22 @@ def _peer_value_map(peers: pl.DataFrame) -> dict[str, np.ndarray]:
 def _score_play(
     rec: dict[str, Any],
     peer_map: dict[str, np.ndarray],
+    *,
+    mode: ScoreMode = "raw",
 ) -> dict[str, Any] | None:
     play_class = str(rec["play_class"])
     position_code = rec.get("position_code")
     position_group = rec.get("position_group")
-    val = float(rec["value"])
-    floor = _MIN_VALUE.get(play_class)
-    if floor is not None and val < floor:
+    score = rec.get("_score", rec.get("value"))
+    if score is None:
         return None
+    val = float(score)
+    if not np.isfinite(val):
+        return None
+    if mode == "raw":
+        floor = _MIN_VALUE.get(play_class)
+        if floor is not None and val < floor:
+            return None
 
     chosen_key = None
     peers = None
@@ -234,13 +280,19 @@ def _score_play(
     std = float(peers.std())
     z = (val - mean) / std if std > 1e-12 else None
     one_in_n = peers.size / favorable
-    metric_id = str(rec["metric_id"])
+    if mode == "epa":
+        metric_id = "epa"
+        stat_label = "EPA"
+    else:
+        metric_id = str(rec["metric_id"])
+        stat_label = _METRIC_LABELS.get(metric_id, metric_id.replace("_", " "))
     desc = rec.get("desc")
     if isinstance(desc, str) and len(desc) > 220:
         desc = desc[:217] + "…"
 
     quarter = rec.get("quarter")
     clock = rec.get("clock")
+    raw_value = rec.get("value")
     return {
         "playerId": rec["player_id"],
         "name": rec.get("player_display_name") or "",
@@ -250,8 +302,10 @@ def _score_play(
         "opponent": rec.get("opponent_team") or "",
         "playClass": play_class,
         "statId": metric_id,
-        "statLabel": _METRIC_LABELS.get(metric_id, metric_id.replace("_", " ")),
+        "statLabel": stat_label,
         "value": val,
+        "rawValue": float(raw_value) if raw_value is not None else None,
+        "metricMode": mode,
         "gameId": rec.get("game_id") or "",
         "playId": int(rec["play_id"]) if rec.get("play_id") is not None else None,
         "quarter": int(quarter) if quarter is not None else None,
@@ -323,7 +377,9 @@ def _combine_completion(pas: dict[str, Any], rec: dict[str, Any]) -> dict[str, A
         primary, secondary = rec, pas
         secondary_role = "pass"
 
-    yards = float(pas["value"])
+    mode = str(pas.get("metricMode") or rec.get("metricMode") or "raw")
+    # Same play → same scored value in both modes (yards or oriented EPA).
+    scored = float(pas["value"])
     out = dict(primary)
     out.update(
         {
@@ -334,9 +390,10 @@ def _combine_completion(pas: dict[str, Any], rec: dict[str, Any]) -> dict[str, A
             "team": pas.get("team") or rec.get("team") or "",
             "opponent": pas.get("opponent") or rec.get("opponent") or "",
             "playClass": "completion",
-            "statId": "completion_yards",
-            "statLabel": "yard pass",
-            "value": yards,
+            "statId": "epa" if mode == "epa" else "completion_yards",
+            "statLabel": "EPA" if mode == "epa" else "yard pass",
+            "value": scored,
+            "metricMode": mode,
             "passerId": pas["playerId"],
             "passerName": pas.get("name") or "",
             "passerPosition": pas.get("position") or "",
@@ -420,14 +477,16 @@ def _board_from_peers(
     season: int,
     week: int,
     *,
+    mode: ScoreMode = "raw",
     missing_peer_seasons: list[int] | None = None,
 ) -> tuple[dict[str, Any], dict[str, np.ndarray]]:
-    this_week = peers.filter((pl.col("season") == season) & (pl.col("week") == week))
-    peer_map = _peer_value_map(peers)
+    scored_peers = _with_score_column(peers, mode)
+    this_week = scored_peers.filter((pl.col("season") == season) & (pl.col("week") == week))
+    peer_map = _peer_value_map(scored_peers)
 
     all_rows: list[dict[str, Any]] = []
     for rec in this_week.iter_rows(named=True):
-        scored = _score_play(rec, peer_map)
+        scored = _score_play(rec, peer_map, mode=mode)
         if scored is not None:
             all_rows.append(scored)
 
@@ -462,6 +521,7 @@ def _board_from_peers(
         "week": week,
         "generatedAt": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
         "scope": "play_all_time",
+        "metricMode": mode,
         "peerWindowStartYear": PLAY_HIGHLIGHTS_START_YEAR,
         "top": top,
         "byClass": by_class,
@@ -520,6 +580,8 @@ def build_play_league_shapes(
     week: int,
     peer_map: dict[str, np.ndarray],
     peer_keys: set[str],
+    *,
+    mode: ScoreMode = "raw",
 ) -> dict[str, Any]:
     """Observed histograms for peer keys present on the board (expand charts)."""
     stats: dict[str, Any] = {}
@@ -528,7 +590,7 @@ def build_play_league_shapes(
         if sample is None or sample.size < MIN_PEER_N:
             continue
         play_class = _play_class_from_peer_key(key)
-        cat = _PLAY_STATS.get(play_class)
+        cat = _EPA_STAT if mode == "epa" else _PLAY_STATS.get(play_class)
         if cat is None:
             continue
         dens = build_league_density(np.asarray(sample, dtype=float), cat)
@@ -538,15 +600,18 @@ def build_play_league_shapes(
         "season": season,
         "asOfWeek": week,
         "scope": "play_all_time",
+        "metricMode": mode,
         "peerWindowStartYear": PLAY_HIGHLIGHTS_START_YEAR,
         "stats": stats,
     }
 
 
-def build_play_highlights_board(season: int, week: int) -> dict[str, Any]:
+def build_play_highlights_board(
+    season: int, week: int, *, mode: ScoreMode = "raw"
+) -> dict[str, Any]:
     peers, missing = _load_all_time_play_peers(season, week)
     payload, _peer_map = _board_from_peers(
-        peers, season, week, missing_peer_seasons=missing
+        peers, season, week, mode=mode, missing_peer_seasons=missing
     )
     return payload
 
@@ -565,18 +630,32 @@ def weeks_to_publish_plays(season: int) -> list[int]:
 def publish_play_highlights(season: int, week: int) -> PlayHighlightsPublishResult:
     ensure_data_dirs()
     peers, missing = _load_all_time_play_peers(season, week)
-    payload, peer_map = _board_from_peers(
-        peers, season, week, missing_peer_seasons=missing
-    )
-    board = play_highlights_board_path(season, week)
-    write_json(board, payload)
 
-    shapes = build_play_league_shapes(
-        season, week, peer_map, _peer_keys_on_board(payload)
+    paths: dict[str, Path] = {}
+    for mode in SCORE_MODES:
+        payload, peer_map = _board_from_peers(
+            peers, season, week, mode=mode, missing_peer_seasons=missing
+        )
+        board = play_highlights_board_path(season, week, mode=mode)
+        write_json(board, payload)
+        shapes = build_play_league_shapes(
+            season,
+            week,
+            peer_map,
+            _peer_keys_on_board(payload),
+            mode=mode,
+        )
+        dist = play_highlights_dist_path(season, week, mode=mode)
+        write_json(dist, shapes)
+        paths[mode] = board
+        paths[f"{mode}_dist"] = dist
+
+    return PlayHighlightsPublishResult(
+        board=paths["raw"],
+        dist=paths["raw_dist"],
+        board_epa=paths["epa"],
+        dist_epa=paths["epa_dist"],
     )
-    dist = play_highlights_dist_path(season, week)
-    write_json(dist, shapes)
-    return PlayHighlightsPublishResult(board=board, dist=dist)
 
 
 def publish_play_highlights_range(

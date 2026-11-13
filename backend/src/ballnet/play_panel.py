@@ -37,6 +37,7 @@ _CLASSIFIED_COLS: list[str] = [
     "play_class",
     "metric_id",
     "value",
+    "epa",
     "player_id",
     "player_display_name",
     "team",
@@ -56,6 +57,7 @@ _PANEL_COLS: list[str] = [
     "play_class",
     "metric_id",
     "value",
+    "epa",
     "player_id",
     "player_display_name",
     "team",
@@ -127,6 +129,7 @@ def _base_context(df: pl.DataFrame) -> pl.DataFrame:
     )
     td = _flag_true("touchdown") if "touchdown" in df.columns else pl.lit(False)
     desc = pl.col("desc").cast(pl.Utf8) if "desc" in df.columns else pl.lit(None).cast(pl.Utf8)
+    epa = pl.col("epa").cast(pl.Float64) if "epa" in df.columns else pl.lit(None).cast(pl.Float64)
     return df.with_columns(
         pl.col("season").cast(pl.Int32),
         pl.col("week").cast(pl.Int32),
@@ -137,6 +140,7 @@ def _base_context(df: pl.DataFrame) -> pl.DataFrame:
         gsr.alias("game_seconds_remaining"),
         td.alias("touchdown"),
         desc.alias("desc"),
+        epa.alias("epa"),
         pl.col("posteam").cast(pl.Utf8).alias("team"),
         pl.col("defteam").cast(pl.Utf8).alias("opponent_team"),
     )
@@ -524,6 +528,7 @@ def _classify_plays(pbp: pl.DataFrame) -> pl.DataFrame:
             "play_class": pl.Utf8,
             "metric_id": pl.Utf8,
             "value": pl.Float64,
+            "epa": pl.Float64,
             "player_id": pl.Utf8,
             "player_display_name": pl.Utf8,
             "team": pl.Utf8,

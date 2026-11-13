@@ -312,7 +312,7 @@ def upload_season_play_highlights(
     bucket: str = DEFAULT_BUCKET,
     **kwargs,
 ) -> UploadResult:
-    """Upload play board + peer histograms under `dists/league_plays/`."""
+    """Upload raw + EPA play boards and peer histograms."""
     week = as_of_week if as_of_week is not None else default_as_of_week(season)
     board = PLAY_HIGHLIGHTS_DIR / str(season) / f"w{week}.json"
     if not board.is_file():
@@ -324,6 +324,14 @@ def upload_season_play_highlights(
     if not dist.is_file():
         raise FileNotFoundError(f"missing local play league shapes {dist}")
     pairs.append((f"dists/league_plays/{season}/w{week}.json", dist))
+    board_epa = PLAY_HIGHLIGHTS_DIR / str(season) / f"w{week}.epa.json"
+    dist_epa = LEAGUE_PLAYS_DIR / str(season) / f"w{week}.epa.json"
+    if not board_epa.is_file():
+        raise FileNotFoundError(f"missing local EPA play highlights file {board_epa}")
+    if not dist_epa.is_file():
+        raise FileNotFoundError(f"missing local EPA play league shapes {dist_epa}")
+    pairs.append((f"highlights/plays/{season}/w{week}.epa.json", board_epa))
+    pairs.append((f"dists/league_plays/{season}/w{week}.epa.json", dist_epa))
     return upload_files(pairs, bucket=bucket, **kwargs)
 
 
@@ -333,7 +341,7 @@ def upload_all_play_highlights_for_season(
     bucket: str = DEFAULT_BUCKET,
     **kwargs,
 ) -> UploadResult:
-    """Upload every local play board + matching `dists/league_plays/` curves."""
+    """Upload every local raw play board (+ EPA twin) and league_plays curves."""
     season_dir = PLAY_HIGHLIGHTS_DIR / str(season)
     if not season_dir.is_dir():
         raise FileNotFoundError(f"missing play highlights dir {season_dir}")
@@ -343,6 +351,7 @@ def upload_all_play_highlights_for_season(
     pairs: list[tuple[str, Path]] = []
     for board in boards:
         week_token = board.stem
+        # Only raw boards (`w12.json`); skip `w12.epa.json` here and attach beside raw.
         if not week_token.startswith("w") or not week_token[1:].isdigit():
             continue
         week = int(week_token[1:])
@@ -350,6 +359,12 @@ def upload_all_play_highlights_for_season(
         dist = LEAGUE_PLAYS_DIR / str(season) / f"w{week}.json"
         if dist.is_file():
             pairs.append((f"dists/league_plays/{season}/w{week}.json", dist))
+        board_epa = season_dir / f"w{week}.epa.json"
+        if board_epa.is_file():
+            pairs.append((f"highlights/plays/{season}/w{week}.epa.json", board_epa))
+        dist_epa = LEAGUE_PLAYS_DIR / str(season) / f"w{week}.epa.json"
+        if dist_epa.is_file():
+            pairs.append((f"dists/league_plays/{season}/w{week}.epa.json", dist_epa))
     if not pairs:
         raise FileNotFoundError(f"no uploadable play highlight files for {season}")
     return upload_files(pairs, bucket=bucket, **kwargs)

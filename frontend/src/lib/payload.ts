@@ -82,6 +82,8 @@ export type HighlightsBoardJson = {
   byGroup: Record<string, HighlightRow[]>;
 };
 
+export type PlayMetricMode = "raw" | "epa";
+
 /** One row on a play-level rarity board (`highlights/plays/{season}/w{week}.json`). */
 export type PlayHighlightRow = {
   playerId: string;
@@ -127,6 +129,9 @@ export type PlayHighlightRow = {
   oneInN: number | null;
   rarityTier?: number | null;
   rank: number;
+  metricMode?: PlayMetricMode;
+  /** Raw yards/etc. when the board is ranked on EPA. */
+  rawValue?: number | null;
   also?: PlayHighlightRow[];
 };
 
@@ -136,6 +141,7 @@ export type PlayHighlightsBoardJson = {
   week: number;
   generatedAt?: string;
   scope?: "play_all_time";
+  metricMode?: PlayMetricMode;
   peerWindowStartYear?: number;
   missingPeerSeasons?: number[];
   top: PlayHighlightRow[];

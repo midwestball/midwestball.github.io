@@ -5,6 +5,7 @@ import type {
   PlayerPageJson,
   HighlightsBoardJson,
   PlayHighlightsBoardJson,
+  PlayMetricMode,
   LeaderboardJson,
 } from "@/lib/payload";
 import type { Point } from "@/lib/distribution";
@@ -297,14 +298,34 @@ export async function fetchHighlightsBoard(
   return loadHighlightsBoard({ season, week });
 }
 
-/** Play-level rarity board (`highlights/plays/{season}/w{week}.json`). */
+function playBoardObjectPath(
+  season: number,
+  week: number,
+  mode: PlayMetricMode = "raw",
+): string {
+  const suffix = mode === "epa" ? ".epa" : "";
+  return `highlights/plays/${season}/w${week}${suffix}.json`;
+}
+
+function playShapesObjectPath(
+  season: number,
+  week: number,
+  mode: PlayMetricMode = "raw",
+): string {
+  const suffix = mode === "epa" ? ".epa" : "";
+  return `dists/league_plays/${season}/w${week}${suffix}.json`;
+}
+
+/** Play-level rarity board (`highlights/plays/{season}/w{week}[.epa].json`). */
 export const loadPlayHighlightsBoard = cache(
   async (opts?: {
     season?: number;
     week?: number;
+    mode?: PlayMetricMode;
   }): Promise<PlayHighlightsBoardJson | null> => {
     let season = opts?.season;
     let week = opts?.week;
+    const mode = opts?.mode ?? "raw";
     if (season == null || week == null) {
       const current = await resolveCurrentPointer();
       if (!current) return null;
@@ -312,7 +333,7 @@ export const loadPlayHighlightsBoard = cache(
       week = week ?? current.week;
     }
     return loadStorageJson<PlayHighlightsBoardJson>(
-      `highlights/plays/${season}/w${week}.json`,
+      playBoardObjectPath(season, week, mode),
     );
   },
 );
@@ -321,16 +342,18 @@ export const loadPlayHighlightsBoard = cache(
 export async function fetchPlayHighlightsBoard(
   season: number,
   week: number,
+  mode: PlayMetricMode = "raw",
 ): Promise<PlayHighlightsBoardJson | null> {
-  return loadPlayHighlightsBoard({ season, week });
+  return loadPlayHighlightsBoard({ season, week, mode });
 }
 
-/** Play-level peer histograms (`dists/league_plays/{season}/w{week}.json`). */
+/** Play-level peer histograms (`dists/league_plays/{season}/w{week}[.epa].json`). */
 export type PlayLeagueShapesJson = {
   schemaVersion: 1;
   season: number;
   asOfWeek: number;
   scope?: "play_all_time";
+  metricMode?: PlayMetricMode;
   peerWindowStartYear?: number;
   /** Keyed by board `peerKey` (e.g. `reception|pos:WR`). */
   stats: Record<string, LeagueStatShape>;
@@ -340,9 +363,11 @@ export const loadPlayLeagueShapes = cache(
   async (opts?: {
     season?: number;
     week?: number;
+    mode?: PlayMetricMode;
   }): Promise<PlayLeagueShapesJson | null> => {
     let season = opts?.season;
     let week = opts?.week;
+    const mode = opts?.mode ?? "raw";
     if (season == null || week == null) {
       const current = await resolveCurrentPointer();
       if (!current) return null;
@@ -350,7 +375,7 @@ export const loadPlayLeagueShapes = cache(
       week = week ?? current.week;
     }
     return loadStorageJson<PlayLeagueShapesJson>(
-      `dists/league_plays/${season}/w${week}.json`,
+      playShapesObjectPath(season, week, mode),
     );
   },
 );
@@ -358,8 +383,9 @@ export const loadPlayLeagueShapes = cache(
 export async function fetchPlayLeagueShapes(
   season: number,
   week: number,
+  mode: PlayMetricMode = "raw",
 ): Promise<PlayLeagueShapesJson | null> {
-  return loadPlayLeagueShapes({ season, week });
+  return loadPlayLeagueShapes({ season, week, mode });
 }
 
 /** Client fetch for Stage H expand curves. */
