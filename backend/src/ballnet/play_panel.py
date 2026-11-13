@@ -20,6 +20,13 @@ PLAY_CLASSES: tuple[str, ...] = (
     "pass",
     "interception",
     "sack",
+    "kick_return",
+    "punt_return",
+    "field_goal",
+    "punt",
+    "tackle_for_loss",
+    "fumble_recovery",
+    "forced_fumble",
 )
 
 _CLASSIFIED_COLS: list[str] = [
@@ -294,6 +301,219 @@ def _classify_plays(pbp: pl.DataFrame) -> pl.DataFrame:
                     opponent_col="team",
                 )
             )
+
+    # Special teams / returns / kicking — continuous metrics only.
+    if "return_team" in base.columns:
+        return_opp = (
+            pl.when(pl.col("return_team") == pl.col("posteam"))
+            .then(pl.col("defteam"))
+            .otherwise(pl.col("posteam"))
+            .alias("_return_opp")
+        )
+    else:
+        return_opp = pl.col("opponent_team").alias("_return_opp")
+
+    if "kickoff_returner_player_id" in base.columns:
+        kr = base.filter(pl.col("kickoff_returner_player_id").is_not_null()).with_columns(
+            return_opp
+        )
+        if "return_team" in kr.columns:
+            kr = kr.with_columns(pl.col("return_team").cast(pl.Utf8).alias("_return_team"))
+        else:
+            kr = kr.with_columns(pl.col("team").alias("_return_team"))
+        ret_yards = (
+            pl.col("return_yards").fill_null(0.0)
+            if "return_yards" in kr.columns
+            else pl.lit(0.0)
+        )
+        name = (
+            "kickoff_returner_player_name"
+            if "kickoff_returner_player_name" in kr.columns
+            else "kickoff_returner_player_id"
+        )
+        frames.append(
+            _actor_frame(
+                kr,
+                play_class="kick_return",
+                metric_id="kick_return_yards",
+                player_id_col="kickoff_returner_player_id",
+                name_col=name,
+                value_expr=ret_yards,
+                team_col="_return_team",
+                opponent_col="_return_opp",
+            )
+        )
+
+    if "punt_returner_player_id" in base.columns:
+        pr = base.filter(pl.col("punt_returner_player_id").is_not_null()).with_columns(
+            return_opp
+        )
+        if "return_team" in pr.columns:
+            pr = pr.with_columns(pl.col("return_team").cast(pl.Utf8).alias("_return_team"))
+        else:
+            pr = pr.with_columns(pl.col("opponent_team").alias("_return_team"))
+        ret_yards = (
+            pl.col("return_yards").fill_null(0.0)
+            if "return_yards" in pr.columns
+            else pl.lit(0.0)
+        )
+        name = (
+            "punt_returner_player_name"
+            if "punt_returner_player_name" in pr.columns
+            else "punt_returner_player_id"
+        )
+        frames.append(
+            _actor_frame(
+                pr,
+                play_class="punt_return",
+                metric_id="punt_return_yards",
+                player_id_col="punt_returner_player_id",
+                name_col=name,
+                value_expr=ret_yards,
+                team_col="_return_team",
+                opponent_col="_return_opp",
+            )
+        )
+
+    if (
+        "field_goal_attempt" in base.columns
+        and "field_goal_result" in base.columns
+        and "kicker_player_id" in base.columns
+    ):
+        fg = base.filter(
+            _flag_true("field_goal_attempt") & (pl.col("field_goal_result") == "made")
+        )
+        dist = (
+            pl.col("kick_distance")
+            if "kick_distance" in fg.columns
+            else pl.lit(None).cast(pl.Float64)
+        )
+        name = "kicker_player_name" if "kicker_player_name" in fg.columns else "kicker_player_id"
+        frames.append(
+            _actor_frame(
+                fg,
+                play_class="field_goal",
+                metric_id="field_goal_distance",
+                player_id_col="kicker_player_id",
+                name_col=name,
+                value_expr=dist,
+            )
+        )
+
+    if "punt_attempt" in base.columns and "punter_player_id" in base.columns:
+        punts = base.filter(_flag_true("punt_attempt"))
+        dist = (
+            pl.col("kick_distance")
+            if "kick_distance" in punts.columns
+            else pl.lit(None).cast(pl.Float64)
+        )
+        name = "punter_player_name" if "punter_player_name" in punts.columns else "punter_player_id"
+        frames.append(
+            _actor_frame(
+                punts,
+                play_class="punt",
+                metric_id="punt_distance",
+                player_id_col="punter_player_id",
+                name_col=name,
+                value_expr=dist,
+            )
+        )
+
+    if "tackle_for_loss_1_player_id" in base.columns:
+        tfl = base.filter(pl.col("tackle_for_loss_1_player_id").is_not_null())
+        lost = (
+            (-pl.col("yards_gained").fill_null(0.0)).clip(lower_bound=0.0)
+            if "yards_gained" in tfl.columns
+            else pl.lit(0.0)
+        )
+        name = (
+            "tackle_for_loss_1_player_name"
+            if "tackle_for_loss_1_player_name" in tfl.columns
+            else "tackle_for_loss_1_player_id"
+        )
+        frames.append(
+            _actor_frame(
+                tfl,
+                play_class="tackle_for_loss",
+                metric_id="tfl_yards",
+                player_id_col="tackle_for_loss_1_player_id",
+                name_col=name,
+                value_expr=lost,
+                team_col="opponent_team",
+                opponent_col="team",
+            )
+        )
+
+    if (
+        "fumble_recovery_1_player_id" in base.columns
+        and "fumble_recovery_1_team" in base.columns
+        and "fumbled_1_team" in base.columns
+    ):
+        # Defensive / change-of-possession recoveries only.
+        fr = base.filter(
+            pl.col("fumble_recovery_1_player_id").is_not_null()
+            & pl.col("fumble_recovery_1_team").is_not_null()
+            & pl.col("fumbled_1_team").is_not_null()
+            & (pl.col("fumble_recovery_1_team") != pl.col("fumbled_1_team"))
+        ).with_columns(
+            pl.col("fumble_recovery_1_team").cast(pl.Utf8).alias("_fr_team"),
+            pl.col("fumbled_1_team").cast(pl.Utf8).alias("_fr_opp"),
+        )
+        yards = (
+            pl.col("fumble_recovery_1_yards").fill_null(0.0)
+            if "fumble_recovery_1_yards" in fr.columns
+            else pl.lit(0.0)
+        )
+        name = (
+            "fumble_recovery_1_player_name"
+            if "fumble_recovery_1_player_name" in fr.columns
+            else "fumble_recovery_1_player_id"
+        )
+        frames.append(
+            _actor_frame(
+                fr,
+                play_class="fumble_recovery",
+                metric_id="fumble_recovery_yards",
+                player_id_col="fumble_recovery_1_player_id",
+                name_col=name,
+                value_expr=yards,
+                team_col="_fr_team",
+                opponent_col="_fr_opp",
+            )
+        )
+
+    if "forced_fumble_player_1_player_id" in base.columns:
+        ff = base.filter(pl.col("forced_fumble_player_1_player_id").is_not_null())
+        if "forced_fumble_player_1_team" in ff.columns:
+            ff = ff.with_columns(
+                pl.col("forced_fumble_player_1_team").cast(pl.Utf8).alias("_ff_team"),
+                pl.when(pl.col("forced_fumble_player_1_team") == pl.col("posteam"))
+                .then(pl.col("defteam"))
+                .otherwise(pl.col("posteam"))
+                .alias("_ff_opp"),
+            )
+            team_col, opp_col = "_ff_team", "_ff_opp"
+        else:
+            team_col, opp_col = "opponent_team", "team"
+        # Continuous proxy: damage done to the offense (higher better for defense).
+        value = (-pl.col("epa")) if "epa" in ff.columns else pl.lit(0.0)
+        name = (
+            "forced_fumble_player_1_player_name"
+            if "forced_fumble_player_1_player_name" in ff.columns
+            else "forced_fumble_player_1_player_id"
+        )
+        frames.append(
+            _actor_frame(
+                ff,
+                play_class="forced_fumble",
+                metric_id="forced_fumble_epa",
+                player_id_col="forced_fumble_player_1_player_id",
+                name_col=name,
+                value_expr=value,
+                team_col=team_col,
+                opponent_col=opp_col,
+            )
+        )
 
     if not frames:
         empty_schema: dict[str, pl.DataType] = {

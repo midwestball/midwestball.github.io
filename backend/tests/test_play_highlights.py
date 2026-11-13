@@ -7,7 +7,9 @@ import polars as pl
 
 from ballnet.play_highlights import (
     _board_from_peers,
+    _combine_completion,
     _fallback_keys,
+    _merge_pass_reception_pairs,
     _peer_keys_on_board,
     _score_play,
     _with_peer_keys,
@@ -65,6 +67,66 @@ def test_classify_plays_splits_types_and_keeps_clock():
     sack = plays.filter(pl.col("play_class") == "sack")
     assert sack["value"].to_list() == [8.0]
     assert sack["team"].to_list() == ["LAC"]  # defender team
+
+
+def test_classify_special_teams_and_defense_extras():
+    pbp = pl.DataFrame(
+        {
+            "season": [2026] * 6,
+            "week": [1] * 6,
+            "game_id": ["g1"] * 6,
+            "play_id": [10, 11, 12, 13, 14, 15],
+            "posteam": ["ARI", "LAC", "ARI", "ARI", "LAC", "LAC"],
+            "defteam": ["LAC", "ARI", "LAC", "LAC", "ARI", "ARI"],
+            "qtr": [1] * 6,
+            "time": ["10:00"] * 6,
+            "game_seconds_remaining": [3000.0] * 6,
+            "touchdown": [0] * 6,
+            "desc": ["kr", "pr", "fg", "punt", "tfl", "ff"],
+            "complete_pass": [0] * 6,
+            "rush_attempt": [0] * 6,
+            "interception": [0] * 6,
+            "sack": [0] * 6,
+            "return_team": ["ARI", "ARI", None, None, None, None],
+            "kickoff_returner_player_id": ["kr1", None, None, None, None, None],
+            "kickoff_returner_player_name": ["KickR", None, None, None, None, None],
+            "punt_returner_player_id": [None, "pr1", None, None, None, None],
+            "punt_returner_player_name": [None, "PuntR", None, None, None, None],
+            "return_yards": [40.0, 12.0, None, None, None, None],
+            "field_goal_attempt": [0, 0, 1, 0, 0, 0],
+            "field_goal_result": [None, None, "made", None, None, None],
+            "kicker_player_id": [None, None, "k1", None, None, None],
+            "kicker_player_name": [None, None, "Kick", None, None, None],
+            "punt_attempt": [0, 0, 0, 1, 0, 0],
+            "punter_player_id": [None, None, None, "p1", None, None],
+            "punter_player_name": [None, None, None, "Punt", None, None],
+            "kick_distance": [None, None, 54.0, 61.0, None, None],
+            "tackle_for_loss_1_player_id": [None, None, None, None, "tfl1", None],
+            "tackle_for_loss_1_player_name": [None, None, None, None, "TFL", None],
+            "yards_gained": [0.0, 0.0, 0.0, 0.0, -6.0, -3.0],
+            "fumble_recovery_1_player_id": [None] * 6,
+            "fumble_recovery_1_team": [None] * 6,
+            "fumbled_1_team": [None] * 6,
+            "forced_fumble_player_1_player_id": [None, None, None, None, None, "ff1"],
+            "forced_fumble_player_1_player_name": [None, None, None, None, None, "Force"],
+            "forced_fumble_player_1_team": [None, None, None, None, None, "ARI"],
+            "epa": [0.0, 0.0, 0.0, 0.0, -2.0, -4.5],
+        }
+    )
+    plays = _classify_plays(pbp)
+    by = {
+        r["play_class"]: r["value"]
+        for r in plays.select(["play_class", "value"]).iter_rows(named=True)
+    }
+    assert by["kick_return"] == 40.0
+    assert by["punt_return"] == 12.0
+    assert by["field_goal"] == 54.0
+    assert by["punt"] == 61.0
+    assert by["tackle_for_loss"] == 6.0
+    assert by["forced_fumble"] == 4.5
+    kr = plays.filter(pl.col("play_class") == "kick_return")
+    assert kr["team"].to_list() == ["ARI"]
+    assert kr["opponent_team"].to_list() == ["LAC"]
 
 
 def test_fallback_keys_prefer_position_then_group():
@@ -178,3 +240,65 @@ def test_play_league_shapes_include_board_peer_keys():
     assert hist["representation"] == "histogram"
     assert hist["bins"]
     assert hist["nSample"] == 20
+
+
+def test_pass_and_reception_merge_into_one_completion_card():
+    pas = {
+        "playerId": "qb1",
+        "name": "J.McCarthy",
+        "position": "QB",
+        "positionGroup": "qb",
+        "team": "MIN",
+        "opponent": "BAL",
+        "playClass": "pass",
+        "statId": "passing_yards",
+        "statLabel": "passing yards",
+        "value": 66.0,
+        "gameId": "g1",
+        "playId": 99,
+        "quarter": 4,
+        "clock": "08:24",
+        "gameClock": "Q4 08:24",
+        "touchdown": False,
+        "description": "deep",
+        "zScore": 2.0,
+        "rarityScore": 0.9,
+        "favorableCount": 1,
+        "peerN": 10,
+        "peerKey": "pass|pos:QB",
+        "oneInN": 10,
+        "rarityTier": 10,
+        "rarityMethod": "empirical-inclusive-v2",
+    }
+    rec = {
+        **pas,
+        "playerId": "te1",
+        "name": "I.Likely",
+        "position": "TE",
+        "positionGroup": "pass_catcher",
+        "playClass": "reception",
+        "statId": "receiving_yards",
+        "statLabel": "receiving yards",
+        "rarityScore": 0.99,
+        "favorableCount": 1,
+        "peerN": 100,
+        "peerKey": "reception|pos:TE",
+        "oneInN": 100,
+        "rarityTier": 100,
+    }
+    combined = _combine_completion(pas, rec)
+    assert combined["playClass"] == "completion"
+    assert combined["passerName"] == "J.McCarthy"
+    assert combined["receiverName"] == "I.Likely"
+    assert combined["name"] == "J.McCarthy → I.Likely"
+    assert combined["value"] == 66.0
+    assert combined["statLabel"] == "yard pass"
+    # Rarer TE reception drives primary chip / histogram.
+    assert combined["peerKey"] == "reception|pos:TE"
+    assert combined["rarityTier"] == 100
+    assert combined["secondaryPeerKey"] == "pass|pos:QB"
+    assert combined["secondaryRole"] == "pass"
+
+    merged = _merge_pass_reception_pairs([pas, rec])
+    assert len(merged) == 1
+    assert merged[0]["playClass"] == "completion"

@@ -107,6 +107,20 @@ export type PlayHighlightRow = {
   zScore: number;
   peerN: number;
   peerKey?: string;
+  /** Present on `completion` cards — the other actor's peer bucket. */
+  secondaryPeerKey?: string;
+  secondaryRole?: "pass" | "reception" | string;
+  secondaryFavorableCount?: number;
+  secondaryPeerN?: number;
+  secondaryOneInN?: number;
+  secondaryRarityTier?: number | null;
+  secondaryRarityScore?: number;
+  passerId?: string;
+  passerName?: string;
+  passerPosition?: string;
+  receiverId?: string;
+  receiverName?: string;
+  receiverPosition?: string;
   favorableCount?: number;
   rarityScore?: number;
   rarityMethod?: string;

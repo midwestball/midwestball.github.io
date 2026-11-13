@@ -28,20 +28,32 @@ import { TeamAbbr } from "@/components/TeamAbbr";
 import { HistogramChart } from "@/components/stat-row/HistogramChart";
 import { cn } from "@/lib/utils";
 
-const PLAY_CLASSES = [
-  "reception",
+const BOARD_CLASSES = [
+  "completion",
   "rush",
-  "pass",
   "interception",
   "sack",
+  "kick_return",
+  "punt_return",
+  "field_goal",
+  "punt",
+  "tackle_for_loss",
+  "fumble_recovery",
+  "forced_fumble",
 ] as const;
 
 const CLASS_LABEL: Record<string, string> = {
-  reception: "Receptions",
+  completion: "Completions",
   rush: "Rushes",
-  pass: "Pass completions",
   interception: "Interceptions",
   sack: "Sacks",
+  kick_return: "Kick returns",
+  punt_return: "Punt returns",
+  field_goal: "Field goals",
+  punt: "Punts",
+  tackle_for_loss: "Tackles for loss",
+  fumble_recovery: "Fumble recoveries",
+  forced_fumble: "Forced fumbles",
 };
 
 function regWeeksInSeason(season: number): number {
@@ -49,8 +61,72 @@ function regWeeksInSeason(season: number): number {
 }
 
 function formatPlayValue(row: PlayHighlightRow): string {
+  if (row.playClass === "forced_fumble") return row.value.toFixed(1);
   if (Number.isInteger(row.value)) return String(row.value);
   return row.value.toFixed(1);
+}
+
+function valueFormat(row: PlayHighlightRow): "count" | "one_decimal" {
+  return row.playClass === "forced_fumble" ? "one_decimal" : "count";
+}
+
+function isCompletion(row: PlayHighlightRow): boolean {
+  return (
+    row.playClass === "completion" &&
+    Boolean(row.passerId) &&
+    Boolean(row.receiverId)
+  );
+}
+
+function CompletionTitle({
+  row,
+  season,
+}: {
+  row: PlayHighlightRow;
+  season: number;
+}) {
+  return (
+    <>
+      <PlayerComparisonLink playerId={row.passerId!} season={season}>
+        {row.passerName || "Passer"}
+      </PlayerComparisonLink>
+      <span className="mx-1 text-muted-foreground" aria-hidden>
+        →
+      </span>
+      <PlayerComparisonLink playerId={row.receiverId!} season={season}>
+        {row.receiverName || "Receiver"}
+      </PlayerComparisonLink>
+    </>
+  );
+}
+
+function formatHeadline(row: PlayHighlightRow): string {
+  if (isCompletion(row) || row.statLabel.startsWith("yard ")) {
+    return `${formatPlayValue(row)} ${row.statLabel}`;
+  }
+  if (row.playClass === "forced_fumble") {
+    return `${formatPlayValue(row)} EPA forced fumble`;
+  }
+  return row.statLabel;
+}
+
+function peerBucketCopy(row: PlayHighlightRow): string {
+  if (row.playClass === "completion") {
+    const primary =
+      row.peerKey?.startsWith("reception|")
+        ? `receptions by ${row.receiverPosition || row.position || "receiver"}`
+        : row.peerKey?.startsWith("pass|")
+          ? `completions by ${row.passerPosition || "QB"}`
+          : "completions";
+    return primary;
+  }
+  if (row.peerKey?.includes("|pos:")) {
+    return `${row.playClass} plays by ${row.position}`;
+  }
+  if (row.peerKey?.includes("|group:")) {
+    return `${row.playClass} plays in this position group`;
+  }
+  return `${row.playClass} plays`;
 }
 
 function RarityChip({ tier }: { tier: number }) {
@@ -69,32 +145,47 @@ function RarityChip({ tier }: { tier: number }) {
   );
 }
 
-function shapeForRow(
-  row: PlayHighlightRow,
+function shapeForKey(
+  peerKey: string | undefined,
   shapes: PlayLeagueShapesJson | null,
 ): LeagueStatShape | null {
-  if (!shapes || !row.peerKey) return null;
-  return shapes.stats?.[row.peerKey] ?? null;
+  if (!shapes || !peerKey) return null;
+  return shapes.stats?.[peerKey] ?? null;
 }
 
-function PerformanceBlock({
-  row,
+function HistogramBlock({
+  label,
+  markerName,
+  value,
+  peerKey,
+  favorableCount,
+  peerN,
+  bucketCopy,
+  tier,
   shapes,
+  format = "count",
 }: {
-  row: PlayHighlightRow;
+  label: string;
+  markerName: string;
+  value: number;
+  peerKey?: string;
+  favorableCount?: number;
+  peerN?: number;
+  bucketCopy: string;
+  tier: number | null | undefined;
   shapes: PlayLeagueShapesJson | null;
+  format?: "count" | "one_decimal";
 }) {
-  const tier = resolveRarityTier(row);
-  const shape = shapeForRow(row, shapes);
+  const shape = shapeForKey(peerKey, shapes);
   const color = tier != null ? rarityTierColor(tier) : "rgb(161, 161, 170)";
   const labelColor =
     tier != null ? rarityTierContrastText(tier) : "#ffffff";
   const standing =
     tier != null
       ? rarityStandingParts({
-          label: row.statLabel,
-          playerValue: row.value,
-          format: "count",
+          label,
+          playerValue: value,
+          format,
           higherIsBetter: true,
           rarityTier: tier,
         })
@@ -102,18 +193,8 @@ function PerformanceBlock({
 
   return (
     <div className="space-y-1">
-      <p className="text-[11px] leading-4 text-muted-foreground">
-        <span className="font-medium text-text-secondary">{row.statLabel}</span>
-        <span aria-hidden> · </span>
-        <span className="tabular-nums text-text-secondary">
-          {formatPlayValue(row)}
-        </span>
-        {row.gameClock ? (
-          <>
-            <span aria-hidden> · </span>
-            <span className="tabular-nums">{row.gameClock}</span>
-          </>
-        ) : null}
+      <p className="text-[11px] font-semibold tracking-[0.08em] text-muted-foreground uppercase">
+        {label}
       </p>
       {standing && tier != null ? (
         <p className="text-[11px] leading-4 text-muted-foreground">
@@ -130,25 +211,18 @@ function PerformanceBlock({
           {standing.rest}
         </p>
       ) : null}
-      {row.rarityMethod === "empirical-inclusive-v2" &&
-      row.favorableCount != null ? (
+      {favorableCount != null && peerN != null ? (
         <p className="text-xs text-text-secondary">
-          {row.favorableCount} of {row.peerN} qualifying{" "}
-          {row.playClass} plays
-          {row.peerKey?.includes("|pos:")
-            ? ` by ${row.position}`
-            : row.peerKey?.includes("|group:")
-              ? " in this position group"
-              : ""}{" "}
-          were at least this favorable.
+          {favorableCount} of {peerN} qualifying {bucketCopy} were at least
+          this favorable.
         </p>
       ) : null}
       {shape?.bins?.length ? (
         <HistogramChart
-          label={row.statLabel}
+          label={label}
           bins={shape.bins}
-          format="count"
-          markers={[{ name: row.name, value: row.value, color }]}
+          format={format}
+          markers={[{ name: markerName, value, color }]}
           interactive
           shadeColor={color}
         />
@@ -157,6 +231,85 @@ function PerformanceBlock({
           Waiting on a play-level peer histogram for this bucket.
         </div>
       )}
+    </div>
+  );
+}
+
+function PerformanceBlock({
+  row,
+  shapes,
+}: {
+  row: PlayHighlightRow;
+  shapes: PlayLeagueShapesJson | null;
+}) {
+  const tier = resolveRarityTier(row);
+  const secondaryTier = row.secondaryRarityTier ?? null;
+  const primaryLabel =
+    row.playClass === "completion"
+      ? row.peerKey?.startsWith("reception|")
+        ? `As catch (${row.receiverPosition || "receiver"})`
+        : `As throw (${row.passerPosition || "QB"})`
+      : row.statLabel;
+  const secondaryLabel =
+    row.secondaryRole === "reception"
+      ? `As catch (${row.receiverPosition || "receiver"})`
+      : row.secondaryRole === "pass"
+        ? `As throw (${row.passerPosition || "QB"})`
+        : "Other perspective";
+
+  return (
+    <div className="space-y-3">
+      <p className="text-[11px] leading-4 text-muted-foreground">
+        <span className="font-medium text-text-secondary">
+          {formatHeadline(row)}
+        </span>
+        {row.gameClock ? (
+          <>
+            <span aria-hidden> · </span>
+            <span className="tabular-nums">{row.gameClock}</span>
+          </>
+        ) : null}
+      </p>
+      <HistogramBlock
+        label={primaryLabel}
+        markerName={
+          isCompletion(row)
+            ? row.peerKey?.startsWith("reception|")
+              ? row.receiverName || row.name
+              : row.passerName || row.name
+            : row.name
+        }
+        value={row.value}
+        peerKey={row.peerKey}
+        favorableCount={row.favorableCount}
+        peerN={row.peerN}
+        bucketCopy={peerBucketCopy(row)}
+        tier={tier}
+        shapes={shapes}
+        format={valueFormat(row)}
+      />
+      {row.secondaryPeerKey ? (
+        <HistogramBlock
+          label={secondaryLabel}
+          markerName={
+            row.secondaryRole === "reception"
+              ? row.receiverName || row.name
+              : row.passerName || row.name
+          }
+          value={row.value}
+          peerKey={row.secondaryPeerKey}
+          favorableCount={row.secondaryFavorableCount}
+          peerN={row.secondaryPeerN}
+          bucketCopy={
+            row.secondaryRole === "reception"
+              ? `receptions by ${row.receiverPosition || "receiver"}`
+              : `completions by ${row.passerPosition || "QB"}`
+          }
+          tier={secondaryTier}
+          shapes={shapes}
+          format={valueFormat(row)}
+        />
+      ) : null}
     </div>
   );
 }
@@ -202,12 +355,20 @@ function PlayRowExpandable({
             <span className="mr-2 text-xs tabular-nums text-muted-foreground">
               {row.rank}
             </span>
-            <PlayerComparisonLink playerId={row.playerId} season={season}>
-              {row.name}
-            </PlayerComparisonLink>
+            {isCompletion(row) ? (
+              <CompletionTitle row={row} season={season} />
+            ) : (
+              <PlayerComparisonLink playerId={row.playerId} season={season}>
+                {row.name}
+              </PlayerComparisonLink>
+            )}
           </p>
           <p className="flex flex-wrap items-center gap-x-1.5 text-sm text-muted-foreground">
-            <span>{row.position || "—"}</span>
+            <span>
+              {isCompletion(row)
+                ? `${row.passerPosition || "QB"} → ${row.receiverPosition || row.position || "—"}`
+                : row.position || "—"}
+            </span>
             <span aria-hidden>·</span>
             <TeamAbbr team={row.team} />
             {row.opponent ? (
@@ -217,7 +378,7 @@ function PlayRowExpandable({
               </>
             ) : null}
             <span aria-hidden>·</span>
-            <span className="truncate">{row.statLabel}</span>
+            <span className="truncate">{formatHeadline(row)}</span>
             {clock ? (
               <>
                 <span aria-hidden>·</span>
@@ -562,7 +723,7 @@ export function PlayHighlightsLabClient({
               emptyLabel="No rare plays for this week."
             />
           </section>
-          {PLAY_CLASSES.map((playClass) => (
+          {BOARD_CLASSES.map((playClass) => (
             <section key={playClass} className="space-y-2">
               <h2 className="text-sm font-semibold tracking-[0.08em] text-muted-foreground uppercase">
                 {CLASS_LABEL[playClass] ?? playClass}

@@ -33,10 +33,27 @@ PLAY_HIGHLIGHTS_START_YEAR = 2016
 
 TOP_N = 25
 PER_CLASS_N = 8
+# Board sections after pass+reception are paired into one completion card.
+BOARD_CLASSES: tuple[str, ...] = (
+    "completion",
+    "rush",
+    "interception",
+    "sack",
+    "kick_return",
+    "punt_return",
+    "field_goal",
+    "punt",
+    "tackle_for_loss",
+    "fumble_recovery",
+    "forced_fumble",
+)
 # Rare-event spam floors applied only when selecting board rows.
 _MIN_VALUE: dict[str, float] = {
     "interception": 1.0,
     "sack": 1.0,
+    "punt_return": 5.0,
+    "tackle_for_loss": 1.0,
+    "fumble_recovery": 1.0,
 }
 
 _METRIC_LABELS: dict[str, str] = {
@@ -45,6 +62,14 @@ _METRIC_LABELS: dict[str, str] = {
     "passing_yards": "passing yards",
     "return_yards": "INT return yards",
     "sack_yards": "sack yards",
+    "completion_yards": "yard pass",
+    "kick_return_yards": "yard kick return",
+    "punt_return_yards": "yard punt return",
+    "field_goal_distance": "yard field goal",
+    "punt_distance": "yard punt",
+    "tfl_yards": "yard TFL",
+    "fumble_recovery_yards": "yard fumble return",
+    "forced_fumble_epa": "EPA forced fumble",
 }
 
 # Synthetic defs for histogram binning only — not frontend catalog ids.
@@ -63,6 +88,35 @@ _PLAY_STATS: dict[str, StatDefinition] = {
     ),
     "sack": StatDefinition(
         "sack_yards", "discrete", True, "count", 0, 40, None, "plays", 2016, bin_width=1
+    ),
+    "kick_return": StatDefinition(
+        "kick_return_yards", "discrete", True, "count", 0, 110, None, "plays", 2016, bin_width=1
+    ),
+    "punt_return": StatDefinition(
+        "punt_return_yards", "discrete", True, "count", -10, 100, None, "plays", 2016, bin_width=1
+    ),
+    "field_goal": StatDefinition(
+        "field_goal_distance", "discrete", True, "count", 15, 70, None, "plays", 2016, bin_width=1
+    ),
+    "punt": StatDefinition(
+        "punt_distance", "discrete", True, "count", 0, 90, None, "plays", 2016, bin_width=1
+    ),
+    "tackle_for_loss": StatDefinition(
+        "tfl_yards", "discrete", True, "count", 0, 25, None, "plays", 2016, bin_width=1
+    ),
+    "fumble_recovery": StatDefinition(
+        "fumble_recovery_yards", "discrete", True, "count", 0, 100, None, "plays", 2016, bin_width=1
+    ),
+    "forced_fumble": StatDefinition(
+        "forced_fumble_epa",
+        "continuous",
+        True,
+        "one_decimal",
+        -5,
+        15,
+        None,
+        "plays",
+        2016,
     ),
 }
 
@@ -223,19 +277,29 @@ def _score_play(
     }
 
 
+def _collapse_key(row: dict[str, Any]) -> str:
+    """Completions stay one card per play; other classes nest by player."""
+    if row.get("playClass") == "completion":
+        game_id = row.get("gameId") or ""
+        play_id = row.get("playId")
+        if game_id and play_id is not None:
+            return f"play:{game_id}:{play_id}"
+    return f"player:{row.get('playerId')}"
+
+
 def _collapse_by_player(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    by_player: dict[str, list[dict[str, Any]]] = {}
+    by_key: dict[str, list[dict[str, Any]]] = {}
     order: list[str] = []
     for row in rows:
-        pid = str(row["playerId"])
-        if pid not in by_player:
-            by_player[pid] = []
-            order.append(pid)
-        by_player[pid].append(row)
+        key = _collapse_key(row)
+        if key not in by_key:
+            by_key[key] = []
+            order.append(key)
+        by_key[key].append(row)
 
     out: list[dict[str, Any]] = []
-    for pid in order:
-        group_rows = by_player[pid]
+    for key in order:
+        group_rows = by_key[key]
         primary = dict(group_rows[0])
         also = []
         for secondary in group_rows[1:]:
@@ -247,6 +311,108 @@ def _collapse_by_player(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
             primary["also"] = also
         out.append(primary)
     return out
+
+
+def _combine_completion(pas: dict[str, Any], rec: dict[str, Any]) -> dict[str, Any]:
+    """One board card for a completed pass: passer → receiver."""
+    # Rank / primary histogram from the rarer of the two peer perspectives.
+    if float(pas.get("rarityScore") or 0) >= float(rec.get("rarityScore") or 0):
+        primary, secondary = pas, rec
+        secondary_role = "reception"
+    else:
+        primary, secondary = rec, pas
+        secondary_role = "pass"
+
+    yards = float(pas["value"])
+    out = dict(primary)
+    out.update(
+        {
+            "playerId": pas["playerId"],
+            "name": f"{pas.get('name') or ''} → {rec.get('name') or ''}".strip(),
+            "position": rec.get("position") or pas.get("position") or "",
+            "positionGroup": rec.get("positionGroup") or pas.get("positionGroup") or "",
+            "team": pas.get("team") or rec.get("team") or "",
+            "opponent": pas.get("opponent") or rec.get("opponent") or "",
+            "playClass": "completion",
+            "statId": "completion_yards",
+            "statLabel": "yard pass",
+            "value": yards,
+            "passerId": pas["playerId"],
+            "passerName": pas.get("name") or "",
+            "passerPosition": pas.get("position") or "",
+            "receiverId": rec["playerId"],
+            "receiverName": rec.get("name") or "",
+            "receiverPosition": rec.get("position") or "",
+            "peerKey": primary.get("peerKey"),
+            "secondaryPeerKey": secondary.get("peerKey"),
+            "secondaryRole": secondary_role,
+            "secondaryFavorableCount": secondary.get("favorableCount"),
+            "secondaryPeerN": secondary.get("peerN"),
+            "secondaryOneInN": secondary.get("oneInN"),
+            "secondaryRarityTier": secondary.get("rarityTier"),
+            "secondaryRarityScore": secondary.get("rarityScore"),
+            "zScore": primary.get("zScore") or 0.0,
+            "rarityScore": primary.get("rarityScore"),
+            "favorableCount": primary.get("favorableCount"),
+            "peerN": primary.get("peerN"),
+            "oneInN": primary.get("oneInN"),
+            "rarityTier": primary.get("rarityTier"),
+            "rarityMethod": primary.get("rarityMethod"),
+            "touchdown": bool(pas.get("touchdown") or rec.get("touchdown")),
+            "description": pas.get("description") or rec.get("description"),
+            "gameId": pas.get("gameId") or rec.get("gameId") or "",
+            "playId": pas.get("playId") if pas.get("playId") is not None else rec.get("playId"),
+            "quarter": pas.get("quarter") if pas.get("quarter") is not None else rec.get("quarter"),
+            "clock": pas.get("clock") or rec.get("clock"),
+            "gameClock": pas.get("gameClock") or rec.get("gameClock"),
+            "gameSecondsRemaining": pas.get("gameSecondsRemaining")
+            if pas.get("gameSecondsRemaining") is not None
+            else rec.get("gameSecondsRemaining"),
+        }
+    )
+    out.pop("also", None)
+    return out
+
+
+def _merge_pass_reception_pairs(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Collapse same-play pass + reception actor rows into completion cards."""
+    paired: dict[tuple[str, int], dict[str, dict[str, Any]]] = {}
+    others: list[dict[str, Any]] = []
+    for row in rows:
+        play_class = row.get("playClass")
+        game_id = row.get("gameId") or ""
+        play_id = row.get("playId")
+        if play_class in ("pass", "reception") and game_id and play_id is not None:
+            key = (str(game_id), int(play_id))
+            bucket = paired.setdefault(key, {})
+            # First win keeps the highest-rarity row if duplicates appear.
+            prior = bucket.get(str(play_class))
+            if prior is None or float(row.get("rarityScore") or 0) > float(
+                prior.get("rarityScore") or 0
+            ):
+                bucket[str(play_class)] = row
+        else:
+            others.append(row)
+
+    merged: list[dict[str, Any]] = list(others)
+    for parts in paired.values():
+        pas = parts.get("pass")
+        rec = parts.get("reception")
+        if pas is not None and rec is not None:
+            merged.append(_combine_completion(pas, rec))
+        else:
+            merged.extend(parts.values())
+    return merged
+
+
+def _rows_for_board_class(rows: list[dict[str, Any]], board_class: str) -> list[dict[str, Any]]:
+    if board_class == "completion":
+        return [
+            r
+            for r in rows
+            if r.get("playClass") in ("completion", "pass", "reception")
+        ]
+    return [r for r in rows if r.get("playClass") == board_class]
 
 
 def _board_from_peers(
@@ -265,19 +431,20 @@ def _board_from_peers(
         if scored is not None:
             all_rows.append(scored)
 
+    all_rows = _merge_pass_reception_pairs(all_rows)
     all_rows.sort(
         key=lambda r: (-r["rarityScore"], r["favorableCount"], r["playerId"], r["playId"] or 0)
     )
 
-    by_class: dict[str, list[dict[str, Any]]] = {c: [] for c in PLAY_CLASSES}
+    by_class: dict[str, list[dict[str, Any]]] = {c: [] for c in BOARD_CLASSES}
     balanced: list[dict[str, Any]] = []
-    for play_class in PLAY_CLASSES:
-        class_rows = [r for r in all_rows if r["playClass"] == play_class]
+    for board_class in BOARD_CLASSES:
+        class_rows = _rows_for_board_class(all_rows, board_class)
         collapsed = _collapse_by_player(class_rows)[:PER_CLASS_N]
         for i, row in enumerate(collapsed, start=1):
             entry = dict(row)
             entry["rank"] = i
-            by_class[play_class].append(entry)
+            by_class[board_class].append(entry)
         balanced.extend(collapsed)
 
     balanced.sort(
@@ -330,9 +497,10 @@ def _peer_keys_on_board(payload: dict[str, Any]) -> set[str]:
 
     def walk(rows: list[dict[str, Any]]) -> None:
         for row in rows:
-            key = row.get("peerKey")
-            if isinstance(key, str) and key:
-                keys.add(key)
+            for field in ("peerKey", "secondaryPeerKey"):
+                key = row.get(field)
+                if isinstance(key, str) and key:
+                    keys.add(key)
             also = row.get("also") or []
             if isinstance(also, list):
                 walk(also)

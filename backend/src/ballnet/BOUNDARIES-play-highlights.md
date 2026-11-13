@@ -3,8 +3,9 @@
 ## Always
 
 - Keep play grain **off Stage B**. Persist plays under `data/plays/plays_{season}.parquet`; never widen the player-week spine join key.
-- Classify actor-centric plays from cached REG PBP: `reception`, `rush`, `pass`, `interception`, `sack`. Attach weekly roster `position_code` / `position_group` (season fallback when the week row is missing).
+- Classify actor-centric plays from cached REG PBP: `reception`, `rush`, `pass`, `interception`, `sack`, `kick_return`, `punt_return`, `field_goal` (made), `punt`, `tackle_for_loss`, `fumble_recovery` (change-of-possession), `forced_fumble` (−EPA). Attach weekly roster `position_code` / `position_group` (season fallback when the week row is missing).
 - Score rarity with the same empirical-inclusive favorable-tail method as Stage H (`empirical-inclusive-v2`), peering within `(play_class, position_code)` and falling back to position_group then class-wide when `peerN < MIN_PEER_N`.
+- Before publishing boards, pair same `(game_id, play_id)` pass + reception into one `completion` card (`passer → receiver`, rarer peer perspective primary, other as `secondaryPeerKey`). Board sections follow `BOARD_CLASSES` (completion + rush/defense/special teams).
 - Publish boards to `data/highlights/plays/{season}/w{week}.json` (Storage: `highlights/plays/...`). Include game clock (`quarter`, `clock`, `gameClock`) on every row.
 - Publish peer histograms for board `peerKey`s to `data/dists/league_plays/{season}/w{week}.json` (`scope: "play_all_time"`). Upload board + dist together; do not embed `curve`/`bins` on board rows.
 - Tolerate missing historical play panels for years in `PLAY_HIGHLIGHTS_START_YEAR..S-1`; record them as `missingPeerSeasons`. Require the current season panel.
