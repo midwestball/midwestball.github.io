@@ -66,7 +66,7 @@ describe("ROS and roster controls", () => {
     localStorage.setItem("midwestball-trade-roster-v1", saved);
     window.history.replaceState(null, "", "/trades/?v=1&r=RB,~TE&g=RB&a=WR");
     render(<TradesPageClient />);
-    await waitFor(() => expect(screen.getByText(/Viewing a shared trade/)).toBeTruthy());
+    await waitFor(() => expect(screen.getByText(/Shared preview/)).toBeTruthy());
     expect(screen.getByLabelText("Status for Player TE")).toBeTruthy();
     fireEvent.change(screen.getByLabelText("Status for Player TE"), { target: { value: "active" } });
     expect(localStorage.getItem("midwestball-trade-roster-v1")).toBe(saved);

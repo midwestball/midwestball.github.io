@@ -48,15 +48,15 @@ describe("published discovery filters", () => {
   it.each(["", "wr"])("places comparison between search controls and the grouped filter results: %s", async selected => {
     history.replaceState(null, "", `/search/?season=2026&p=${selected}`);
     render(<SearchPageClient players={players} seasons={[{ season: 2026, asOfWeek: 8 }]} initialSeason={2026} />);
-    const results = screen.getByRole("region", { name: "Filter results" });
+    const results = screen.getByRole("region", { name: "Player rankings and filters" });
     expect(results.contains(screen.getByLabelText("Position"))).toBe(true);
-    expect(results.contains(screen.getByRole("heading", { name: "Filter results" }))).toBe(true);
-    expect(screen.getByLabelText("Search players").compareDocumentPosition(results) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(results.contains(screen.getByRole("heading", { name: "Rankings" }))).toBe(true);
+    expect(screen.getByLabelText("Find players").compareDocumentPosition(results) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(screen.getAllByLabelText("Season")).toHaveLength(1);
     if (selected) {
       await waitFor(() => expect(screen.getByText("Comparison board")).toBeTruthy());
       const board = screen.getByText("Comparison board");
-      expect(screen.getByLabelText("Search players").compareDocumentPosition(board) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+      expect(screen.getByLabelText("Find players").compareDocumentPosition(board) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
       expect(board.compareDocumentPosition(results) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     }
     expect(screen.queryByRole("heading", { name: "Discovery results" })).toBeNull();
@@ -87,7 +87,7 @@ describe("published discovery filters", () => {
     const { rerender } = render(<SearchPageClient {...props} />);
     await waitFor(() => expect(screen.getByText("Comparison board")).toBeTruthy());
     const calls = vi.mocked(loadHydratedPlayerSnapshots).mock.calls.length;
-    fireEvent.change(screen.getByLabelText("Search players"), { target: { value: "end" } });
+    fireEvent.change(screen.getByLabelText("Find players"), { target: { value: "end" } });
     expect(vi.mocked(loadHydratedPlayerSnapshots).mock.calls).toHaveLength(calls);
     fireEvent.change(screen.getByLabelText("Position"), { target: { value: "te" } });
     rerender(<SearchPageClient {...props} />);

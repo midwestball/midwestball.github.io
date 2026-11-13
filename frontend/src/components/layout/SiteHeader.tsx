@@ -2,7 +2,7 @@ import Link from "next/link";
 
 const NAV = [
   { href: "/", label: "Home" },
-  { href: "/search", label: "Search" },
+  { href: "/search", label: "Players" },
   { href: "/ballnet", label: "Projections" },
   { href: "/trades", label: "Trades" },
 ] as const;
@@ -12,11 +12,8 @@ export function SiteHeader() {
     <header className="border-b border-border bg-card">
       <div className="mx-auto flex max-w-3xl flex-wrap items-center justify-between gap-3 px-4 py-2.5">
         <Link href="/" className="min-w-0">
-          <p className="text-xs font-semibold tracking-[0.2em] text-muted-foreground uppercase">
+          <p className="text-sm font-semibold tracking-[0.1em] text-foreground uppercase">
             midwestball
-          </p>
-          <p className="text-sm font-semibold tracking-tight text-foreground">
-            Player stats
           </p>
         </Link>
         <nav className="flex max-w-full items-center gap-1 overflow-x-auto text-sm">

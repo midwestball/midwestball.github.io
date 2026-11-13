@@ -44,12 +44,14 @@ export function SearchPageClient(props: Parameters<typeof useLeaderboardDiscover
     rankedRows: model.rankedRows?.filter(row => !differentGroup(row.playerId)) ?? null,
   };
   return <main className="mx-auto w-full min-w-0 max-w-6xl space-y-3 px-4 py-5">
-    <header><h1 className="text-3xl font-semibold tracking-tight">Search</h1>
-      <p className="text-sm text-muted-foreground">Discover players and compare up to four from the same stat group.</p></header>
+    <header>
+      <h1 className="text-3xl font-semibold tracking-tight">Players</h1>
+      <p className="text-sm text-muted-foreground">Find and compare up to four players.</p>
+    </header>
     <PlayerSearchControls model={model}>
-      <PlayerCombobox label="Search players" query={model.query} onQueryChange={model.setQuery} onPick={add}
+      <PlayerCombobox label="Find players" query={model.query} onQueryChange={model.setQuery} onPick={add}
         disabled={ids.length >= 4} showWhenEmpty={ids.length === 0}
-        emptyMessage={ids.length >= 4 ? "Maximum four selected. Remove a player to add another." : "No eligible matching players for this season and stat group."}
+        emptyMessage={ids.length >= 4 ? "Four selected — remove one to add another." : "No players match this season and group."}
         items={suggestions.map(p => ({ key: p.id, primary: p.name, secondary: `${p.position} / ${p.team}` }))} />
     </PlayerSearchControls>
     <div className="flex flex-wrap gap-1">{ids.map(id => <button key={id} onClick={() => navigate({ p: ids.filter(p => p !== id).join(",") })}
@@ -60,11 +62,15 @@ export function SearchPageClient(props: Parameters<typeof useLeaderboardDiscover
     {!compare.sameGroup ? <p role="alert">Comparison requires the same stat group. Remove an incompatible player.</p> : compare.loading ?
       <div role="status" className="min-h-32 border border-border p-3">Loading comparison…</div> : compare.displayedColumns.length > 0 &&
       <div className="border border-border bg-card max-md:-mx-4 max-md:border-x-0"><CompareBoard columns={compare.displayedColumns} /></div>}
-    <section aria-label="Filter results" className="min-h-32 space-y-1">
-      <h2 className="text-sm font-semibold">Filter results</h2>
+    <section aria-label="Player rankings and filters" className="min-h-32 space-y-1">
+      <h2 className="text-sm font-semibold">Rankings</h2>
       {model.directoryReady && ((params.has("pos") && params.get("pos") !== model.group) || (params.has("stat") && params.get("stat") !== model.statId) || (params.has("season") && Number(params.get("season")) !== model.season)) &&
         <p role="status" className="text-sm text-warning-foreground">Some shared filters are unavailable. <button className="underline" onClick={() => navigate({ pos: model.group, stat: model.statId, season: String(model.season), min: null }, true)}>Clear invalid filters</button></p>}
-      <p className="text-xs text-muted-foreground">Published season {model.season}, through week {model.asOfWeek}. Filters apply to these results; selected comparison columns stay selected.</p>
+      <p className="text-xs text-muted-foreground">
+        Published {model.season} · Through W{model.asOfWeek}
+        <span aria-hidden="true"> · Filters don&apos;t change compared players</span>
+        <span className="sr-only">. Filters affect rankings, not selected comparison players.</span>
+      </p>
       <PlayerLeaderboardFilters model={model} />
       <PlayerDiscoveryResults model={discovery} onSelect={add} selectionReason={reason} />
     </section>

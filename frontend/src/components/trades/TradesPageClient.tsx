@@ -47,13 +47,13 @@ export function TradesPageClient() {
   if (!snapshot) return <main className="mx-auto max-w-5xl px-4 py-5"><h1 className="text-3xl font-semibold">Trade analysis</h1><p role="status" className="mt-4 border border-border p-4 text-sm">{error || "Loading rest-of-season projections…"}{error && <button onClick={retry} className="ml-3 underline">Retry</button>}</p></main>;
 
   return <main className="mx-auto max-w-5xl space-y-4 px-4 py-5">
-    <header><p className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">{snapshot.season} · ROS through week {snapshot.cutoffWeek} · Full PPR</p>
+    <header><p className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">{snapshot.season} · ROS through week {snapshot.cutoffWeek} · Full PPR · Updated <time dateTime={snapshot.generatedAt}>{new Date(snapshot.generatedAt).toLocaleString()}</time></p>
       <h1 className="text-3xl font-semibold tracking-tight">Trade analysis</h1>
-      <p className="mt-2 border border-warning-border bg-warning-surface p-2 text-sm text-warning-foreground"><strong>Experimental:</strong> Rest-of-season forecasts have not passed a separate ROS validation gate. Current injury news is not an input. Updated <time dateTime={snapshot.generatedAt}>{new Date(snapshot.generatedAt).toLocaleString()}</time>.</p>
-      <p className="mt-1 max-w-3xl text-sm text-text-secondary">Compare remaining regular-season points using each player’s median projection. Add your roster to see how a trade changes your best starting lineup.</p>
+      <p className="mt-2 border border-warning-border bg-warning-surface p-2 text-sm text-warning-foreground"><strong>Experimental:</strong> ROS forecasts have not passed a separate validation gate. Current injury news is not included.</p>
+      <p className="mt-1 max-w-3xl text-sm text-text-secondary">See how a trade changes your projected starting lineup.</p>
     </header>
     {scenario.shared && <aside className="space-y-2 border border-border bg-muted p-3 text-sm">
-      <p>{storageNote === "Roster saved" ? "Viewing a shared trade. This roster has been saved in this browser." : "Viewing a shared trade. Your saved roster has not been changed."}</p>
+      <p>{storageNote === "Roster saved" ? "Shared roster saved on this device." : "Shared preview · Your saved roster is unchanged."}</p>
       {rosterAware && <button disabled={!validSettings(settings)} onClick={scenario.save} className={control}>Save this roster</button>}{" "}
       <button onClick={scenario.useSaved} className={control}>Use my saved roster</button>
     </aside>}
@@ -86,8 +86,8 @@ export function TradesPageClient() {
               scenario.change(s => ({ ...s, give: [...s.give.filter(id => id !== entry.playerId), ...(e.target.value === "give" ? [entry.playerId] : [])], drops: [...s.drops.filter(id => id !== entry.playerId), ...(e.target.value === "drop" ? [entry.playerId] : [])] }));
             }}><option value="keep">Keep</option><option value="give">Give</option><option value="drop">Drop</option></select></td>
             <td className="border-b border-border"><button onClick={() => remove(entry.playerId)} aria-label={`Remove ${p?.name ?? entry.playerId} from roster`} className="text-xs underline">Remove</button></td>
-          </tr>; })}</tbody></table></div> : <p className="text-sm text-muted-foreground">Start with your QB, RBs, WRs and TE, then add your bench. Starting slots are filled automatically by projected ROS points.</p>}
-        <p className="text-xs text-muted-foreground">{scenario.shared ? "Shared preview edits remain temporary until you save this roster." : "Roster and settings save in this browser. Trade selections are temporary."}</p>
+          </tr>; })}</tbody></table></div> : <p className="text-sm text-muted-foreground">Add your starters and bench. We&apos;ll optimize the lineup.</p>}
+        {!scenario.shared && <p className="text-xs text-muted-foreground">Roster saved in this browser · Trade picks are temporary.</p>}
       </div>
     </section>}
 

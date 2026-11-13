@@ -346,11 +346,30 @@ export function HighlightsBrowser({
             Highlights
           </h1>
           <p className="mt-1 max-w-xl text-sm leading-5 text-text-secondary">
-            Best single-game offensive performances. {board?.schemaVersion === 2
-              ? "Ranked by observed rarity among qualifying games since 2016."
-              : "Legacy boards are ranked by standardized scores among qualifying games since 2016."}
-            {" "}Expand a row for the peer distribution and other standout stats.
+            Standout offensive games. Expand a row for more.
           </p>
+          <details className="mt-1 max-w-xl text-xs text-muted-foreground">
+            <summary className="cursor-pointer font-medium text-text-secondary">
+              About rankings
+            </summary>
+            {board ? (
+              <>
+                <p className="mt-2 leading-5">
+                  {board.schemaVersion === 2
+                    ? "Ranked by observed rarity among qualifying games since 2016."
+                    : "Legacy boards are ranked by standardized scores among qualifying games since 2016."}
+                </p>
+                <p className="mt-1 leading-5">
+                  Expand a player to see the peer distribution and other standout
+                  stats.
+                </p>
+              </>
+            ) : (
+              <p className="mt-2 leading-5">
+                Ranking method loads with the board.
+              </p>
+            )}
+          </details>
         </div>
       </div>
 
@@ -395,11 +414,9 @@ export function HighlightsBrowser({
         ) : null}
 
         <p className="pt-1 text-sm text-muted-foreground">
-          Looking for someone else?{" "}
           <Link href="/search" className="font-medium text-foreground underline">
-            Search every player
+            Find players
           </Link>
-          .
         </p>
       </main>
     </div>
