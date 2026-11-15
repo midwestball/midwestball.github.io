@@ -7,6 +7,9 @@ import {
 const HOST = "https://lm-api-reads.fantasy.espn.com";
 const VIEWS = ["mSettings", "mTeam", "mRoster", "mMatchup"];
 
+/** Shared by the paste box and the JSON file picker. A full private-league download can pass the old 2,000,000-character paste cap. */
+export const ESPN_JSON_LIMIT = 16_000_000;
+
 /** ESPN slot ids used by the unofficial league payload. Unlisted ids stay unsupported. */
 const ESPN_SLOT: Record<number, keyof ReturnType<typeof blankSettings> | "flex-note" | "superflex"> = {
   0: "QB", 2: "RB", 4: "WR", 6: "TE", 23: "FLEX",
@@ -170,7 +173,7 @@ async function readEspn(url: string, credentials: RequestCredentials, signal?: A
     response = await fetch(url, { signal, credentials, headers: { accept: "application/json" } });
   } catch (error) {
     if (error instanceof DOMException && error.name === "AbortError") throw error;
-    throw new LeagueConnectError("NETWORK", "Could not reach ESPN from this page. You can paste the league JSON instead.");
+    throw new LeagueConnectError("NETWORK", "Could not reach ESPN from this page. You can import the league JSON instead.");
   }
   const text = await response.text();
   const html = text.trimStart().startsWith("<") || (response.headers.get("content-type") ?? "").includes("html");
@@ -212,14 +215,14 @@ export async function fetchEspnLeague(leagueId: string, season: number, signal?:
 
 export function parseEspnPaste(text: string, request: { leagueId: string; season: number; identity: IdentityIndex }): SavedLeague {
   const trimmed = text.trim();
-  if (!trimmed) throw new LeagueConnectError("INVALID", "Paste the league JSON first.");
-  if (trimmed.length > 2_000_000) throw new LeagueConnectError("INVALID", "That paste is too large.");
-  if (trimmed.startsWith("<")) throw new LeagueConnectError("AUTH_REQUIRED", "That paste is a login page, not league JSON.");
+  if (!trimmed) throw new LeagueConnectError("INVALID", "The league JSON is empty.");
+  if (trimmed.length > ESPN_JSON_LIMIT) throw new LeagueConnectError("INVALID", "That league JSON is too large.");
+  if (trimmed.startsWith("<")) throw new LeagueConnectError("AUTH_REQUIRED", "That response is a login page, not league JSON.");
   let body: unknown;
   try {
     body = JSON.parse(trimmed);
   } catch {
-    throw new LeagueConnectError("INVALID", "That paste isn't league JSON.");
+    throw new LeagueConnectError("INVALID", "That isn't league JSON.");
   }
   return normalizeEspn(body, request);
 }

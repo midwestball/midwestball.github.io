@@ -25,6 +25,15 @@ function messageOf(error: unknown): string {
   return error instanceof Error ? error.message : "The league didn't load.";
 }
 
+function readFileText(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(typeof reader.result === "string" ? reader.result : "");
+    reader.onerror = () => reject(new LeagueConnectError("INVALID", "Could not read that league file."));
+    reader.readAsText(file);
+  });
+}
+
 function subscribeToLeagueStore(callback: () => void) {
   window.addEventListener(STORAGE_EVENT, callback);
   window.addEventListener("storage", callback);
@@ -56,6 +65,8 @@ export function LeagueLabClient() {
   const [espnInput, setEspnInput] = useState("");
   const [paste, setPaste] = useState("");
   const [showPaste, setShowPaste] = useState(false);
+  const [espnImport, setEspnImport] = useState<"paste" | "file">("paste");
+  const [espnFile, setEspnFile] = useState<File | null>(null);
   const [found, setFound] = useState<{ userId: string; leagues: SleeperLeagueSummary[] } | null>(null);
   const seasonsTouched = useRef(false);
   const run = useRef(0);
@@ -89,6 +100,7 @@ export function LeagueLabClient() {
     setError("");
     setConfirmUnlink(false);
     setPaste("");
+    setEspnFile(null);
     commit(upsertLeague(store, next));
   }
 
@@ -141,13 +153,27 @@ export function LeagueLabClient() {
     });
   }
 
+  async function readEspnImport(text: string) {
+    const { leagueId } = parseEspnLeagueReference(espnInput, espnSeason);
+    const identity = await loadPlayerDirectory();
+    save(parseEspnPaste(text, { leagueId, season: espnSeason, identity }));
+    setShowPaste(false);
+  }
+
   function importPaste() {
     setWorking("Reading the pasted league…");
+    void guarded(() => readEspnImport(paste));
+  }
+
+  function importFile() {
+    const file = espnFile;
+    if (!file) {
+      setError("Choose a league JSON file first.");
+      return;
+    }
+    setWorking("Reading the league file…");
     void guarded(async () => {
-      const { leagueId } = parseEspnLeagueReference(espnInput, espnSeason);
-      const identity = await loadPlayerDirectory();
-      save(parseEspnPaste(paste, { leagueId, season: espnSeason, identity }));
-      setShowPaste(false);
+      await readEspnImport(await readFileText(file));
     });
   }
 
@@ -204,13 +230,25 @@ export function LeagueLabClient() {
         <input type="number" min={2017} max={2035} value={espnSeason} onChange={(event) => { seasonsTouched.current = true; setEspnSeason(Number(event.target.value)); }} className={`${control} mt-1 w-28`} />
       </label>
       <button type="submit" disabled={!!working || !espnInput.trim()} className={primary}>Link league</button>
-      <p className="text-sm text-muted-foreground">If the league is private, a commissioner can make it viewable, or you can open the read-only URL while logged into ESPN and paste the JSON once. That paste stores the league, not your cookies. <a className="underline" href="https://support.espn.com/hc/en-us/articles/360000991871-Making-a-Private-League-Viewable-to-the-Public" target="_blank" rel="noreferrer">ESPN public-view setting</a></p>
-      {(showPaste || paste) && <>
-        <p className="text-sm">Open <EspnDataLink input={espnInput} season={espnSeason} /> while logged in, copy the JSON, and paste it here.</p>
-        <label className="block text-xs font-semibold">ESPN league JSON
-          <textarea value={paste} spellCheck={false} autoComplete="off" rows={6} onChange={(event) => setPaste(event.target.value)} className={`${control} mt-1 w-full font-mono`} />
-        </label>
-        <button type="button" disabled={!!working || !paste.trim()} onClick={importPaste} className={primary}>Import pasted league</button>
+      <p className="text-sm text-muted-foreground">If the league is private, a commissioner can make it viewable, or you can open the read-only URL while logged into ESPN and import the JSON once. That import stores the league, not your cookies. <a className="underline" href="https://support.espn.com/hc/en-us/articles/360000991871-Making-a-Private-League-Viewable-to-the-Public" target="_blank" rel="noreferrer">ESPN public-view setting</a></p>
+      {(showPaste || paste || espnFile) && <>
+        <p className="text-sm">Open <EspnDataLink input={espnInput} season={espnSeason} /> while logged in. Paste the JSON, or save the response and choose the file.</p>
+        <div className="flex gap-2" role="group" aria-label="How to add the ESPN JSON">
+          <button type="button" aria-pressed={espnImport === "paste"} onClick={() => setEspnImport("paste")} className={espnImport === "paste" ? "border border-ring bg-muted px-2 py-1 text-sm font-semibold" : control}>Paste JSON</button>
+          <button type="button" aria-pressed={espnImport === "file"} onClick={() => setEspnImport("file")} className={espnImport === "file" ? "border border-ring bg-muted px-2 py-1 text-sm font-semibold" : control}>JSON file</button>
+        </div>
+        {espnImport === "paste" ? <>
+          <label className="block text-xs font-semibold">ESPN league JSON
+            <textarea value={paste} spellCheck={false} autoComplete="off" rows={6} onChange={(event) => setPaste(event.target.value)} className={`${control} mt-1 w-full font-mono`} />
+          </label>
+          <button type="button" disabled={!!working || !paste.trim()} onClick={importPaste} className={primary}>Import pasted league</button>
+        </> : <>
+          <label className="block text-xs font-semibold">League JSON file
+            <input type="file" accept="application/json,.json" onChange={(event) => setEspnFile(event.target.files?.[0] ?? null)} className={`${control} mt-1 block w-full`} />
+          </label>
+          {espnFile && <p className="text-xs text-muted-foreground">Selected {espnFile.name}</p>}
+          <button type="button" disabled={!!working || !espnFile} onClick={importFile} className={primary}>Import league file</button>
+        </>}
       </>}
     </form>
   </div>;

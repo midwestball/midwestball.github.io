@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { RosPlayer, RosPosition, RosSnapshot } from "@/lib/ros";
-import { normalizeEspn, parseEspnLeagueReference } from "./espn";
+import { ESPN_JSON_LIMIT, normalizeEspn, parseEspnLeagueReference, parseEspnPaste } from "./espn";
 import type { IdentityIndex } from "./identity";
 import { projectLeague, replayThrough } from "./project";
 import { EMPTY_LEAGUE_STORE, LEAGUE_STORAGE_KEY, loadLeagueStore, parseLeagueStore, saveLeagueStore, upsertLeague } from "./store";
@@ -97,6 +97,21 @@ describe("league connections", () => {
       { week: 1, matchupId: "p1-0", teamId: "2", points: 90 },
     ]);
     expect(JSON.stringify(saved)).not.toContain("MEMBER-TOKEN-XYZ");
+  });
+
+  it("accepts league JSON above the old paste cap and rejects anything past the shared cap", () => {
+    const text = JSON.stringify({
+      id: 55, seasonId: 2026, settings: { name: "Office" },
+      teams: [
+        { id: 1, name: "Alpha", roster: { entries: [] } },
+        { id: 2, name: "Beta", roster: { entries: [] } },
+      ],
+      padding: "x".repeat(2_000_000),
+    });
+    expect(text.length).toBeGreaterThan(2_000_000);
+    expect(text.length).toBeLessThanOrEqual(ESPN_JSON_LIMIT);
+    expect(parseEspnPaste(`\n${text}\n`, { leagueId: "55", season: 2026, identity, importedAt: "2026-11-14T00:00:00Z" }).name).toBe("Office");
+    expect(() => parseEspnPaste("x".repeat(ESPN_JSON_LIMIT + 1), { leagueId: "55", season: 2026, identity })).toThrow(/too large/);
   });
 
   it("saves a league locally and drops anything with a session secret", () => {

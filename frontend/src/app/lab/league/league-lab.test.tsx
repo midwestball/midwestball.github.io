@@ -53,4 +53,37 @@ describe("league lab page", () => {
     await waitFor(() => expect(screen.getByRole("button", { name: "Find leagues" })).toBeTruthy());
     expect(JSON.parse(localStorage.getItem(LEAGUE_STORAGE_KEY)!).leagues).toEqual([]);
   });
+
+  it("imports an ESPN league from a JSON file instead of a paste", async () => {
+    const leagueJson = JSON.stringify({
+      id: 55, seasonId: 2026, settings: { name: "Office File" },
+      teams: [
+        { id: 1, name: "Alpha", roster: { entries: [{ playerId: 3139477, lineupSlotId: 0, playerPoolEntry: { player: { id: 3139477, fullName: "Pat", defaultPositionId: 1 } } }] } },
+        { id: 2, name: "Beta", roster: { entries: [] } },
+      ],
+    });
+    const players: Record<string, unknown> = {};
+    for (let id = 1; id <= 100; id += 1) players[String(id)] = { full_name: `Player ${id}`, gsis_id: `00-${id}`, espn_id: 1000 + id, position: "RB", team: "KC" };
+    players["1"] = { full_name: "Pat", gsis_id: "00-QB", espn_id: 3139477, position: "QB", team: "KC" };
+    vi.stubGlobal("fetch", vi.fn(async (url: string) => {
+      if (String(url).includes("players/nfl")) {
+        return new Response(JSON.stringify(players), { status: 200, headers: { "content-type": "application/json" } });
+      }
+      if (String(url).includes("lm-api-reads")) {
+        return new Response(JSON.stringify({ details: [{ type: "AUTH_LEAGUE_NOT_VISIBLE" }] }), { status: 401, headers: { "content-type": "application/json" } });
+      }
+      throw new Error("offline");
+    }));
+    render(<LeagueLabClient />);
+    fireEvent.change(screen.getByLabelText("ESPN league URL or ID"), { target: { value: "55" } });
+    fireEvent.click(screen.getByRole("button", { name: "Link league" }));
+    expect(await screen.findByRole("button", { name: "JSON file" })).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "JSON file" }));
+    const file = new File([leagueJson], "office.json", { type: "application/json" });
+    fireEvent.change(screen.getByLabelText("League JSON file"), { target: { files: [file] } });
+    fireEvent.click(screen.getByRole("button", { name: "Import league file" }));
+    expect(await screen.findByRole("heading", { name: "Office File" })).toBeTruthy();
+    expect(localStorage.getItem(LEAGUE_STORAGE_KEY)).not.toMatch(/espn_s2|swid/i);
+    expect(JSON.parse(localStorage.getItem(LEAGUE_STORAGE_KEY)!).leagues[0].teams[0].players[0].gsisId).toBe("00-QB");
+  });
 });
