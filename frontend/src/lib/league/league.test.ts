@@ -80,7 +80,7 @@ describe("league connections", () => {
       members: [{ id: "{MEMBER-TOKEN-XYZ}", displayName: "Alex" }],
       teams: [
         { id: 1, name: "Alpha", primaryOwner: "{MEMBER-TOKEN-XYZ}", record: { overall: { wins: 3, losses: 1, ties: 0, pointsFor: 400.5 } }, roster: { entries: [{ playerId: 3139477, lineupSlotId: 0, playerPoolEntry: { player: { id: 3139477, fullName: "Pat", defaultPositionId: 1 } } }, { playerId: 9, lineupSlotId: 21, playerPoolEntry: { player: { id: 9, fullName: "Hurt", defaultPositionId: 2 } } }] } },
-        { id: 2, name: "Beta", record: { overall: { wins: 1, losses: 3, ties: 0, pointsFor: 300 } }, roster: { entries: [] } },
+        { id: 2, name: "Beta", record: { overall: { wins: 1, losses: 3, ties: 0, pointsFor: 300 } }, roster: { entries: [{ playerId: "42", lineupSlotId: 2, playerPoolEntry: { player: { id: "42", fullName: "String Id", defaultPositionId: 2, proTeamId: 34 } } }] } },
       ],
       schedule: [{ matchupPeriodId: 1, home: { teamId: 1, totalPoints: 110 }, away: { teamId: 2, totalPoints: 90 } }],
     }, { leagueId: "55", season: 2026, identity, importedAt: "2026-11-14T00:00:00Z" });
@@ -88,6 +88,7 @@ describe("league connections", () => {
     expect(saved.teams[0]).toMatchObject({ manager: "Alex", points: 400.5 });
     expect(saved.teams[0]?.players[0]).toMatchObject({ gsisId: "00-QB", ir: false });
     expect(saved.teams[0]?.players[1]).toMatchObject({ name: "Hurt", ir: true, gsisId: null });
+    expect(saved.teams[1]?.players[0]).toMatchObject({ providerPlayerId: "42", name: "String Id", position: "RB", nflTeam: "HOU", gsisId: null });
     expect(saved.playoffWeekStart).toBe(15);
     expect(saved.receptionPoints).toBe(1);
     expect(saved.rosterSettings).toMatchObject({ QB: 1, FLEX: 1, K: 1 });
@@ -178,7 +179,7 @@ describe("league projection", () => {
           { providerPlayerId: "w", name: "Flex", position: "WR", nflTeam: "KC", gsisId: "00-WR", ir: false, taxi: false },
           { providerPlayerId: "i", name: "Hurt", position: "RB", nflTeam: "KC", gsisId: "00-IR", ir: true, taxi: false },
           { providerPlayerId: "k", name: "Boot", position: "K", nflTeam: "KC", gsisId: null, ir: false, taxi: false },
-          { providerPlayerId: "n", name: "00-NAME", position: "TE", nflTeam: "KC", gsisId: null, ir: false, taxi: false },
+          { providerPlayerId: "n", name: "Unlisted Player", position: "TE", nflTeam: "KC", gsisId: null, ir: false, taxi: false },
         ] },
         { id: "2", name: "Beta", manager: "B", wins: 0, losses: 1, ties: 0, points: 4, players: [] },
       ],
@@ -187,8 +188,41 @@ describe("league projection", () => {
     expect(result.mode).toBe("simulated");
     expect(alpha.rosMedianSum).toBe(190);
     expect(alpha.heldOut.map((item) => item.name)).toEqual(["Hurt"]);
-    expect(alpha.unmapped.map((item) => item.name)).toEqual(["Boot", "00-NAME"]);
-    expect(alpha.unmapped.some((item) => item.detail.includes("not matched by name"))).toBe(true);
+    expect(alpha.unmapped.map((item) => item.name)).toEqual(["Boot", "Unlisted Player"]);
+    expect(alpha.unmapped.map((item) => item.detail)).toEqual(["Kickers and defenses are not projected.", "No rest-of-season projection."]);
+  });
+
+  it("matches a roster name to the one projected player with that name and position", () => {
+    const chase = player("00-CHASE", "WR", 80);
+    chase.name = "Ja'Marr Chase";
+    const sharedA = player("00-A", "QB", 10);
+    sharedA.name = "Josh Johnson";
+    sharedA.team = "BAL";
+    const sharedB = player("00-B", "QB", 30);
+    sharedB.name = "Josh Johnson";
+    sharedB.team = "WAS";
+    const result = projectLeague(league([
+      { week: 1, matchupId: "a", teamId: "1", points: 5 }, { week: 1, matchupId: "a", teamId: "2", points: 4 },
+    ], {
+      playoffWeekStart: 3,
+      rosterSettings: { QB: 1, RB: 0, WR: 1, TE: 0, FLEX: 0, SUPERFLEX: 0, bench: 0, ir: 0, K: 0, DST: 0 },
+      teams: [
+        { id: "1", name: "Alpha", manager: "A", wins: 0, losses: 0, ties: 0, points: 0, players: [
+          { providerPlayerId: "c", name: "Ja Marr Chase Jr.", position: "WR", nflTeam: "", gsisId: null, ir: false, taxi: false },
+          { providerPlayerId: "j", name: "Josh Johnson", position: "QB", nflTeam: "WAS", gsisId: null, ir: false, taxi: false },
+          { providerPlayerId: "s", name: "Nobody Special", position: "QB", nflTeam: "", gsisId: "missing", ir: false, taxi: false },
+        ] },
+        { id: "2", name: "Beta", manager: "B", wins: 0, losses: 0, ties: 0, points: 0, players: [
+          { providerPlayerId: "u", name: "Josh Johnson", position: "QB", nflTeam: "", gsisId: null, ir: false, taxi: false },
+        ] },
+      ],
+    }), snapshot([chase, sharedA, sharedB], 1), { sims: 5, seed: 1 });
+    const alpha = result.teams[0]!;
+    const beta = result.teams[1]!;
+    expect(alpha.lineup.map((spot) => spot.player?.playerId)).toEqual(["00-B", "00-CHASE"]);
+    expect(alpha.unmapped.map((item) => item.detail)).toEqual(["No rest-of-season projection."]);
+    expect(beta.unmapped.map((item) => item.detail)).toEqual(["Several projected players share this name and position."]);
+    expect(alpha.rosSd).toBeGreaterThan(0);
   });
 
   it("does not estimate a league from another season", () => {

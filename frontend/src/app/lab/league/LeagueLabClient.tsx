@@ -1,6 +1,7 @@
 "use client";
 
 import { PlayerComparisonLink } from "@/components/PlayerComparisonLink";
+import { LeagueDistributions, PlayerCurve } from "./LeagueCharts";
 import { useRos } from "@/components/projections/useRos";
 import { fetchEspnLeague, normalizeEspn, parseEspnLeagueReference, parseEspnPaste, espnLeagueUrl } from "@/lib/league/espn";
 import { loadPlayerDirectory } from "@/lib/league/identity";
@@ -356,6 +357,7 @@ function LeagueReport({ league, projection, rosError, retry, generatedAt, onTeam
         </tbody>
       </table>
     </div>
+    {projection && projection.mode !== "blocked" && <LeagueDistributions league={league} projection={projection} />}
   </section>;
 }
 
@@ -364,7 +366,8 @@ function LineupDetails({ row, season }: { row: TeamProjection; season: number })
   return <details className="mt-1 text-xs font-normal text-muted-foreground">
     <summary>{row.lineupError ?? `Lineup${missing ? ` · ${missing} not started` : ""}`}</summary>
     <ul className="mt-1 space-y-1">
-      {row.lineup.map((spot, index) => <li key={`${spot.slot}-${index}`}>{spot.slot}: {spot.player ? <><PlayerComparisonLink playerId={spot.player.playerId} season={season}>{spot.player.name}</PlayerComparisonLink> {formatPoints(spot.player.mean)}{spot.rosterName ? ` (roster: ${spot.rosterName})` : ""}</> : "empty"}</li>)}
+      {row.lineup.map((spot, index) => <li key={`${spot.slot}-${index}`}>{spot.slot}: {spot.player ? <><PlayerComparisonLink playerId={spot.player.playerId} season={season}>{spot.player.name}</PlayerComparisonLink> {formatPoints(spot.player.mean)}{spot.rosterName ? ` (roster: ${spot.rosterName})` : ""}<PlayerCurve player={spot.player} /></> : "empty"}</li>)}
+      {row.benched.map((item) => <li key={item.player.playerId}>{item.name} — Bench · {formatPoints(item.player.mean)}<PlayerCurve player={item.player} /></li>)}
       {row.heldOut.map((item) => <li key={item.name}>{item.name} — {item.detail}</li>)}
       {row.unmapped.map((item) => <li key={`${item.name}-${item.detail}`}>{item.name} — {item.detail}</li>)}
     </ul>

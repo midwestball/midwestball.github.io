@@ -19,6 +19,19 @@ const ESPN_SLOT: Record<number, keyof ReturnType<typeof blankSettings> | "flex-n
 
 const ESPN_POSITION: Record<number, string> = { 1: "QB", 2: "RB", 3: "WR", 4: "TE", 5: "K", 16: "DST" };
 
+const ESPN_TEAM: Record<number, string> = {
+  1: "ATL", 2: "BUF", 3: "CHI", 4: "CIN", 5: "CLE", 6: "DAL", 7: "DEN", 8: "DET", 9: "GB", 10: "TEN",
+  11: "IND", 12: "KC", 13: "LV", 14: "LAR", 15: "MIA", 16: "MIN", 17: "NE", 18: "NO", 19: "NYG", 20: "NYJ",
+  21: "PHI", 22: "ARI", 23: "PIT", 24: "LAC", 25: "SF", 26: "SEA", 27: "TB", 28: "WAS", 29: "CAR", 30: "JAX",
+  33: "BAL", 34: "HOU",
+};
+
+function espnId(value: unknown): number | null {
+  const whole = wholeNumber(value);
+  if (whole !== null) return whole;
+  return typeof value === "string" && /^\d{1,12}$/.test(value) ? Number(value) : null;
+}
+
 export function espnLeagueUrl(leagueId: string, season: number): string {
   return `${HOST}/apis/v3/games/ffl/seasons/${season}/segments/0/leagues/${leagueId}?${VIEWS.map((view) => `view=${view}`).join("&")}`;
 }
@@ -152,15 +165,16 @@ function espnPlayer(entry: unknown, identity: IdentityIndex): LeaguePlayer[] {
   const row = asRecord(entry);
   if (!row) return [];
   const pool = asRecord(asRecord(row.playerPoolEntry)?.player);
-  const id = wholeNumber(row.playerId) ?? wholeNumber(pool?.id);
+  const id = espnId(row.playerId) ?? espnId(pool?.id);
   if (id === null) return [];
   const hit = identity.byEspnId.get(String(id));
   const positionId = wholeNumber(pool?.defaultPositionId);
+  const proTeam = ESPN_TEAM[espnId(pool?.proTeamId) ?? -1] ?? "";
   return [{
     providerPlayerId: String(id),
     name: clipText(pool?.fullName, 80, hit?.name || `Player ${id}`),
     position: fantasyPosition(ESPN_POSITION[positionId ?? -1] || hit?.position || ""),
-    nflTeam: hit?.nflTeam || "",
+    nflTeam: hit?.nflTeam || proTeam,
     gsisId: hit?.gsisId ?? null,
     ir: wholeNumber(row.lineupSlotId) === 21,
     taxi: false,

@@ -13,10 +13,12 @@ export type TeamProjection = {
   lineup: LineupSpot[];
   unmapped: Omission[];
   heldOut: Omission[];
+  benched: { name: string; player: RosPlayer }[];
   lineupError: string | null;
   fantasyGames: number;
   rosMean: number | null;
   rosMedianSum: number | null;
+  rosSd: number | null;
   through: { wins: number; losses: number; ties: number; points: number };
   projectedPoints: number | null;
   pBestRecord: number | null;
@@ -56,6 +58,7 @@ export function methodCaveats(league?: SavedLeague | null): string[] {
   const caveats = [
     "Projections are full-PPR rest-of-season totals. The league's reception scoring, tight-end premium, bonuses, and negative points are not applied.",
     "Kickers, team defenses, and individual defensive players are omitted. An empty lineup slot counts as zero.",
+    "A roster player with no GSIS id is still used when that name and position match exactly one rest-of-season player. A name shared by several projected players is left out.",
     "Starters are the single highest-median lineup for the whole rest of the season. The lineup does not change by week, and IR or taxi players do not start.",
     "Each modeled player is treated as an independent normal curve fit to the published mean and the gap between the 5th and 95th percentiles. These are not the model's own simulated draws. A weekly score is that season curve split evenly across the fantasy team's remaining regular-season games and floored at zero.",
     "The split ignores opponent, weather, correlation between teammates, and which week a player is actually on bye.",
@@ -75,8 +78,28 @@ export function methodCaveats(league?: SavedLeague | null): string[] {
   return caveats;
 }
 
+export function playerDeviation(player: RosPlayer): number {
+  return Math.max(0, (player.quantiles[4] - player.quantiles[0]) / (2 * Z95));
+}
+
 function spread(player: RosPlayer): { mean: number; sd: number } {
-  return { mean: player.mean, sd: Math.max(0, (player.quantiles[4] - player.quantiles[0]) / (2 * Z95)) };
+  return { mean: player.mean, sd: playerDeviation(player) };
+}
+
+/** Letters and digits only, with a trailing generation suffix removed, so "Ja'Marr Chase" and "Jamarr Chase Jr." share a key. */
+export function rosterKey(name: string): string {
+  return name.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/\b(jr|sr|ii|iii|iv|v)\b/g, " ").replace(/[^a-z0-9]/g, "");
+}
+
+export function fittedCurve(mean: number, sd: number, from: number, to: number, count = 48): { x: number; y: number }[] {
+  if (!(sd > 0) || !(to > from) || count < 2) return [];
+  const points: { x: number; y: number }[] = [];
+  for (let index = 0; index < count; index += 1) {
+    const x = from + ((to - from) * index) / (count - 1);
+    const z = (x - mean) / sd;
+    points.push({ x, y: Math.exp(-0.5 * z * z) / (sd * Math.sqrt(2 * Math.PI)) });
+  }
+  return points;
 }
 
 function mulberry32(seed: number): () => number {
@@ -168,7 +191,21 @@ function scaleToFantasy(player: RosPlayer, gamesLeft: number): RosPlayer {
   return { ...player, mean: player.mean * factor, quantiles: player.quantiles.map((quantile) => quantile * factor) as RosPlayer["quantiles"] };
 }
 
-function lineupFor(team: LeagueTeam, byId: Map<string, RosPlayer>, settings: SavedLeague["rosterSettings"], gamesLeft: number): Pick<TeamProjection, "lineup" | "unmapped" | "heldOut" | "lineupError" | "fantasyGames" | "rosMean" | "rosMedianSum"> {
+function projectedPlayer(rosterPlayer: LeagueTeam["players"][number], byId: Map<string, RosPlayer>, byName: Map<string, RosPlayer[]>): { player: RosPlayer } | { detail: string } {
+  const byGsis = rosterPlayer.gsisId ? byId.get(rosterPlayer.gsisId) : undefined;
+  if (byGsis) return { player: byGsis };
+  const key = rosterKey(rosterPlayer.name);
+  const hits = key.length >= 4 ? byName.get(`${key}|${rosterPlayer.position}`) ?? [] : [];
+  if (hits.length === 1) return { player: hits[0]! };
+  if (hits.length > 1 && rosterPlayer.nflTeam) {
+    const sameTeam = hits.filter((player) => player.team === rosterPlayer.nflTeam);
+    if (sameTeam.length === 1) return { player: sameTeam[0]! };
+  }
+  if (hits.length > 1) return { detail: "Several projected players share this name and position." };
+  return { detail: "No rest-of-season projection." };
+}
+
+function lineupFor(team: LeagueTeam, byId: Map<string, RosPlayer>, byName: Map<string, RosPlayer[]>, settings: SavedLeague["rosterSettings"], gamesLeft: number): Pick<TeamProjection, "lineup" | "unmapped" | "heldOut" | "benched" | "lineupError" | "fantasyGames" | "rosMean" | "rosMedianSum" | "rosSd"> {
   const unmapped: Omission[] = [];
   const heldOut: Omission[] = [];
   const chosen = new Map<string, { player: RosPlayer; rosterName: string }>();
@@ -181,15 +218,16 @@ function lineupFor(team: LeagueTeam, byId: Map<string, RosPlayer>, settings: Sav
       heldOut.push({ name: rosterPlayer.name, detail: rosterPlayer.ir ? "IR, not started." : "Taxi, not started." });
       continue;
     }
-    if (!rosterPlayer.gsisId || !byId.has(rosterPlayer.gsisId)) {
-      unmapped.push({ name: rosterPlayer.name, detail: rosterPlayer.gsisId ? "No rest-of-season projection." : "No GSIS id, so this player was not matched by name." });
+    const resolved = projectedPlayer(rosterPlayer, byId, byName);
+    if (!("player" in resolved)) {
+      unmapped.push({ name: rosterPlayer.name, detail: resolved.detail });
       continue;
     }
-    const player = scaleToFantasy(byId.get(rosterPlayer.gsisId)!, gamesLeft);
+    const player = scaleToFantasy(resolved.player, gamesLeft);
     if (!chosen.has(player.playerId)) chosen.set(player.playerId, { player, rosterName: rosterPlayer.name });
   }
   if (!validSettings(settings)) {
-    return { lineup: [], unmapped, heldOut, lineupError: "This league's starting slots aren't supported by the lineup calculator.", fantasyGames: gamesLeft, rosMean: null, rosMedianSum: null };
+    return { lineup: [], unmapped, heldOut, benched: [], lineupError: "This league's starting slots aren't supported by the lineup calculator.", fantasyGames: gamesLeft, rosMean: null, rosMedianSum: null, rosSd: null };
   }
   const optimized = optimizeLineup([...chosen.values()].map((item) => item.player), settings);
   const lineup = optimized.assignments.map((assignment) => ({
@@ -198,16 +236,19 @@ function lineupFor(team: LeagueTeam, byId: Map<string, RosPlayer>, settings: Sav
     rosterName: assignment.player && !sameName(assignment.player.name, chosen.get(assignment.player.playerId)?.rosterName ?? "") ? chosen.get(assignment.player.playerId)!.rosterName : null,
   }));
   const starters = lineup.flatMap((spot) => spot.player ? [spot.player] : []);
+  const starterIds = new Set(starters.map((player) => player.playerId));
+  const benched = [...chosen.values()].filter((item) => !starterIds.has(item.player.playerId)).map((item) => ({ name: item.rosterName, player: item.player }));
   return {
-    lineup, unmapped, heldOut, lineupError: null, fantasyGames: gamesLeft,
+    lineup, unmapped, heldOut, benched, lineupError: null, fantasyGames: gamesLeft,
     rosMean: starters.reduce((sum, player) => sum + player.mean, 0),
     rosMedianSum: optimized.total,
+    rosSd: Math.sqrt(starters.reduce((sum, player) => sum + playerDeviation(player) ** 2, 0)),
   };
 }
 
 function blankTeam(team: LeagueTeam, through: Standing): TeamProjection {
   return {
-    teamId: team.id, lineup: [], unmapped: [], heldOut: [], lineupError: null, fantasyGames: 0, rosMean: null, rosMedianSum: null,
+    teamId: team.id, lineup: [], unmapped: [], heldOut: [], benched: [], lineupError: null, fantasyGames: 0, rosMean: null, rosMedianSum: null, rosSd: null,
     through, projectedPoints: null, pBestRecord: null, pMostPoints: null, expectedWins: null, records: [],
   };
 }
@@ -287,6 +328,13 @@ export function projectLeague(league: SavedLeague, ros: RosSnapshot, options?: {
     };
   }
   const byId = new Map(ros.entities.map((player) => [player.playerId, player]));
+  const byName = new Map<string, RosPlayer[]>();
+  for (const player of ros.entities) {
+    const key = `${rosterKey(player.name)}|${player.position}`;
+    const group = byName.get(key) ?? [];
+    group.push(player);
+    byName.set(key, group);
+  }
   const replay = replayThrough(league.matchups, teamIds, ros.cutoffWeek);
   if (replay.skippedWeeks.length) caveats.push(`Week ${replay.skippedWeeks.join(", ")} was saved as all zeros and was left out of the results.`);
   const playoffStart = league.playoffWeekStart ?? 15;
@@ -294,7 +342,7 @@ export function projectLeague(league: SavedLeague, ros: RosSnapshot, options?: {
   const games = remainingGames(league.matchups, ros.cutoffWeek, playoffStart);
   const pairedWeeks = new Set(games.map((game) => game.week)).size;
   const gamesLeftFor = (teamId: string) => games.length ? games.filter((game) => game.teams.includes(teamId)).length : futureWeekCount;
-  const built = new Map(league.teams.map((team) => [team.id, lineupFor(team, byId, league.rosterSettings, gamesLeftFor(team.id))]));
+  const built = new Map(league.teams.map((team) => [team.id, lineupFor(team, byId, byName, league.rosterSettings, gamesLeftFor(team.id))]));
   const missingSkill = [...built.values()].reduce((sum, row) => sum + row.unmapped.filter((item) => item.detail !== "Kickers and defenses are not projected.").length, 0);
   if (missingSkill) caveats.push(`${missingSkill} skill-player spots have no rest-of-season projection and are left out of the totals.`);
   const startersOf = (teamId: string) => (built.get(teamId)?.lineup ?? []).flatMap((spot) => spot.player ? [spot.player] : []).sort((a, b) => a.playerId.localeCompare(b.playerId));
