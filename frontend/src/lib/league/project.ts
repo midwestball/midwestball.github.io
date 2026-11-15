@@ -91,6 +91,33 @@ export function rosterKey(name: string): string {
   return name.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/\b(jr|sr|ii|iii|iv|v)\b/g, " ").replace(/[^a-z0-9]/g, "");
 }
 
+function standardNormalCdf(z: number): number {
+  const sign = z < 0 ? -1 : 1;
+  const x = Math.abs(z) / Math.SQRT2;
+  const a1 = 0.254829592;
+  const a2 = -0.284496736;
+  const a3 = 1.421413741;
+  const a4 = -1.453152027;
+  const a5 = 1.061405429;
+  const p = 0.3275911;
+  const t = 1 / (1 + p * x);
+  const erf = 1 - (((((a5 * t + a4) * t) + a3) * t + a2) * t + a1) * t * Math.exp(-x * x);
+  return 0.5 * (1 + sign * erf);
+}
+
+/** Chance a fitted normal scores at least `points`. */
+export function normalAtLeast(mean: number, sd: number, points: number): number {
+  if (!(sd > 0)) return points <= mean ? 1 : 0;
+  return Math.min(1, Math.max(0, 1 - standardNormalCdf((points - mean) / sd)));
+}
+
+/** Chance the first fitted normal lands above the second, treating them as independent. */
+export function normalAhead(mean: number, sd: number, otherMean: number, otherSd: number): number {
+  const spread = Math.sqrt(sd * sd + otherSd * otherSd);
+  if (!(spread > 0)) return mean > otherMean ? 1 : mean < otherMean ? 0 : 0.5;
+  return normalAtLeast(mean, spread, otherMean);
+}
+
 export function fittedCurve(mean: number, sd: number, from: number, to: number, count = 48): { x: number; y: number }[] {
   if (!(sd > 0) || !(to > from) || count < 2) return [];
   const points: { x: number; y: number }[] = [];

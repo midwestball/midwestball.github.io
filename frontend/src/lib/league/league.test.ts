@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { RosPlayer, RosPosition, RosSnapshot } from "@/lib/ros";
 import { ESPN_JSON_LIMIT, normalizeEspn, parseEspnLeagueReference, parseEspnPaste } from "./espn";
 import type { IdentityIndex } from "./identity";
-import { projectLeague, replayThrough } from "./project";
+import { normalAhead, normalAtLeast, projectLeague, replayThrough } from "./project";
 import { EMPTY_LEAGUE_STORE, LEAGUE_STORAGE_KEY, loadLeagueStore, parseLeagueStore, saveLeagueStore, upsertLeague } from "./store";
 import { normalizeSleeper } from "./sleeper";
 import type { LeagueMatchup, SavedLeague } from "./types";
@@ -223,6 +223,14 @@ describe("league projection", () => {
     expect(alpha.unmapped.map((item) => item.detail)).toEqual(["No rest-of-season projection."]);
     expect(beta.unmapped.map((item) => item.detail)).toEqual(["Several projected players share this name and position."]);
     expect(alpha.rosSd).toBeGreaterThan(0);
+  });
+
+  it("reads a fitted normal at the mean and a lopsided head-to-head", () => {
+    expect(normalAtLeast(10, 2, 10)).toBeCloseTo(0.5, 2);
+    expect(normalAtLeast(10, 2, 0)).toBeGreaterThan(0.99);
+    expect(normalAtLeast(10, 2, 30)).toBeLessThan(0.01);
+    expect(normalAhead(20, 2, 5, 2)).toBeGreaterThan(0.9);
+    expect(normalAhead(8, 0, 8, 0)).toBe(0.5);
   });
 
   it("does not estimate a league from another season", () => {
