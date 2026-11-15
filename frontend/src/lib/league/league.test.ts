@@ -110,7 +110,7 @@ describe("league connections", () => {
     });
     expect(text.length).toBeGreaterThan(2_000_000);
     expect(text.length).toBeLessThanOrEqual(ESPN_JSON_LIMIT);
-    expect(parseEspnPaste(`\n${text}\n`, { leagueId: "55", season: 2026, identity, importedAt: "2026-11-14T00:00:00Z" }).name).toBe("Office");
+    expect(parseEspnPaste(`\n${text}\n`, { leagueId: "55", season: 2026, identity }).name).toBe("Office");
     expect(() => parseEspnPaste("x".repeat(ESPN_JSON_LIMIT + 1), { leagueId: "55", season: 2026, identity })).toThrow(/too large/);
   });
 
