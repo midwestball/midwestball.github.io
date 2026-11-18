@@ -32,6 +32,36 @@ def _hist_and_proj():
     ]
 
 
+def test_historical_stages_include_play_highlights_and_upload():
+    stages = T.historical_stages(2026, 10)
+    names = [s.name for s in stages]
+    assert names == [
+        "fetch",
+        "spine",
+        "publish-all",
+        "highlights",
+        "play-panel",
+        "play-highlights",
+        "upload-storage",
+    ]
+    upload = stages[-1].argv
+    assert "--highlights" in upload and "--play-highlights" in upload
+    assert stages[names.index("play-highlights")].argv == (
+        "play-highlights",
+        "--season",
+        "2026",
+        "--week",
+        "10",
+    )
+
+
+def test_historical_stages_skip_play_when_highlight_disabled():
+    stages = T.historical_stages(2026, 10, highlight=False)
+    names = [s.name for s in stages]
+    assert "play-panel" not in names and "play-highlights" not in names
+    assert "--play-highlights" not in stages[-1].argv
+
+
 def test_projections_must_be_the_final_stage():
     T.assert_projections_last(_hist_and_proj())
     bad = [Stage("projections", ("p",), is_projections=True), Stage("prune", ("prune",))]

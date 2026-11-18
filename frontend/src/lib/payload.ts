@@ -105,7 +105,16 @@ export type PlayHighlightRow = {
   gameClock?: string | null;
   gameSecondsRemaining?: number | null;
   touchdown?: boolean;
-  description?: string | null;
+  /** Snap down (1–4). */
+  down?: number | null;
+  /** Yards to go at the snap. */
+  distance?: number | null;
+  /** Yards from opponent end zone at the snap. */
+  yardline100?: number | null;
+  /** NFL yard-line label at the snap, e.g. "ARI 25". */
+  yardline?: string | null;
+  airYards?: number | null;
+  yardsAfterCatch?: number | null;
   zScore: number;
   peerN: number;
   peerKey?: string;

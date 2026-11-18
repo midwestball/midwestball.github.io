@@ -47,6 +47,12 @@ _CLASSIFIED_COLS: list[str] = [
     "game_seconds_remaining",
     "touchdown",
     "desc",
+    "down",
+    "ydstogo",
+    "yardline_100",
+    "yrdln",
+    "air_yards",
+    "yards_after_catch",
 ]
 
 _PANEL_COLS: list[str] = [
@@ -69,6 +75,12 @@ _PANEL_COLS: list[str] = [
     "game_seconds_remaining",
     "touchdown",
     "desc",
+    "down",
+    "ydstogo",
+    "yardline_100",
+    "yrdln",
+    "air_yards",
+    "yards_after_catch",
 ]
 
 
@@ -130,6 +142,32 @@ def _base_context(df: pl.DataFrame) -> pl.DataFrame:
     td = _flag_true("touchdown") if "touchdown" in df.columns else pl.lit(False)
     desc = pl.col("desc").cast(pl.Utf8) if "desc" in df.columns else pl.lit(None).cast(pl.Utf8)
     epa = pl.col("epa").cast(pl.Float64) if "epa" in df.columns else pl.lit(None).cast(pl.Float64)
+    down = (
+        pl.col("down").cast(pl.Int32, strict=False)
+        if "down" in df.columns
+        else pl.lit(None).cast(pl.Int32)
+    )
+    ydstogo = (
+        pl.col("ydstogo").cast(pl.Float64)
+        if "ydstogo" in df.columns
+        else pl.lit(None).cast(pl.Float64)
+    )
+    yardline_100 = (
+        pl.col("yardline_100").cast(pl.Float64)
+        if "yardline_100" in df.columns
+        else pl.lit(None).cast(pl.Float64)
+    )
+    yrdln = pl.col("yrdln").cast(pl.Utf8) if "yrdln" in df.columns else pl.lit(None).cast(pl.Utf8)
+    air_yards = (
+        pl.col("air_yards").cast(pl.Float64)
+        if "air_yards" in df.columns
+        else pl.lit(None).cast(pl.Float64)
+    )
+    yards_after_catch = (
+        pl.col("yards_after_catch").cast(pl.Float64)
+        if "yards_after_catch" in df.columns
+        else pl.lit(None).cast(pl.Float64)
+    )
     return df.with_columns(
         pl.col("season").cast(pl.Int32),
         pl.col("week").cast(pl.Int32),
@@ -141,6 +179,12 @@ def _base_context(df: pl.DataFrame) -> pl.DataFrame:
         td.alias("touchdown"),
         desc.alias("desc"),
         epa.alias("epa"),
+        down.alias("down"),
+        ydstogo.alias("ydstogo"),
+        yardline_100.alias("yardline_100"),
+        yrdln.alias("yrdln"),
+        air_yards.alias("air_yards"),
+        yards_after_catch.alias("yards_after_catch"),
         pl.col("posteam").cast(pl.Utf8).alias("team"),
         pl.col("defteam").cast(pl.Utf8).alias("opponent_team"),
     )
@@ -538,6 +582,12 @@ def _classify_plays(pbp: pl.DataFrame) -> pl.DataFrame:
             "game_seconds_remaining": pl.Float64,
             "touchdown": pl.Boolean,
             "desc": pl.Utf8,
+            "down": pl.Int32,
+            "ydstogo": pl.Float64,
+            "yardline_100": pl.Float64,
+            "yrdln": pl.Utf8,
+            "air_yards": pl.Float64,
+            "yards_after_catch": pl.Float64,
         }
         return pl.DataFrame(schema=empty_schema)
 

@@ -147,6 +147,102 @@ function formatHeadline(row: PlayHighlightRow): string {
   return row.statLabel;
 }
 
+function downOrdinal(down: number): string | null {
+  if (down === 1) return "1st";
+  if (down === 2) return "2nd";
+  if (down === 3) return "3rd";
+  if (down === 4) return "4th";
+  return null;
+}
+
+/** e.g. "2nd & 7 from ARI 25" */
+function formatSituation(row: PlayHighlightRow): string | null {
+  const parts: string[] = [];
+  const ordinal =
+    row.down != null && Number.isFinite(row.down) ? downOrdinal(row.down) : null;
+  if (ordinal != null && row.distance != null && Number.isFinite(row.distance)) {
+    parts.push(`${ordinal} & ${formatRawNumber(row.distance)}`);
+  }
+  const yardline =
+    typeof row.yardline === "string" ? row.yardline.trim() : "";
+  if (yardline) {
+    parts.push(`from ${yardline}`);
+  } else if (row.yardline100 != null && Number.isFinite(row.yardline100)) {
+    parts.push(`from opp ${formatRawNumber(row.yardline100)}`);
+  }
+  return parts.length ? parts.join(" ") : null;
+}
+
+function yardsPhrase(yards: number, unit: string): string {
+  return `${formatRawNumber(yards)} yd ${unit}`;
+}
+
+/** Class-specific outcome line; completions include air / YAC when published. */
+function formatPlayOutcome(row: PlayHighlightRow): string | null {
+  const parts: string[] = [];
+  const yards =
+    isEpaMode(row) && row.rawValue != null && Number.isFinite(row.rawValue)
+      ? row.rawValue
+      : !isEpaMode(row) && Number.isFinite(row.value)
+        ? row.value
+        : null;
+
+  switch (row.playClass) {
+    case "completion":
+    case "pass":
+    case "reception":
+      if (yards != null) parts.push(yardsPhrase(yards, "pass"));
+      if (row.airYards != null && Number.isFinite(row.airYards)) {
+        parts.push(`${formatRawNumber(row.airYards)} air`);
+      }
+      if (
+        row.yardsAfterCatch != null &&
+        Number.isFinite(row.yardsAfterCatch)
+      ) {
+        parts.push(`${formatRawNumber(row.yardsAfterCatch)} YAC`);
+      }
+      break;
+    case "rush":
+      if (yards != null) parts.push(yardsPhrase(yards, "rush"));
+      break;
+    case "interception":
+      if (yards != null) parts.push(yardsPhrase(yards, "INT return"));
+      break;
+    case "sack":
+      if (yards != null) parts.push(yardsPhrase(yards, "sack"));
+      break;
+    case "kick_return":
+      if (yards != null) parts.push(yardsPhrase(yards, "kick return"));
+      break;
+    case "punt_return":
+      if (yards != null) parts.push(yardsPhrase(yards, "punt return"));
+      break;
+    case "field_goal":
+      if (yards != null) parts.push(yardsPhrase(yards, "FG"));
+      break;
+    case "punt":
+      if (yards != null) parts.push(yardsPhrase(yards, "punt"));
+      break;
+    case "tackle_for_loss":
+      if (yards != null) parts.push(yardsPhrase(yards, "TFL"));
+      break;
+    case "fumble_recovery":
+      if (yards != null) parts.push(yardsPhrase(yards, "fumble return"));
+      break;
+    case "forced_fumble":
+      parts.push(`${formatPlayValue(row)} EPA`);
+      break;
+    default:
+      break;
+  }
+
+  if (isEpaMode(row) && row.playClass !== "forced_fumble") {
+    parts.push(`${formatPlayValue(row)} EPA`);
+  }
+
+  return parts.length ? parts.join(" · ") : null;
+}
+
 function peerBucketCopy(row: PlayHighlightRow): string {
   if (row.playClass === "completion") {
     const primary =
@@ -294,19 +390,30 @@ function PerformanceBlock({
         ? `As throw (${row.passerPosition || "QB"})`
         : "Other perspective";
 
+  const situation = formatSituation(row);
+  const outcome = formatPlayOutcome(row) ?? formatHeadline(row);
+
   return (
     <div className="space-y-3">
-      <p className="text-[11px] leading-4 text-muted-foreground">
-        <span className="font-medium text-text-secondary">
-          {formatHeadline(row)}
-        </span>
-        {row.gameClock ? (
-          <>
-            <span aria-hidden> · </span>
-            <span className="tabular-nums">{row.gameClock}</span>
-          </>
+      <div className="space-y-1" data-testid="play-summary">
+        {situation ? (
+          <p className="text-sm leading-5 text-foreground/90">{situation}</p>
         ) : null}
-      </p>
+        <p className="text-sm leading-5 text-foreground/90">
+          <span className="font-medium">{outcome}</span>
+          {row.gameClock ? (
+            <>
+              <span className="text-muted-foreground" aria-hidden>
+                {" "}
+                ·{" "}
+              </span>
+              <span className="tabular-nums text-muted-foreground">
+                {row.gameClock}
+              </span>
+            </>
+          ) : null}
+        </p>
+      </div>
       <HistogramBlock
         label={primaryLabel}
         markerName={

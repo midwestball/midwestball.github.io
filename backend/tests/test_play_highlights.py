@@ -65,9 +65,30 @@ def test_classify_plays_splits_types_and_keeps_clock():
     rec = plays.filter(pl.col("play_class") == "reception").sort("play_id")
     assert rec["clock"].to_list() == ["14:56", "5:00"]
     assert rec["value"].to_list() == [27.0, 40.0]
+    assert rec["down"].to_list() == [None, None]
+    assert "air_yards" in rec.columns
+    assert "yards_after_catch" in rec.columns
     sack = plays.filter(pl.col("play_class") == "sack")
     assert sack["value"].to_list() == [8.0]
     assert sack["team"].to_list() == ["LAC"]  # defender team
+
+
+def test_classify_plays_keeps_situation_and_yac():
+    pbp = _mini_pbp().with_columns(
+        pl.Series("down", [2.0, 1.0, 3.0, 2.0, 1.0]),
+        pl.Series("ydstogo", [7.0, 10.0, 4.0, 8.0, 10.0]),
+        pl.Series("yardline_100", [75.0, 60.0, 40.0, 55.0, 70.0]),
+        pl.Series("yrdln", ["ARI 25", "ARI 40", "LAC 40", "ARI 45", "ARI 30"]),
+        pl.Series("air_yards", [18.0, None, 28.0, None, None]),
+        pl.Series("yards_after_catch", [9.0, None, 12.0, None, None]),
+    )
+    plays = _classify_plays(pbp)
+    rec = plays.filter(pl.col("play_class") == "reception").sort("play_id")
+    assert rec["down"].to_list() == [2, 3]
+    assert rec["ydstogo"].to_list() == [7.0, 4.0]
+    assert rec["yrdln"].to_list() == ["ARI 25", "LAC 40"]
+    assert rec["air_yards"].to_list() == [18.0, 28.0]
+    assert rec["yards_after_catch"].to_list() == [9.0, 12.0]
 
 
 def test_classify_special_teams_and_defense_extras():
@@ -205,6 +226,48 @@ def test_score_play_falls_back_when_position_bucket_is_thin():
     assert row is not None
     assert row["peerKey"] == "reception|all"
     assert row["gameClock"] == "Q4 2:00"
+    assert "description" not in row
+
+
+def test_score_play_includes_situation_and_pass_detail():
+    peer_map = {
+        "reception|all": np.sort(np.asarray([1.0] * 20 + [50.0], dtype=float)),
+    }
+    row = _score_play(
+        {
+            "play_class": "reception",
+            "position_code": "WR",
+            "position_group": "pass_catcher",
+            "value": 50.0,
+            "metric_id": "receiving_yards",
+            "player_id": "p1",
+            "player_display_name": "Wide",
+            "team": "BUF",
+            "opponent_team": "MIA",
+            "game_id": "g",
+            "play_id": 9,
+            "quarter": 2,
+            "clock": "4:12",
+            "game_seconds_remaining": 2052.0,
+            "touchdown": True,
+            "desc": "ignored",
+            "down": 2,
+            "ydstogo": 7.0,
+            "yardline_100": 75.0,
+            "yrdln": " BUF 25 ",
+            "air_yards": 35.0,
+            "yards_after_catch": 15.0,
+        },
+        peer_map,
+    )
+    assert row is not None
+    assert row["down"] == 2
+    assert row["distance"] == 7.0
+    assert row["yardline100"] == 75.0
+    assert row["yardline"] == "BUF 25"
+    assert row["airYards"] == 35.0
+    assert row["yardsAfterCatch"] == 15.0
+    assert "description" not in row
 
 
 def test_play_league_shapes_include_board_peer_keys():
@@ -275,7 +338,12 @@ def test_pass_and_reception_merge_into_one_completion_card():
         "clock": "08:24",
         "gameClock": "Q4 08:24",
         "touchdown": False,
-        "description": "deep",
+        "down": 3,
+        "distance": 8.0,
+        "yardline100": 40.0,
+        "yardline": "BAL 40",
+        "airYards": 42.0,
+        "yardsAfterCatch": 24.0,
         "zScore": 2.0,
         "rarityScore": 0.9,
         "favorableCount": 1,
@@ -313,6 +381,11 @@ def test_pass_and_reception_merge_into_one_completion_card():
     assert combined["rarityTier"] == 100
     assert combined["secondaryPeerKey"] == "pass|pos:QB"
     assert combined["secondaryRole"] == "pass"
+    assert combined["down"] == 3
+    assert combined["distance"] == 8.0
+    assert combined["yardline"] == "BAL 40"
+    assert combined["airYards"] == 42.0
+    assert combined["yardsAfterCatch"] == 24.0
 
     merged = _merge_pass_reception_pairs([pas, rec])
     assert len(merged) == 1

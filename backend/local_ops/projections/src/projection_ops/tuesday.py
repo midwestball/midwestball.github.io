@@ -63,7 +63,7 @@ class StageResult:
 def historical_stages(
     season: int, week: int, *, fetch: bool = True, highlight: bool = True
 ) -> list[Stage]:
-    """Ballnet finalized-stats stages A through H plus the Storage upload."""
+    """Ballnet finalized-stats stages A–H + play rarity, then Storage upload."""
     stages: list[Stage] = []
     if fetch:
         stages.append(Stage("fetch", ("fetch", "--season", str(season), "--force")))
@@ -75,20 +75,25 @@ def historical_stages(
         stages.append(
             Stage("highlights", ("highlights", "--season", str(season), "--week", str(week)))
         )
-    stages.append(
-        Stage(
-            "upload-storage",
-            (
-                "upload-storage",
-                "--index",
-                "--season",
-                str(season),
-                "--as-of-week",
-                str(week),
-                "--highlights",
-            ),
+        stages.append(Stage("play-panel", ("play-panel", "--season", str(season))))
+        stages.append(
+            Stage(
+                "play-highlights",
+                ("play-highlights", "--season", str(season), "--week", str(week)),
+            )
         )
-    )
+    upload_argv = [
+        "upload-storage",
+        "--index",
+        "--season",
+        str(season),
+        "--as-of-week",
+        str(week),
+        "--highlights",
+    ]
+    if highlight:
+        upload_argv.append("--play-highlights")
+    stages.append(Stage("upload-storage", tuple(upload_argv)))
     return stages
 
 

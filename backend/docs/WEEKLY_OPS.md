@@ -25,7 +25,9 @@ Intended stages inside `refresh` (not a new math path — wrap what already exis
    - All weeks for one year: `upload-storage --season YEAR --highlights-only --all-highlight-weeks`
    - Play boards + histograms: `upload-storage --season YEAR --play-highlights-only [--all-play-highlight-weeks]`
 
-Until `refresh` exists, run that sequence manually (see below).
+Until `refresh` exists, run that sequence manually (see below). The local watcher
+pipeline (`local_ops/run_pipeline.ps1`) already includes Stage H, play-panel,
+play-highlights, and both highlight Storage uploads before `publish-all`.
 
 ## Manual recipe (works today)
 

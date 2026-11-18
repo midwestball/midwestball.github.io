@@ -286,13 +286,15 @@ def _score_play(
     else:
         metric_id = str(rec["metric_id"])
         stat_label = _METRIC_LABELS.get(metric_id, metric_id.replace("_", " "))
-    desc = rec.get("desc")
-    if isinstance(desc, str) and len(desc) > 220:
-        desc = desc[:217] + "…"
-
     quarter = rec.get("quarter")
     clock = rec.get("clock")
     raw_value = rec.get("value")
+    down = rec.get("down")
+    ydstogo = rec.get("ydstogo")
+    yardline_100 = rec.get("yardline_100")
+    yrdln = rec.get("yrdln")
+    air_yards = rec.get("air_yards")
+    yards_after_catch = rec.get("yards_after_catch")
     return {
         "playerId": rec["player_id"],
         "name": rec.get("player_display_name") or "",
@@ -319,7 +321,14 @@ def _score_play(
             else None
         ),
         "touchdown": bool(rec.get("touchdown") or False),
-        "description": desc,
+        "down": int(down) if down is not None else None,
+        "distance": float(ydstogo) if ydstogo is not None else None,
+        "yardline100": float(yardline_100) if yardline_100 is not None else None,
+        "yardline": yrdln.strip() if isinstance(yrdln, str) and yrdln.strip() else None,
+        "airYards": float(air_yards) if air_yards is not None else None,
+        "yardsAfterCatch": (
+            float(yards_after_catch) if yards_after_catch is not None else None
+        ),
         "zScore": round(z, 3) if z is not None else 0.0,
         "rarityScore": 1.0 - favorable / peers.size,
         "favorableCount": favorable,
@@ -423,7 +432,28 @@ def _combine_completion(pas: dict[str, Any], rec: dict[str, Any]) -> dict[str, A
             "rarityTier": primary.get("rarityTier"),
             "rarityMethod": primary.get("rarityMethod"),
             "touchdown": bool(pas.get("touchdown") or rec.get("touchdown")),
-            "description": pas.get("description") or rec.get("description"),
+            "down": pas.get("down") if pas.get("down") is not None else rec.get("down"),
+            "distance": (
+                pas.get("distance")
+                if pas.get("distance") is not None
+                else rec.get("distance")
+            ),
+            "yardline100": (
+                pas.get("yardline100")
+                if pas.get("yardline100") is not None
+                else rec.get("yardline100")
+            ),
+            "yardline": pas.get("yardline") or rec.get("yardline"),
+            "airYards": (
+                pas.get("airYards")
+                if pas.get("airYards") is not None
+                else rec.get("airYards")
+            ),
+            "yardsAfterCatch": (
+                pas.get("yardsAfterCatch")
+                if pas.get("yardsAfterCatch") is not None
+                else rec.get("yardsAfterCatch")
+            ),
             "gameId": pas.get("gameId") or rec.get("gameId") or "",
             "playId": pas.get("playId") if pas.get("playId") is not None else rec.get("playId"),
             "quarter": pas.get("quarter") if pas.get("quarter") is not None else rec.get("quarter"),

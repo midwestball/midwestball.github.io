@@ -5,6 +5,7 @@
 - Render published `highlights/plays/{season}/w{week}[.epa].json` rows only — no client-side rarity math. Toggle Raw / EPA via `?metric=epa`.
 - Expand charts from the matching `dists/league_plays/{season}/w{week}[.epa].json` keyed by row `peerKey` — never invent bins.
 - Show game clock (`gameClock` / `clock` + `quarter`) on each row when present.
+- On expand, show situation (`down` / `distance` / `yardline`) and class outcome (yards + `airYards` / `yardsAfterCatch` when present) above the peer histogram — never invent values missing from the board row.
 - Keep the route out of `SiteHeader` nav until product asks to ship it.
 
 ## Ask First
