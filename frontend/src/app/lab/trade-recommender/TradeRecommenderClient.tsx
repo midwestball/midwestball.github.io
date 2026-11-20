@@ -5,7 +5,8 @@ import { useEffect, useMemo, useState } from "react";
 import { PlayerComparisonLink } from "@/components/PlayerComparisonLink";
 import { LeagueConnectForms, leagueControlClass as control } from "@/components/league/LeagueConnectForms";
 import { useRos } from "@/components/projections/useRos";
-import { formatPct, formatPoints, projectLeague } from "@/lib/league/project";
+import { externalRos, formatSourceLine } from "@/lib/league/external-ros";
+import { formatPct, projectLeague } from "@/lib/league/project";
 import {
   analyzeTeamStrengths,
   canRecommend,
@@ -52,6 +53,12 @@ export function TradeRecommenderClient() {
   const resolvedPartner = partnerId || league?.teams.find((team) => team.id !== resolvedYourId)?.id || "";
   const resolvedA = teamA || resolvedYourId;
   const resolvedB = teamB || league?.teams.find((team) => team.id !== resolvedA)?.id || "";
+
+  // Keep an explicit partner id in give-away mode so the "Players I want" list always binds to a real team.
+  useEffect(() => {
+    if (mode !== "give-away" || !resolvedPartner) return;
+    if (partnerId !== resolvedPartner) setPartnerId(resolvedPartner);
+  }, [mode, partnerId, resolvedPartner]);
 
   const packageSize = clampPackageSize(maxEachSide);
   const strengths = useMemo(() => (league && projection && canRecommend(snapshot, projection) ? analyzeTeamStrengths(league, projection) : []), [league, projection, snapshot]);
@@ -170,6 +177,7 @@ export function TradeRecommenderClient() {
                 <p className="text-sm text-muted-foreground">
                   {league.provider === "sleeper" ? "Sleeper" : "ESPN"} · {league.season} · {leagueSettingsLabel(league.rosterSettings)}
                   {snapshot ? ` · ROS through week ${snapshot.cutoffWeek}` : ""}
+                  {` · Ext weeks ${externalRos.horizonStartWeek}–${externalRos.horizonEndWeek}`}
                 </p>
               </div>
             </div>
@@ -242,9 +250,11 @@ export function TradeRecommenderClient() {
                         <select
                           value={resolvedYourId}
                           onChange={(event) => {
-                            setYourTeamId(event.target.value);
+                            const next = event.target.value;
+                            setYourTeamId(next);
                             setGiveAwayIds([]);
                             setReceiveIds([]);
+                            if (partnerId === next) setPartnerId("");
                             setSelectedTradeId(null);
                           }}
                           className={`${control} mt-1 block w-full`}
@@ -320,6 +330,39 @@ export function TradeRecommenderClient() {
                   )}
                 </div>
 
+                {mode === "give-away" && (
+                  <section className="space-y-3 border border-ring/40 bg-muted/40 p-3" aria-label="Players to give and want">
+                    <div>
+                      <h3 className="text-sm font-semibold">Choose players on both sides</h3>
+                      <p className="text-xs text-muted-foreground">
+                        Tap names to lock them. You can lock only givers, only targets from {partnerLabel}, or both. Unlocked slots are filled by the recommender (up to {packageSize} each side).
+                      </p>
+                    </div>
+                    <div className="grid gap-3 lg:grid-cols-2">
+                      <PlayerPickList
+                        title="Players I give"
+                        subtitle={`From ${leftName} · ${giveAwayIds.length}/${packageSize} locked`}
+                        hint="Outgoing players from your roster."
+                        emptyListMessage="No projected skill players on your roster."
+                        emptySelectionHint="Optional — leave empty to search any outgoing package."
+                        players={givePool}
+                        selectedIds={giveAwayIds}
+                        onToggle={toggleGive}
+                      />
+                      <PlayerPickList
+                        title="Players I want"
+                        subtitle={`From ${partnerLabel} · ${receiveIds.length}/${packageSize} locked`}
+                        hint={`Targets on ${partnerLabel}'s roster that must be in the return.`}
+                        emptyListMessage={`No projected skill players on ${partnerLabel}. Pick another trade partner.`}
+                        emptySelectionHint={`Optional — lock who you want from ${partnerLabel}.`}
+                        players={receivePool}
+                        selectedIds={receiveIds}
+                        onToggle={toggleReceive}
+                      />
+                    </div>
+                  </section>
+                )}
+
                 <div className="grid gap-3 sm:grid-cols-2">
                   <label className="block space-y-2 text-xs font-semibold">
                     <span className="flex flex-wrap items-baseline justify-between gap-2">
@@ -371,27 +414,6 @@ export function TradeRecommenderClient() {
                     </p>
                   </fieldset>
                 </div>
-
-                {mode === "give-away" && (
-                  <div className="grid gap-4 lg:grid-cols-2">
-                    <PlayerPickList
-                      title={`You send (up to ${packageSize})`}
-                      hint={`Optional. Leave empty to only lock targets from ${partnerLabel}.`}
-                      emptyPrompt={`Select players you will send, lock targets from ${partnerLabel}, or both.`}
-                      players={givePool}
-                      selectedIds={giveAwayIds}
-                      onToggle={toggleGive}
-                    />
-                    <PlayerPickList
-                      title={`${partnerLabel} sends / you receive (up to ${packageSize})`}
-                      hint="Optional. Locked targets must be in the return package; other slots can still be filled."
-                      emptyPrompt={`Select players you want from ${partnerLabel}, or leave empty to search freely.`}
-                      players={receivePool}
-                      selectedIds={receiveIds}
-                      onToggle={toggleReceive}
-                    />
-                  </div>
-                )}
               </section>
 
               <section className="space-y-3" aria-live="polite" aria-label="Recommended trades">
@@ -494,6 +516,11 @@ export function TradeRecommenderClient() {
         </h2>
         <ul className="list-disc space-y-1 pl-5 text-sm text-muted-foreground">
           <li>Each roster maps to rest-of-season players the same way as the league lab. Kickers, defenses, IR, and taxi spots are out of the pool.</li>
+          <li>
+            Player lines show midwestball ROS mean with a ±1σ band, plus hardcoded Sleeper and ESPN full-PPR sums for weeks {externalRos.horizonStartWeek}–
+            {externalRos.horizonEndWeek} (captured {externalRos.capturedAt.slice(0, 10)}), and the mean of whichever of those sources are present (μ3 when all three
+            exist). Trade search and fairness still use midwestball projections only.
+          </li>
           <li>Team strength is the optimized starter lineup mean; uncertainty is a normal fit from each starter&apos;s mean and 5th–95th gap.</li>
           <li>
             P(help) / P(hurt) use the change in lineup totals with shared starters canceling, so only players who enter or leave the starting lineup contribute variance.
@@ -522,68 +549,88 @@ export function TradeRecommenderClient() {
 
 function PlayerPickList({
   title,
+  subtitle,
   hint,
-  emptyPrompt,
+  emptyListMessage,
+  emptySelectionHint,
   players,
   selectedIds,
   onToggle,
 }: {
   title: string;
+  subtitle: string;
   hint: string;
-  emptyPrompt: string;
+  emptyListMessage: string;
+  emptySelectionHint: string;
   players: RosPlayer[];
   selectedIds: string[];
   onToggle: (id: string) => void;
 }) {
   return (
-    <div className="space-y-2">
+    <div className="space-y-2 border border-border bg-card p-3">
       <div>
-        <p className="text-xs font-semibold">{title}</p>
-        <p className="text-xs text-muted-foreground">{hint}</p>
+        <p className="text-sm font-semibold">{title}</p>
+        <p className="text-xs text-muted-foreground">{subtitle}</p>
+        <p className="mt-1 text-xs text-muted-foreground">{hint}</p>
       </div>
-      <ul className="grid gap-1">
-        {players.map((player) => {
-          const on = selectedIds.includes(player.playerId);
-          return (
-            <li key={player.playerId}>
-              <button
-                type="button"
-                aria-pressed={on}
-                onClick={() => onToggle(player.playerId)}
-                className={`w-full border px-2 py-1.5 text-left text-sm ${on ? "border-ring bg-muted font-semibold" : "border-border bg-card"}`}
-              >
-                {player.name}{" "}
-                <span className="text-xs font-normal text-muted-foreground">
-                  {player.position} · {rosMedian(player).toFixed(1)}
-                </span>
-              </button>
-            </li>
-          );
-        })}
-      </ul>
-      {!selectedIds.length && <p className="text-sm text-muted-foreground">{emptyPrompt}</p>}
+      {!players.length ? (
+        <p className="text-sm text-warning-foreground">{emptyListMessage}</p>
+      ) : (
+        <ul className="grid max-h-72 gap-1 overflow-y-auto pr-1">
+          {players.map((player) => {
+            const on = selectedIds.includes(player.playerId);
+            return (
+              <li key={player.playerId}>
+                <button
+                  type="button"
+                  aria-pressed={on}
+                  onClick={() => onToggle(player.playerId)}
+                  className={`w-full border px-2 py-1.5 text-left text-sm ${on ? "border-ring bg-primary text-primary-foreground font-semibold" : "border-border bg-card"}`}
+                >
+                  <span className="block">
+                    {player.name}{" "}
+                    <span className={`text-xs font-normal ${on ? "text-primary-foreground/80" : "text-muted-foreground"}`}>
+                      {player.position}
+                    </span>
+                  </span>
+                  <span className={`mt-0.5 block text-[11px] font-normal tabular-nums leading-snug ${on ? "text-primary-foreground/80" : "text-muted-foreground"}`}>
+                    {formatSourceLine(player)}
+                  </span>
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+      {!!players.length && !selectedIds.length && <p className="text-xs text-muted-foreground">{emptySelectionHint}</p>}
+      {selectedIds.length > 0 && (
+        <p className="text-xs font-semibold text-foreground">
+          Locked: {selectedIds.map((id) => players.find((player) => player.playerId === id)?.name ?? id).join(", ")}
+        </p>
+      )}
     </div>
   );
 }
 
 function PackageLine({ season, label, players }: { season: number; label: string; players: RosPlayer[] }) {
   return (
-    <p className="text-sm">
+    <div className="text-sm">
       <span className="text-xs font-semibold text-muted-foreground">{label}</span>
-      <span className="mt-0.5 block">
-        {players.length
-          ? players.map((player, index) => (
-              <span key={player.playerId}>
-                {index > 0 ? ", " : ""}
-                <PlayerComparisonLink playerId={player.playerId} season={season}>
-                  {player.name}
-                </PlayerComparisonLink>
-                <span className="text-xs text-muted-foreground"> ({formatPoints(player.mean)})</span>
-              </span>
-            ))
-          : "—"}
-      </span>
-    </p>
+      {players.length ? (
+        <ul className="mt-0.5 space-y-1">
+          {players.map((player) => (
+            <li key={player.playerId}>
+              <PlayerComparisonLink playerId={player.playerId} season={season}>
+                {player.name}
+              </PlayerComparisonLink>
+              <span className="mt-0.5 block text-[11px] tabular-nums text-muted-foreground">{formatSourceLine(player)}</span>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <span className="mt-0.5 block">—</span>
+      )}
+    </div>
   );
 }
 
@@ -635,7 +682,9 @@ function MiniLineup({ season, caption, lineup }: { season: number; caption: stri
                 "Empty"
               )}
             </td>
-            <td className="border-t border-border py-1 tabular-nums">{spot.player ? formatPoints(spot.player.mean) : "0.0"}</td>
+            <td className="border-t border-border py-1 text-[11px] tabular-nums leading-snug">
+              {spot.player ? formatSourceLine(spot.player) : "0.0"}
+            </td>
           </tr>
         ))}
       </tbody>
