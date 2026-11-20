@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { PlayerComparisonLink } from "@/components/PlayerComparisonLink";
 import { LeagueConnectForms, leagueControlClass as control } from "@/components/league/LeagueConnectForms";
 import { useRos } from "@/components/projections/useRos";
@@ -34,7 +34,7 @@ export function TradeRecommenderClient() {
   const { store, league, save, activate } = useLeagueLabStore();
   const [working, setWorking] = useState("");
   const [error, setError] = useState("");
-  const [mode, setMode] = useState<Mode>("suggest");
+  const [mode, setMode] = useState<Mode>("give-away");
   const [fairness, setFairness] = useState(0);
   const [maxEachSide, setMaxEachSide] = useState(2);
   const [yourTeamId, setYourTeamId] = useState("");
@@ -42,6 +42,7 @@ export function TradeRecommenderClient() {
   const [teamA, setTeamA] = useState("");
   const [teamB, setTeamB] = useState("");
   const [giveAwayIds, setGiveAwayIds] = useState<string[]>([]);
+  const [receiveIds, setReceiveIds] = useState<string[]>([]);
   const [selectedTradeId, setSelectedTradeId] = useState<string | null>(null);
 
   const projection = useMemo(() => (league && snapshot ? projectLeague(league, snapshot) : null), [league, snapshot]);
@@ -62,6 +63,11 @@ export function TradeRecommenderClient() {
     return tradeablePlayers(projection, fromId).sort((a, b) => rosMedian(b) - rosMedian(a) || a.name.localeCompare(b.name));
   }, [projection, mode, resolvedYourId, resolvedA]);
 
+  const receivePool = useMemo(() => {
+    if (!projection || mode !== "give-away") return [] as RosPlayer[];
+    return tradeablePlayers(projection, resolvedPartner).sort((a, b) => rosMedian(b) - rosMedian(a) || a.name.localeCompare(b.name));
+  }, [projection, mode, resolvedPartner]);
+
   const recommendations = useMemo(() => {
     if (!league || !projection || !canRecommend(snapshot, projection)) return [] as TradeRecommendation[];
     const base = { fairness, limit: 10, maxEachSide: packageSize };
@@ -70,32 +76,58 @@ export function TradeRecommenderClient() {
       return recommendTrades(league, projection, resolvedA, resolvedB, base);
     }
     if (mode === "give-away") {
-      if (!resolvedYourId || !resolvedPartner || !giveAwayIds.length) return [];
-      return recommendTrades(league, projection, resolvedYourId, resolvedPartner, { ...base, forcedGiveIds: giveAwayIds, limit: 12 });
+      if (!resolvedYourId || !resolvedPartner) return [];
+      if (!giveAwayIds.length && !receiveIds.length) return [];
+      return recommendTrades(league, projection, resolvedYourId, resolvedPartner, {
+        ...base,
+        forcedGiveIds: giveAwayIds.length ? giveAwayIds : undefined,
+        forcedReceiveIds: receiveIds.length ? receiveIds : undefined,
+        limit: 12,
+      });
     }
     if (!resolvedYourId) return [];
     return recommendForTeam(league, projection, resolvedYourId, { ...base, partnerId: partnerId || null, limit: 12 });
-  }, [league, projection, snapshot, mode, fairness, packageSize, resolvedA, resolvedB, resolvedYourId, resolvedPartner, partnerId, giveAwayIds]);
+  }, [league, projection, snapshot, mode, fairness, packageSize, resolvedA, resolvedB, resolvedYourId, resolvedPartner, partnerId, giveAwayIds, receiveIds]);
 
-  const selected = recommendations.find((trade) => trade.id === selectedTradeId) ?? recommendations[0] ?? null;
+  // Keep selection pinned to a live recommendation so chart overlays always have a concrete trade id.
+  useEffect(() => {
+    if (!recommendations.length) {
+      if (selectedTradeId !== null) setSelectedTradeId(null);
+      return;
+    }
+    if (!selectedTradeId || !recommendations.some((trade) => trade.id === selectedTradeId)) {
+      setSelectedTradeId(recommendations[0]!.id);
+    }
+  }, [recommendations, selectedTradeId]);
+
+  const selected = recommendations.find((trade) => trade.id === selectedTradeId) ?? null;
 
   const leftFocusId = mode === "two-team" ? resolvedA : resolvedYourId;
   const leftName = teamNames.get(leftFocusId) ?? "Your team";
   const rightName = selected ? (teamNames.get(selected.right.teamId) ?? "Partner") : teamNames.get(mode === "two-team" ? resolvedB : resolvedPartner) ?? "Partner";
+  const partnerLabel = teamNames.get(resolvedPartner) ?? "Partner";
 
-  const focusSide = selected && selected.left.teamId === leftFocusId ? selected.left : selected?.right.teamId === leftFocusId ? selected.right : selected?.left;
+  const focusSide = selected?.left.teamId === leftFocusId ? selected.left : selected?.right.teamId === leftFocusId ? selected.right : selected?.left ?? null;
   const gapOverlay = useMemo(() => {
     if (!yourStrength || !selected || !focusSide || focusSide.teamId !== yourStrength.teamId) return null;
     return gapOverlayForSide(yourStrength, focusSide);
   }, [yourStrength, selected, focusSide]);
   const strengthOverlay = useMemo(() => (selected && strengths.length ? strengthOverlayForTrade(strengths, selected) : null), [selected, strengths]);
+  const chartKey = selected?.id ?? "baseline";
+
+  function toggleId(list: string[], id: string, cap: number): string[] {
+    if (list.includes(id)) return list.filter((item) => item !== id);
+    if (list.length >= cap) return [...list.slice(list.length - cap + 1), id];
+    return [...list, id];
+  }
 
   function toggleGive(id: string) {
-    setGiveAwayIds((ids) => {
-      if (ids.includes(id)) return ids.filter((item) => item !== id);
-      if (ids.length >= packageSize) return [...ids.slice(ids.length - packageSize + 1), id];
-      return [...ids, id];
-    });
+    setGiveAwayIds((ids) => toggleId(ids, id, packageSize));
+    setSelectedTradeId(null);
+  }
+
+  function toggleReceive(id: string) {
+    setReceiveIds((ids) => toggleId(ids, id, packageSize));
     setSelectedTradeId(null);
   }
 
@@ -182,9 +214,9 @@ export function TradeRecommenderClient() {
                 <div role="group" aria-label="Recommendation mode" className="flex flex-wrap gap-1">
                   {(
                     [
+                      ["give-away", "Players I give"],
                       ["suggest", "Help my team"],
                       ["two-team", "Any two teams"],
-                      ["give-away", "Players I give"],
                     ] as const
                   ).map(([key, label]) => (
                     <button
@@ -212,6 +244,7 @@ export function TradeRecommenderClient() {
                           onChange={(event) => {
                             setYourTeamId(event.target.value);
                             setGiveAwayIds([]);
+                            setReceiveIds([]);
                             setSelectedTradeId(null);
                           }}
                           className={`${control} mt-1 block w-full`}
@@ -229,6 +262,7 @@ export function TradeRecommenderClient() {
                           value={mode === "suggest" ? partnerId : resolvedPartner}
                           onChange={(event) => {
                             setPartnerId(event.target.value);
+                            setReceiveIds([]);
                             setSelectedTradeId(null);
                           }}
                           className={`${control} mt-1 block w-full`}
@@ -322,6 +356,7 @@ export function TradeRecommenderClient() {
                           onClick={() => {
                             setMaxEachSide(size);
                             setGiveAwayIds((ids) => ids.slice(0, size));
+                            setReceiveIds((ids) => ids.slice(0, size));
                             setSelectedTradeId(null);
                           }}
                           className={`border px-3 py-2 text-sm font-semibold ${packageSize === size ? "border-ring bg-primary text-primary-foreground" : "border-border bg-card text-text-secondary"}`}
@@ -338,61 +373,33 @@ export function TradeRecommenderClient() {
                 </div>
 
                 {mode === "give-away" && (
-                  <div className="space-y-2">
-                    <p className="text-xs font-semibold">Players to trade away (up to {packageSize})</p>
-                    <ul className="grid gap-1 sm:grid-cols-2">
-                      {givePool.map((player) => {
-                        const on = giveAwayIds.includes(player.playerId);
-                        return (
-                          <li key={player.playerId}>
-                            <button
-                              type="button"
-                              aria-pressed={on}
-                              onClick={() => toggleGive(player.playerId)}
-                              className={`w-full border px-2 py-1.5 text-left text-sm ${on ? "border-ring bg-muted font-semibold" : "border-border bg-card"}`}
-                            >
-                              {player.name}{" "}
-                              <span className="text-xs font-normal text-muted-foreground">
-                                {player.position} · {rosMedian(player).toFixed(1)}
-                              </span>
-                            </button>
-                          </li>
-                        );
-                      })}
-                    </ul>
-                    {!giveAwayIds.length && (
-                      <p className="text-sm text-muted-foreground">
-                        Select up to {packageSize} player{packageSize === 1 ? "" : "s"} you are willing to send.
-                      </p>
-                    )}
+                  <div className="grid gap-4 lg:grid-cols-2">
+                    <PlayerPickList
+                      title={`You send (up to ${packageSize})`}
+                      hint={`Optional. Leave empty to only lock targets from ${partnerLabel}.`}
+                      emptyPrompt={`Select players you will send, lock targets from ${partnerLabel}, or both.`}
+                      players={givePool}
+                      selectedIds={giveAwayIds}
+                      onToggle={toggleGive}
+                    />
+                    <PlayerPickList
+                      title={`${partnerLabel} sends / you receive (up to ${packageSize})`}
+                      hint="Optional. Locked targets must be in the return package; other slots can still be filled."
+                      emptyPrompt={`Select players you want from ${partnerLabel}, or leave empty to search freely.`}
+                      players={receivePool}
+                      selectedIds={receiveIds}
+                      onToggle={toggleReceive}
+                    />
                   </div>
                 )}
               </section>
-
-              {yourStrength && (
-                <div className="grid gap-4 lg:grid-cols-2">
-                  <WeaknessChart
-                    gaps={yourStrength.positions}
-                    teamName={teamNames.get(yourStrength.teamId) ?? "Team"}
-                    overlay={gapOverlay}
-                  />
-                  <LeagueStrengthBars
-                    strengths={strengths}
-                    teamNames={teamNames}
-                    focusId={yourStrength.teamId}
-                    overlay={strengthOverlay}
-                  />
-                </div>
-              )}
-
-              <TradeScatter trades={recommendations} leftName={leftName} rightLabel={mode === "suggest" && !partnerId ? "partner" : rightName} />
 
               <section className="space-y-3" aria-live="polite" aria-label="Recommended trades">
                 <div className="flex flex-wrap items-end justify-between gap-2">
                   <div>
                     <h2 className="text-lg font-semibold">Recommended packages</h2>
                     <p className="text-xs text-muted-foreground">
-                      Ranked by expected help to {leftName} under the fairness slider. Only packages that clear the fairness filters are listed.
+                      Ranked by expected help to {leftName} under the fairness slider. Select a row to update the charts below.
                     </p>
                   </div>
                   <p className="text-xs text-muted-foreground">{recommendations.length} shown</p>
@@ -401,12 +408,15 @@ export function TradeRecommenderClient() {
                 {!recommendations.length ? (
                   <p className="border border-border bg-card p-3 text-sm text-muted-foreground">
                     No packages cleared the fairness filters
-                    {mode === "give-away" && !giveAwayIds.length ? " — pick players to send first" : ""}. Try raising fairness, changing the partner, or picking different give-aways.
+                    {mode === "give-away" && !giveAwayIds.length && !receiveIds.length
+                      ? " — pick players to send and/or receive first"
+                      : ""}
+                    . Try raising fairness, changing the partner, or adjusting locked players.
                   </p>
                 ) : (
                   <ul className="space-y-2">
                     {recommendations.map((trade, index) => {
-                      const active = (selected?.id ?? "") === trade.id;
+                      const active = selected?.id === trade.id;
                       const partner = teamNames.get(trade.right.teamId) ?? trade.right.teamId;
                       return (
                         <li key={trade.id}>
@@ -418,6 +428,7 @@ export function TradeRecommenderClient() {
                             <div className="flex flex-wrap items-start justify-between gap-2">
                               <p className="text-sm font-semibold">
                                 #{index + 1} · vs {partner}
+                                {!trade.fairnessPass ? <span className="ml-2 text-xs font-normal text-warning-foreground">locked · outside fairness</span> : null}
                               </p>
                               <p className="text-xs text-muted-foreground">score {trade.score.toFixed(1)}</p>
                             </div>
@@ -441,9 +452,31 @@ export function TradeRecommenderClient() {
                 )}
               </section>
 
+              {yourStrength && (
+                <div className="grid gap-4 lg:grid-cols-2">
+                  <WeaknessChart
+                    key={`gap-${chartKey}`}
+                    gaps={yourStrength.positions}
+                    teamName={teamNames.get(yourStrength.teamId) ?? "Team"}
+                    overlay={gapOverlay}
+                    selectedTradeId={selected?.id ?? null}
+                  />
+                  <LeagueStrengthBars
+                    key={`league-${chartKey}`}
+                    strengths={strengths}
+                    teamNames={teamNames}
+                    focusId={yourStrength.teamId}
+                    overlay={strengthOverlay}
+                    selectedTradeId={selected?.id ?? null}
+                  />
+                </div>
+              )}
+
+              <TradeScatter trades={recommendations} leftName={leftName} rightLabel={mode === "suggest" && !partnerId ? "partner" : rightName} />
+
               {selected && (
                 <>
-                  <TradeImpactCurves trade={selected} leftName={leftName} rightName={rightName} />
+                  <TradeImpactCurves key={`curves-${selected.id}`} trade={selected} leftName={leftName} rightName={rightName} />
                   <section className="grid gap-3 sm:grid-cols-2" aria-label="Selected trade lineup change">
                     <LineupDelta season={league.season} title={`${leftName} lineup`} before={selected.left.beforeLineup} after={selected.left.afterLineup} delta={selected.left.deltaMean} />
                     <LineupDelta season={league.season} title={`${rightName} lineup`} before={selected.right.beforeLineup} after={selected.right.afterLineup} delta={selected.right.deltaMean} />
@@ -469,6 +502,9 @@ export function TradeRecommenderClient() {
             Fairness 0 keeps the other team near even (about −2 ROS mean points of hurt allowed, with a soft package-gap budget). Fairness 1 widens that floor toward roughly −120 points and weights your gain more heavily.
           </li>
           <li>
+            In Players I give mode you can lock outgoing players, incoming targets, or both. Partial locks are filled up to the max package size; a fully locked package is always evaluated even if it sits outside the fairness slider.
+          </li>
+          <li>
             Package size is user-controlled (1–{MAX_PACKAGE_SIZE} per side). Three-player packages only enumerate the top {THREE_PACK_POOL} ROS means on each roster so the search stays responsive. This does not search three-team trades, faab, or draft picks.{" "}
             <Link href="/trades" className="underline">
               Manual trade analysis
@@ -481,6 +517,52 @@ export function TradeRecommenderClient() {
         </ul>
       </section>
     </main>
+  );
+}
+
+function PlayerPickList({
+  title,
+  hint,
+  emptyPrompt,
+  players,
+  selectedIds,
+  onToggle,
+}: {
+  title: string;
+  hint: string;
+  emptyPrompt: string;
+  players: RosPlayer[];
+  selectedIds: string[];
+  onToggle: (id: string) => void;
+}) {
+  return (
+    <div className="space-y-2">
+      <div>
+        <p className="text-xs font-semibold">{title}</p>
+        <p className="text-xs text-muted-foreground">{hint}</p>
+      </div>
+      <ul className="grid gap-1">
+        {players.map((player) => {
+          const on = selectedIds.includes(player.playerId);
+          return (
+            <li key={player.playerId}>
+              <button
+                type="button"
+                aria-pressed={on}
+                onClick={() => onToggle(player.playerId)}
+                className={`w-full border px-2 py-1.5 text-left text-sm ${on ? "border-ring bg-muted font-semibold" : "border-border bg-card"}`}
+              >
+                {player.name}{" "}
+                <span className="text-xs font-normal text-muted-foreground">
+                  {player.position} · {rosMedian(player).toFixed(1)}
+                </span>
+              </button>
+            </li>
+          );
+        })}
+      </ul>
+      {!selectedIds.length && <p className="text-sm text-muted-foreground">{emptyPrompt}</p>}
+    </div>
   );
 }
 

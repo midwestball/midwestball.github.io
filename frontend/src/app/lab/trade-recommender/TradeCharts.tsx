@@ -38,10 +38,12 @@ export function WeaknessChart({
   gaps,
   teamName,
   overlay,
+  selectedTradeId = null,
 }: {
   gaps: PositionGap[];
   teamName: string;
   overlay?: GapOverlayRow[] | null;
+  selectedTradeId?: string | null;
 }) {
   type GapRow = {
     position: PositionGap["position"];
@@ -88,7 +90,7 @@ export function WeaknessChart({
       </div>
       <div className="h-56 w-full border border-border bg-card p-2">
         <ResponsiveContainer width="100%" height="100%">
-          <BarChart data={data} margin={{ top: 8, right: 8, left: 0, bottom: 4 }}>
+          <BarChart key={selectedTradeId ?? "baseline"} data={data} margin={{ top: 8, right: 8, left: 0, bottom: 4 }}>
             <CartesianGrid stroke={GRID} strokeDasharray="3 3" />
             <XAxis dataKey="position" tick={{ fontSize: 12 }} />
             <YAxis tick={{ fontSize: 11 }} width={40} />
@@ -103,13 +105,13 @@ export function WeaknessChart({
             <ReferenceLine y={0} stroke="var(--foreground)" strokeOpacity={0.35} />
             {showingTrade ? (
               <>
-                <Bar dataKey="before" name="before" fill={BEFORE} fillOpacity={0.55} radius={0} />
-                <Bar dataKey="after" name="after" fill={YOU} radius={0}>
+                <Bar dataKey="before" name="before" fill={BEFORE} fillOpacity={0.55} radius={0} isAnimationActive={false} />
+                <Bar dataKey="after" name="after" fill={YOU} radius={0} isAnimationActive={false}>
                   <ErrorBar dataKey="afterError" width={4} strokeWidth={1.5} stroke="var(--foreground)" direction="y" />
                 </Bar>
               </>
             ) : (
-              <Bar dataKey="gap" name="gap" radius={0}>
+              <Bar dataKey="gap" name="gap" radius={0} isAnimationActive={false}>
                 {data.map((row) => (
                   <Cell key={row.position} fill={row.gap < 0 ? WEAK : STRONG} />
                 ))}
@@ -127,24 +129,29 @@ export function LeagueStrengthBars({
   teamNames,
   focusId,
   overlay,
+  selectedTradeId = null,
 }: {
   strengths: TeamStrength[];
   teamNames: Map<string, string>;
   focusId: string;
   overlay?: StrengthOverlayRow[] | null;
+  selectedTradeId?: string | null;
 }) {
   const overlayById = new Map(overlay?.map((row) => [row.teamId, row]) ?? []);
+  const showingTrade = !!overlay?.some((row) => row.involved);
   const data = [...strengths]
     .map((row) => {
       const over = overlayById.get(row.teamId);
       const before = over?.beforeMean ?? row.rosMean;
-      const after = over?.involved ? over.afterMean : null;
-      const sortKey = after ?? before;
+      const afterRaw = over?.involved ? over.afterMean : null;
+      const after = afterRaw === null || afterRaw === undefined ? before : afterRaw;
+      const sortKey = afterRaw ?? before;
       return {
         id: row.teamId,
         name: teamNames.get(row.teamId) ?? row.teamId,
         before: Math.round(before * 10) / 10,
-        after: after === null || after === undefined ? null : Math.round(after * 10) / 10,
+        // Non-involved teams keep after === before so the dual-bar layout stays stable; hide via opacity.
+        after: Math.round(after * 10) / 10,
         afterError: over?.involved && over.afterSd !== null ? Math.round(over.afterSd * 10) / 10 : 0,
         delta: over?.deltaMean === null || over?.deltaMean === undefined ? null : Math.round(over.deltaMean * 10) / 10,
         focus: row.teamId === focusId,
@@ -153,8 +160,6 @@ export function LeagueStrengthBars({
       };
     })
     .sort((a, b) => b.sortKey - a.sortKey);
-
-  const showingTrade = !!overlay?.some((row) => row.involved);
 
   return (
     <section className="space-y-2" aria-labelledby="league-strength">
@@ -170,7 +175,7 @@ export function LeagueStrengthBars({
       </div>
       <div className="h-56 w-full border border-border bg-card p-2">
         <ResponsiveContainer width="100%" height="100%">
-          <BarChart data={data} layout="vertical" margin={{ top: 4, right: 12, left: 4, bottom: 4 }}>
+          <BarChart key={selectedTradeId ?? "baseline"} data={data} layout="vertical" margin={{ top: 4, right: 12, left: 4, bottom: 4 }}>
             <CartesianGrid stroke={GRID} strokeDasharray="3 3" />
             <XAxis type="number" tick={{ fontSize: 11 }} />
             <YAxis type="category" dataKey="name" width={96} tick={{ fontSize: 11 }} />
@@ -178,6 +183,7 @@ export function LeagueStrengthBars({
               formatter={(value, name, item) => {
                 const row = item?.payload as { delta?: number | null; involved?: boolean } | undefined;
                 if (name === "after") {
+                  if (!row?.involved) return [`${Number(value).toFixed(1)}`, "unchanged"];
                   const delta = row?.delta;
                   const suffix = delta === null || delta === undefined ? "" : ` · Δ ${delta > 0 ? "+" : ""}${delta.toFixed(1)}`;
                   return [`${Number(value).toFixed(1)}${suffix}`, "after (±1σ)"];
@@ -187,13 +193,16 @@ export function LeagueStrengthBars({
             />
             {showingTrade ? (
               <>
-                <Bar dataKey="before" name="before" fill={BEFORE} fillOpacity={0.45} radius={0} />
-                <Bar dataKey="after" name="after" fill={YOU} radius={0}>
+                <Bar dataKey="before" name="before" fill={BEFORE} fillOpacity={0.45} radius={0} isAnimationActive={false} />
+                <Bar dataKey="after" name="after" radius={0} isAnimationActive={false}>
+                  {data.map((row) => (
+                    <Cell key={row.id} fill={YOU} fillOpacity={row.involved ? 1 : 0} />
+                  ))}
                   <ErrorBar dataKey="afterError" width={4} strokeWidth={1.5} stroke="var(--foreground)" direction="x" />
                 </Bar>
               </>
             ) : (
-              <Bar dataKey="before" name="ROS mean" radius={0}>
+              <Bar dataKey="before" name="ROS mean" radius={0} isAnimationActive={false}>
                 {data.map((row) => (
                   <Cell key={row.id} fill={row.focus ? YOU : BEFORE} fillOpacity={row.focus ? 1 : 0.55} />
                 ))}

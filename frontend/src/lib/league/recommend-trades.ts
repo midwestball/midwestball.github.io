@@ -82,8 +82,16 @@ export type RecommendOptions = {
   maxEachSide?: number;
   /** How many recommendations to keep. */
   limit?: number;
-  /** When set, left team must give exactly these ROS player ids (order ignored). */
+  /**
+   * Left team must include these players in its outgoing package.
+   * Larger packages that still include them are searched up to maxEachSide.
+   */
   forcedGiveIds?: string[];
+  /**
+   * Right team must include these players in what it sends (left receives them).
+   * Larger packages that still include them are searched up to maxEachSide.
+   */
+  forcedReceiveIds?: string[];
 };
 
 function pool(team: TeamProjection): RosPlayer[] {
@@ -319,8 +327,30 @@ function packageCombos(players: RosPlayer[], size: number): RosPlayer[][] {
   return combinations(poolForSize(players, size), size);
 }
 
+/** Packages of size 1…maxEach, or supersets of required ids up to maxEach. Empty required → open search. */
+function constrainedPackageCombos(players: RosPlayer[], requiredIds: string[] | null, maxEach: number): RosPlayer[][] | null {
+  if (!requiredIds || requiredIds.length === 0) {
+    const open: RosPlayer[][] = [];
+    for (let size = 1; size <= maxEach; size += 1) open.push(...packageCombos(players, size));
+    return open;
+  }
+  const requiredSet = new Set(requiredIds);
+  const required = players.filter((player) => requiredSet.has(player.playerId));
+  if (required.length !== requiredSet.size || required.length > maxEach) return null;
+  const remaining = players.filter((player) => !requiredSet.has(player.playerId));
+  const combos: RosPlayer[][] = [required];
+  for (let extra = 1; extra <= maxEach - required.length; extra += 1) {
+    for (const add of combinations(remaining, extra)) combos.push([...required, ...add]);
+  }
+  return combos;
+}
+
 export function clampPackageSize(value: number): number {
   return Math.min(MAX_PACKAGE_SIZE, Math.max(1, Math.round(value)));
+}
+
+function sameIdSet(players: RosPlayer[], ids: Set<string>): boolean {
+  return players.length === ids.size && players.every((player) => ids.has(player.playerId));
 }
 
 /** Soft floor on the other team's ROS mean change: ~−2 at fairness 0, ~−120 at fairness 1. */
@@ -392,38 +422,37 @@ export function recommendTrades(
   const fairness = options.fairness ?? 0;
   const maxEach = clampPackageSize(options.maxEachSide ?? 2);
   const limit = Math.min(40, Math.max(1, options.limit ?? 8));
-  const forced = options.forcedGiveIds ? new Set(options.forcedGiveIds) : null;
+  const mustGive = options.forcedGiveIds?.length ? new Set(options.forcedGiveIds) : null;
+  const mustReceive = options.forcedReceiveIds?.length ? new Set(options.forcedReceiveIds) : null;
 
-  const leftCombos: RosPlayer[][] = [];
-  if (forced) {
-    const chosen = leftPool.filter((player) => forced.has(player.playerId));
-    if (chosen.length !== forced.size || chosen.length === 0 || chosen.length > maxEach) return [];
-    leftCombos.push(chosen);
-  } else {
-    for (let size = 1; size <= maxEach; size += 1) leftCombos.push(...packageCombos(leftPool, size));
-  }
+  const leftCombos = constrainedPackageCombos(leftPool, mustGive ? [...mustGive] : null, maxEach);
+  const rightCombos = constrainedPackageCombos(rightPool, mustReceive ? [...mustReceive] : null, maxEach);
+  if (!leftCombos || !rightCombos) return [];
 
   const results: TradeRecommendation[] = [];
   for (const giveLeft of leftCombos) {
-    for (let size = 1; size <= maxEach; size += 1) {
-      // Allow uneven packages, but skip empty-for-empty and pure dump unless forced give.
-      for (const giveRight of packageCombos(rightPool, size)) {
-        if (!giveLeft.length && !giveRight.length) continue;
-        const { nextLeft, nextRight } = applySwap(leftPool, rightPool, giveLeft, giveRight);
-        const afterLeft = lineupValue(nextLeft, league.rosterSettings);
-        const afterRight = lineupValue(nextRight, league.rosterSettings);
-        if (!afterLeft || !afterRight) continue;
-        const left = sideStats(leftTeamId, giveLeft, beforeLeft, afterLeft);
-        const right = sideStats(rightTeamId, giveRight, beforeRight, afterRight);
-        if (!passesFairness(left, right, fairness)) continue;
-        results.push({
-          id: `${packageKey(giveLeft)}>${packageKey(giveRight)}`,
-          left,
-          right,
-          score: scoreTrade(left, right, fairness),
-          fairnessPass: true,
-        });
-      }
+    for (const giveRight of rightCombos) {
+      if (!giveLeft.length && !giveRight.length) continue;
+      const { nextLeft, nextRight } = applySwap(leftPool, rightPool, giveLeft, giveRight);
+      const afterLeft = lineupValue(nextLeft, league.rosterSettings);
+      const afterRight = lineupValue(nextRight, league.rosterSettings);
+      if (!afterLeft || !afterRight) continue;
+      const left = sideStats(leftTeamId, giveLeft, beforeLeft, afterLeft);
+      const right = sideStats(rightTeamId, giveRight, beforeRight, afterRight);
+      const exactLock =
+        !!mustGive &&
+        !!mustReceive &&
+        sameIdSet(giveLeft, mustGive) &&
+        sameIdSet(giveRight, mustReceive);
+      const fair = passesFairness(left, right, fairness);
+      if (!fair && !exactLock) continue;
+      results.push({
+        id: `${packageKey(giveLeft)}>${packageKey(giveRight)}`,
+        left,
+        right,
+        score: scoreTrade(left, right, fairness) + (exactLock ? 1e6 : 0),
+        fairnessPass: fair,
+      });
     }
   }
 

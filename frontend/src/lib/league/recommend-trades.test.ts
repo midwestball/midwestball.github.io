@@ -330,4 +330,70 @@ describe("recommend-trades", () => {
     expect(left.deltaError).toBeGreaterThan(0);
     expect(right.deltaMean).toBeCloseTo(trade.right.deltaMean, 5);
   });
+
+  it("respects locked receive targets and evaluates a fully locked package", () => {
+    const ros = snapshot([
+      player("qb-a", "QB", 70, "Alpha QB"),
+      player("rb-weak", "RB", 30, "Weak RB"),
+      player("wr-a1", "WR", 80, "Alpha WR1"),
+      player("wr-a2", "WR", 75, "Alpha WR2"),
+      player("qb-b", "QB", 70, "Beta QB"),
+      player("rb-b1", "RB", 85, "Beta RB1"),
+      player("rb-b2", "RB", 80, "Beta RB2"),
+      player("wr-weak", "WR", 25, "Weak WR"),
+    ]);
+    const league = leagueOf([
+      {
+        id: "1",
+        name: "Alpha",
+        manager: "A",
+        wins: 1,
+        losses: 0,
+        ties: 0,
+        points: 100,
+        players: [
+          { providerPlayerId: "1", name: "Alpha QB", position: "QB", nflTeam: "CHI", gsisId: "qb-a", ir: false, taxi: false },
+          { providerPlayerId: "2", name: "Weak RB", position: "RB", nflTeam: "CHI", gsisId: "rb-weak", ir: false, taxi: false },
+          { providerPlayerId: "3", name: "Alpha WR1", position: "WR", nflTeam: "CHI", gsisId: "wr-a1", ir: false, taxi: false },
+          { providerPlayerId: "4", name: "Alpha WR2", position: "WR", nflTeam: "CHI", gsisId: "wr-a2", ir: false, taxi: false },
+        ],
+      },
+      {
+        id: "2",
+        name: "Beta",
+        manager: "B",
+        wins: 0,
+        losses: 1,
+        ties: 0,
+        points: 90,
+        players: [
+          { providerPlayerId: "5", name: "Beta QB", position: "QB", nflTeam: "CHI", gsisId: "qb-b", ir: false, taxi: false },
+          { providerPlayerId: "6", name: "Beta RB1", position: "RB", nflTeam: "CHI", gsisId: "rb-b1", ir: false, taxi: false },
+          { providerPlayerId: "7", name: "Beta RB2", position: "RB", nflTeam: "CHI", gsisId: "rb-b2", ir: false, taxi: false },
+          { providerPlayerId: "8", name: "Weak WR", position: "WR", nflTeam: "CHI", gsisId: "wr-weak", ir: false, taxi: false },
+        ],
+      },
+    ]);
+    const projection = projectLeague(league, ros, { sims: 10, seed: 5 });
+
+    const receiveOnly = recommendTrades(league, projection, "1", "2", {
+      fairness: 0,
+      limit: 8,
+      maxEachSide: 1,
+      forcedReceiveIds: ["rb-b2"],
+    });
+    expect(receiveOnly.length).toBeGreaterThan(0);
+    expect(receiveOnly.every((trade) => trade.right.give.some((player) => player.playerId === "rb-b2"))).toBe(true);
+
+    const locked = recommendTrades(league, projection, "1", "2", {
+      fairness: 0,
+      limit: 5,
+      maxEachSide: 1,
+      forcedGiveIds: ["wr-a2"],
+      forcedReceiveIds: ["rb-b1"],
+    });
+    expect(locked.length).toBeGreaterThan(0);
+    expect(locked[0]!.left.give.map((player) => player.playerId)).toEqual(["wr-a2"]);
+    expect(locked[0]!.right.give.map((player) => player.playerId)).toEqual(["rb-b1"]);
+  });
 });
