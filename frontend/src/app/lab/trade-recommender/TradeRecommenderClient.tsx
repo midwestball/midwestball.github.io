@@ -5,7 +5,14 @@ import { useEffect, useMemo, useState } from "react";
 import { PlayerComparisonLink } from "@/components/PlayerComparisonLink";
 import { LeagueConnectForms, leagueControlClass as control } from "@/components/league/LeagueConnectForms";
 import { useRos } from "@/components/projections/useRos";
-import { externalRos, formatSourceLine } from "@/lib/league/external-ros";
+import {
+  externalRos,
+  formatSourceLine,
+  RANKING_SOURCES,
+  rankingPoints,
+  remapRosSnapshot,
+  type RankingSource,
+} from "@/lib/league/external-ros";
 import { formatPct, projectLeague } from "@/lib/league/project";
 import {
   analyzeTeamStrengths,
@@ -23,7 +30,7 @@ import {
 } from "@/lib/league/recommend-trades";
 import { leagueSettingsLabel } from "@/lib/league/store";
 import { useLeagueLabStore } from "@/lib/league/use-league-store";
-import { rosMedian, type RosPlayer } from "@/lib/ros";
+import type { RosPlayer } from "@/lib/ros";
 import { LeagueStrengthBars, TradeImpactCurves, TradeScatter, WeaknessChart } from "./TradeCharts";
 
 type Mode = "suggest" | "two-team" | "give-away";
@@ -37,6 +44,7 @@ export function TradeRecommenderClient() {
   const [error, setError] = useState("");
   const [mode, setMode] = useState<Mode>("give-away");
   const [fairness, setFairness] = useState(0);
+  const [rankingSource, setRankingSource] = useState<RankingSource>("midwestball");
   const [maxEachSide, setMaxEachSide] = useState(2);
   const [yourTeamId, setYourTeamId] = useState("");
   const [partnerId, setPartnerId] = useState("");
@@ -46,8 +54,15 @@ export function TradeRecommenderClient() {
   const [receiveIds, setReceiveIds] = useState<string[]>([]);
   const [selectedTradeId, setSelectedTradeId] = useState<string | null>(null);
 
-  const projection = useMemo(() => (league && snapshot ? projectLeague(league, snapshot) : null), [league, snapshot]);
+  const mbById = useMemo(() => new Map(snapshot?.entities.map((player) => [player.playerId, player]) ?? []), [snapshot]);
+  const rankingSnapshot = useMemo(() => (snapshot ? remapRosSnapshot(snapshot, rankingSource) : null), [snapshot, rankingSource]);
+  const projection = useMemo(
+    () => (league && rankingSnapshot ? projectLeague(league, rankingSnapshot) : null),
+    [league, rankingSnapshot],
+  );
   const teamNames = useMemo(() => new Map(league?.teams.map((team) => [team.id, team.name]) ?? []), [league]);
+  const rankingLabel = RANKING_SOURCES.find((row) => row.id === rankingSource)?.label ?? "Midwest Ball";
+  const sourceLine = (player: RosPlayer) => formatSourceLine(player, mbById.get(player.playerId) ?? player);
 
   const resolvedYourId = yourTeamId || league?.selectedTeamId || league?.teams[0]?.id || "";
   const resolvedPartner = partnerId || league?.teams.find((team) => team.id !== resolvedYourId)?.id || "";
@@ -61,22 +76,29 @@ export function TradeRecommenderClient() {
   }, [mode, partnerId, resolvedPartner]);
 
   const packageSize = clampPackageSize(maxEachSide);
-  const strengths = useMemo(() => (league && projection && canRecommend(snapshot, projection) ? analyzeTeamStrengths(league, projection) : []), [league, projection, snapshot]);
+  const strengths = useMemo(
+    () => (league && projection && canRecommend(rankingSnapshot, projection) ? analyzeTeamStrengths(league, projection) : []),
+    [league, projection, rankingSnapshot],
+  );
   const yourStrength = strengths.find((row) => row.teamId === (mode === "two-team" ? resolvedA : resolvedYourId));
 
   const givePool = useMemo(() => {
     if (!projection) return [] as RosPlayer[];
     const fromId = mode === "give-away" ? resolvedYourId : resolvedA;
-    return tradeablePlayers(projection, fromId).sort((a, b) => rosMedian(b) - rosMedian(a) || a.name.localeCompare(b.name));
-  }, [projection, mode, resolvedYourId, resolvedA]);
+    return tradeablePlayers(projection, fromId).sort(
+      (a, b) => rankingPoints(b, rankingSource, mbById.get(b.playerId) ?? b) - rankingPoints(a, rankingSource, mbById.get(a.playerId) ?? a) || a.name.localeCompare(b.name),
+    );
+  }, [projection, mode, resolvedYourId, resolvedA, rankingSource, mbById]);
 
   const receivePool = useMemo(() => {
     if (!projection || mode !== "give-away") return [] as RosPlayer[];
-    return tradeablePlayers(projection, resolvedPartner).sort((a, b) => rosMedian(b) - rosMedian(a) || a.name.localeCompare(b.name));
-  }, [projection, mode, resolvedPartner]);
+    return tradeablePlayers(projection, resolvedPartner).sort(
+      (a, b) => rankingPoints(b, rankingSource, mbById.get(b.playerId) ?? b) - rankingPoints(a, rankingSource, mbById.get(a.playerId) ?? a) || a.name.localeCompare(b.name),
+    );
+  }, [projection, mode, resolvedPartner, rankingSource, mbById]);
 
   const recommendations = useMemo(() => {
-    if (!league || !projection || !canRecommend(snapshot, projection)) return [] as TradeRecommendation[];
+    if (!league || !projection || !canRecommend(rankingSnapshot, projection)) return [] as TradeRecommendation[];
     const base = { fairness, limit: 10, maxEachSide: packageSize };
     if (mode === "two-team") {
       if (!resolvedA || !resolvedB) return [];
@@ -94,7 +116,7 @@ export function TradeRecommenderClient() {
     }
     if (!resolvedYourId) return [];
     return recommendForTeam(league, projection, resolvedYourId, { ...base, partnerId: partnerId || null, limit: 12 });
-  }, [league, projection, snapshot, mode, fairness, packageSize, resolvedA, resolvedB, resolvedYourId, resolvedPartner, partnerId, giveAwayIds, receiveIds]);
+  }, [league, projection, rankingSnapshot, mode, fairness, packageSize, resolvedA, resolvedB, resolvedYourId, resolvedPartner, partnerId, giveAwayIds, receiveIds]);
 
   // Keep selection pinned to a live recommendation so chart overlays always have a concrete trade id.
   useEffect(() => {
@@ -348,6 +370,7 @@ export function TradeRecommenderClient() {
                         players={givePool}
                         selectedIds={giveAwayIds}
                         onToggle={toggleGive}
+                        sourceLine={sourceLine}
                       />
                       <PlayerPickList
                         title="Players I want"
@@ -358,12 +381,35 @@ export function TradeRecommenderClient() {
                         players={receivePool}
                         selectedIds={receiveIds}
                         onToggle={toggleReceive}
+                        sourceLine={sourceLine}
                       />
                     </div>
                   </section>
                 )}
 
-                <div className="grid gap-3 sm:grid-cols-2">
+                <div className="grid gap-3 lg:grid-cols-3">
+                  <fieldset className="space-y-2">
+                    <legend className="text-xs font-semibold">Rank trades using</legend>
+                    <div className="flex flex-wrap gap-1" role="group" aria-label="Projection source for ranking">
+                      {RANKING_SOURCES.map((source) => (
+                        <button
+                          key={source.id}
+                          type="button"
+                          aria-pressed={rankingSource === source.id}
+                          onClick={() => {
+                            setRankingSource(source.id);
+                            setSelectedTradeId(null);
+                          }}
+                          className={`border px-3 py-2 text-sm font-semibold ${rankingSource === source.id ? "border-ring bg-primary text-primary-foreground" : "border-border bg-card text-text-secondary"}`}
+                        >
+                          {source.short}
+                        </button>
+                      ))}
+                    </div>
+                    <p className="text-xs font-normal text-muted-foreground">
+                      Lineups, fairness, charts, and package ranking use {rankingLabel}. Missing Sleeper/ESPN values fall back to MB. Player lines still show all sources.
+                    </p>
+                  </fieldset>
                   <label className="block space-y-2 text-xs font-semibold">
                     <span className="flex flex-wrap items-baseline justify-between gap-2">
                       <span>Fairness {fairness.toFixed(2)}</span>
@@ -421,7 +467,7 @@ export function TradeRecommenderClient() {
                   <div>
                     <h2 className="text-lg font-semibold">Recommended packages</h2>
                     <p className="text-xs text-muted-foreground">
-                      Ranked by expected help to {leftName} under the fairness slider. Select a row to update the charts below.
+                      Ranked with {rankingLabel} by expected help to {leftName} under the fairness slider. Select a row to update the charts below.
                     </p>
                   </div>
                   <p className="text-xs text-muted-foreground">{recommendations.length} shown</p>
@@ -455,8 +501,8 @@ export function TradeRecommenderClient() {
                               <p className="text-xs text-muted-foreground">score {trade.score.toFixed(1)}</p>
                             </div>
                             <div className="mt-2 grid gap-2 sm:grid-cols-2">
-                              <PackageLine season={league.season} label={`${leftName} sends`} players={trade.left.give} />
-                              <PackageLine season={league.season} label={`${partner} sends`} players={trade.right.give} />
+                              <PackageLine season={league.season} label={`${leftName} sends`} players={trade.left.give} sourceLine={sourceLine} />
+                              <PackageLine season={league.season} label={`${partner} sends`} players={trade.right.give} sourceLine={sourceLine} />
                             </div>
                             <div className="mt-2 flex flex-wrap gap-3 text-xs tabular-nums">
                               <span className={trade.left.deltaMean >= 0 ? "text-success" : "text-destructive"}>
@@ -500,8 +546,8 @@ export function TradeRecommenderClient() {
                 <>
                   <TradeImpactCurves key={`curves-${selected.id}`} trade={selected} leftName={leftName} rightName={rightName} />
                   <section className="grid gap-3 sm:grid-cols-2" aria-label="Selected trade lineup change">
-                    <LineupDelta season={league.season} title={`${leftName} lineup`} before={selected.left.beforeLineup} after={selected.left.afterLineup} delta={selected.left.deltaMean} />
-                    <LineupDelta season={league.season} title={`${rightName} lineup`} before={selected.right.beforeLineup} after={selected.right.afterLineup} delta={selected.right.deltaMean} />
+                    <LineupDelta season={league.season} title={`${leftName} lineup`} before={selected.left.beforeLineup} after={selected.left.afterLineup} delta={selected.left.deltaMean} sourceLine={sourceLine} />
+                    <LineupDelta season={league.season} title={`${rightName} lineup`} before={selected.right.beforeLineup} after={selected.right.afterLineup} delta={selected.right.deltaMean} sourceLine={sourceLine} />
                   </section>
                 </>
               )}
@@ -519,7 +565,8 @@ export function TradeRecommenderClient() {
           <li>
             Player lines show midwestball ROS mean with a ±1σ band, plus hardcoded Sleeper and ESPN full-PPR sums for weeks {externalRos.horizonStartWeek}–
             {externalRos.horizonEndWeek} (captured {externalRos.capturedAt.slice(0, 10)}), and the mean of whichever of those sources are present (μ3 when all three
-            exist). Trade search and fairness still use midwestball projections only.
+            exist). The &quot;Rank trades using&quot; control remaps lineup totals, fairness, charts, and package ranking onto MB, Sleeper, ESPN, or the mean of available
+            sources (missing externals fall back to MB). Uncertainty bands stay MB-shaped and are shifted with the chosen point estimate.
           </li>
           <li>Team strength is the optimized starter lineup mean; uncertainty is a normal fit from each starter&apos;s mean and 5th–95th gap.</li>
           <li>
@@ -556,6 +603,7 @@ function PlayerPickList({
   players,
   selectedIds,
   onToggle,
+  sourceLine,
 }: {
   title: string;
   subtitle: string;
@@ -565,6 +613,7 @@ function PlayerPickList({
   players: RosPlayer[];
   selectedIds: string[];
   onToggle: (id: string) => void;
+  sourceLine: (player: RosPlayer) => string;
 }) {
   return (
     <div className="space-y-2 border border-border bg-card p-3">
@@ -594,7 +643,7 @@ function PlayerPickList({
                     </span>
                   </span>
                   <span className={`mt-0.5 block text-[11px] font-normal tabular-nums leading-snug ${on ? "text-primary-foreground/80" : "text-muted-foreground"}`}>
-                    {formatSourceLine(player)}
+                    {sourceLine(player)}
                   </span>
                 </button>
               </li>
@@ -612,7 +661,17 @@ function PlayerPickList({
   );
 }
 
-function PackageLine({ season, label, players }: { season: number; label: string; players: RosPlayer[] }) {
+function PackageLine({
+  season,
+  label,
+  players,
+  sourceLine,
+}: {
+  season: number;
+  label: string;
+  players: RosPlayer[];
+  sourceLine: (player: RosPlayer) => string;
+}) {
   return (
     <div className="text-sm">
       <span className="text-xs font-semibold text-muted-foreground">{label}</span>
@@ -623,7 +682,7 @@ function PackageLine({ season, label, players }: { season: number; label: string
               <PlayerComparisonLink playerId={player.playerId} season={season}>
                 {player.name}
               </PlayerComparisonLink>
-              <span className="mt-0.5 block text-[11px] tabular-nums text-muted-foreground">{formatSourceLine(player)}</span>
+              <span className="mt-0.5 block text-[11px] tabular-nums text-muted-foreground">{sourceLine(player)}</span>
             </li>
           ))}
         </ul>
@@ -640,12 +699,14 @@ function LineupDelta({
   before,
   after,
   delta,
+  sourceLine,
 }: {
   season: number;
   title: string;
   before: TradeRecommendation["left"]["beforeLineup"];
   after: TradeRecommendation["left"]["afterLineup"];
   delta: number;
+  sourceLine: (player: RosPlayer) => string;
 }) {
   return (
     <div className="border border-border bg-card p-3">
@@ -654,18 +715,28 @@ function LineupDelta({
         <span className={`tabular-nums ${delta >= 0 ? "text-success" : "text-destructive"}`}>{signed(delta)}</span>
       </p>
       <div className="mt-2 grid gap-2 sm:grid-cols-2">
-        <MiniLineup season={season} caption="Before" lineup={before} />
-        <MiniLineup season={season} caption="After" lineup={after} />
+        <MiniLineup season={season} caption="Before" lineup={before} sourceLine={sourceLine} />
+        <MiniLineup season={season} caption="After" lineup={after} sourceLine={sourceLine} />
       </div>
     </div>
   );
 }
 
-function MiniLineup({ season, caption, lineup }: { season: number; caption: string; lineup: TradeRecommendation["left"]["beforeLineup"] }) {
+function MiniLineup({
+  season,
+  caption,
+  lineup,
+  sourceLine,
+}: {
+  season: number;
+  caption: string;
+  lineup: TradeRecommendation["left"]["beforeLineup"];
+  sourceLine: (player: RosPlayer) => string;
+}) {
   return (
     <table className="w-full text-left text-xs">
       <caption className="pb-1 text-left font-semibold">
-        {caption} · {lineup.total.toFixed(1)} med
+        {caption} · {lineup.total.toFixed(1)}
       </caption>
       <tbody>
         {lineup.assignments.map((spot, index) => (
@@ -683,7 +754,7 @@ function MiniLineup({ season, caption, lineup }: { season: number; caption: stri
               )}
             </td>
             <td className="border-t border-border py-1 text-[11px] tabular-nums leading-snug">
-              {spot.player ? formatSourceLine(spot.player) : "0.0"}
+              {spot.player ? sourceLine(spot.player) : "0.0"}
             </td>
           </tr>
         ))}
