@@ -3,8 +3,11 @@ import type { RosPlayer, RosPosition, RosSnapshot } from "@/lib/ros";
 import { projectLeague } from "./project";
 import {
   analyzeTeamStrengths,
+  clampPackageSize,
+  gapOverlayForSide,
   otherDeltaFloor,
   recommendTrades,
+  strengthOverlayForTrade,
   unfairnessBudget,
 } from "./recommend-trades";
 import type { SavedLeague } from "./types";
@@ -191,5 +194,140 @@ describe("recommend-trades", () => {
       forcedGiveIds: ["scrub"],
     });
     expect(loose.some((trade) => trade.right.give.some((player) => player.playerId === "star"))).toBe(true);
+  });
+
+  it("clamps package size and can search up to 3-player packages", () => {
+    expect(clampPackageSize(0)).toBe(1);
+    expect(clampPackageSize(2.4)).toBe(2);
+    expect(clampPackageSize(9)).toBe(3);
+
+    const ros = snapshot([
+      player("qb-a", "QB", 70, "Alpha QB"),
+      player("rb-a1", "RB", 25, "A RB1"),
+      player("rb-a2", "RB", 20, "A RB2"),
+      player("wr-a1", "WR", 55, "A WR1"),
+      player("wr-a2", "WR", 50, "A WR2"),
+      player("wr-a3", "WR", 45, "A WR3"),
+      player("qb-b", "QB", 65, "Beta QB"),
+      player("rb-b1", "RB", 80, "B RB1"),
+      player("rb-b2", "RB", 70, "B RB2"),
+      player("rb-b3", "RB", 60, "B RB3"),
+      player("wr-b1", "WR", 30, "B WR1"),
+      player("wr-b2", "WR", 22, "B WR2"),
+    ]);
+    const league = leagueOf([
+      {
+        id: "1",
+        name: "Alpha",
+        manager: "A",
+        wins: 1,
+        losses: 0,
+        ties: 0,
+        points: 100,
+        players: [
+          { providerPlayerId: "1", name: "Alpha QB", position: "QB", nflTeam: "CHI", gsisId: "qb-a", ir: false, taxi: false },
+          { providerPlayerId: "2", name: "A RB1", position: "RB", nflTeam: "CHI", gsisId: "rb-a1", ir: false, taxi: false },
+          { providerPlayerId: "3", name: "A RB2", position: "RB", nflTeam: "CHI", gsisId: "rb-a2", ir: false, taxi: false },
+          { providerPlayerId: "4", name: "A WR1", position: "WR", nflTeam: "CHI", gsisId: "wr-a1", ir: false, taxi: false },
+          { providerPlayerId: "5", name: "A WR2", position: "WR", nflTeam: "CHI", gsisId: "wr-a2", ir: false, taxi: false },
+          { providerPlayerId: "6", name: "A WR3", position: "WR", nflTeam: "CHI", gsisId: "wr-a3", ir: false, taxi: false },
+        ],
+      },
+      {
+        id: "2",
+        name: "Beta",
+        manager: "B",
+        wins: 0,
+        losses: 1,
+        ties: 0,
+        points: 90,
+        players: [
+          { providerPlayerId: "7", name: "Beta QB", position: "QB", nflTeam: "CHI", gsisId: "qb-b", ir: false, taxi: false },
+          { providerPlayerId: "8", name: "B RB1", position: "RB", nflTeam: "CHI", gsisId: "rb-b1", ir: false, taxi: false },
+          { providerPlayerId: "9", name: "B RB2", position: "RB", nflTeam: "CHI", gsisId: "rb-b2", ir: false, taxi: false },
+          { providerPlayerId: "10", name: "B RB3", position: "RB", nflTeam: "CHI", gsisId: "rb-b3", ir: false, taxi: false },
+          { providerPlayerId: "11", name: "B WR1", position: "WR", nflTeam: "CHI", gsisId: "wr-b1", ir: false, taxi: false },
+          { providerPlayerId: "12", name: "B WR2", position: "WR", nflTeam: "CHI", gsisId: "wr-b2", ir: false, taxi: false },
+        ],
+      },
+    ]);
+    const projection = projectLeague(league, ros, { sims: 10, seed: 3 });
+    const trades = recommendTrades(league, projection, "1", "2", { fairness: 0.85, limit: 20, maxEachSide: 3 });
+    expect(trades.length).toBeGreaterThan(0);
+    expect(trades.every((trade) => trade.left.give.length <= 3 && trade.right.give.length <= 3)).toBe(true);
+
+    const threeOut = recommendTrades(league, projection, "1", "2", {
+      fairness: 1,
+      limit: 12,
+      maxEachSide: 3,
+      forcedGiveIds: ["wr-a1", "wr-a2", "wr-a3"],
+    });
+    expect(threeOut.length).toBeGreaterThan(0);
+    expect(threeOut.every((trade) => trade.left.give.length === 3)).toBe(true);
+    expect(threeOut.some((trade) => trade.right.give.length >= 1)).toBe(true);
+  });
+
+  it("builds gap and strength overlays with error bars for a selected trade", () => {
+    const ros = snapshot([
+      player("qb-a", "QB", 70, "Alpha QB"),
+      player("rb-weak", "RB", 30, "Weak RB"),
+      player("wr-a1", "WR", 80, "Alpha WR1"),
+      player("wr-a2", "WR", 75, "Alpha WR2"),
+      player("qb-b", "QB", 70, "Beta QB"),
+      player("rb-b1", "RB", 85, "Beta RB1"),
+      player("rb-b2", "RB", 80, "Beta RB2"),
+      player("wr-weak", "WR", 25, "Weak WR"),
+    ]);
+    const league = leagueOf([
+      {
+        id: "1",
+        name: "Alpha",
+        manager: "A",
+        wins: 1,
+        losses: 0,
+        ties: 0,
+        points: 100,
+        players: [
+          { providerPlayerId: "1", name: "Alpha QB", position: "QB", nflTeam: "CHI", gsisId: "qb-a", ir: false, taxi: false },
+          { providerPlayerId: "2", name: "Weak RB", position: "RB", nflTeam: "CHI", gsisId: "rb-weak", ir: false, taxi: false },
+          { providerPlayerId: "3", name: "Alpha WR1", position: "WR", nflTeam: "CHI", gsisId: "wr-a1", ir: false, taxi: false },
+          { providerPlayerId: "4", name: "Alpha WR2", position: "WR", nflTeam: "CHI", gsisId: "wr-a2", ir: false, taxi: false },
+        ],
+      },
+      {
+        id: "2",
+        name: "Beta",
+        manager: "B",
+        wins: 0,
+        losses: 1,
+        ties: 0,
+        points: 90,
+        players: [
+          { providerPlayerId: "5", name: "Beta QB", position: "QB", nflTeam: "CHI", gsisId: "qb-b", ir: false, taxi: false },
+          { providerPlayerId: "6", name: "Beta RB1", position: "RB", nflTeam: "CHI", gsisId: "rb-b1", ir: false, taxi: false },
+          { providerPlayerId: "7", name: "Beta RB2", position: "RB", nflTeam: "CHI", gsisId: "rb-b2", ir: false, taxi: false },
+          { providerPlayerId: "8", name: "Weak WR", position: "WR", nflTeam: "CHI", gsisId: "wr-weak", ir: false, taxi: false },
+        ],
+      },
+    ]);
+    const projection = projectLeague(league, ros, { sims: 10, seed: 4 });
+    const strengths = analyzeTeamStrengths(league, projection);
+    const trades = recommendTrades(league, projection, "1", "2", { fairness: 0, limit: 5, maxEachSide: 1 });
+    expect(trades.length).toBeGreaterThan(0);
+    const trade = trades[0]!;
+    const alpha = strengths.find((row) => row.teamId === "1")!;
+    const gaps = gapOverlayForSide(alpha, trade.left);
+    expect(gaps).toHaveLength(4);
+    expect(gaps.every((row) => row.afterError >= 0 && row.deltaError >= 0)).toBe(true);
+    expect(gaps.reduce((sum, row) => sum + row.deltaGap, 0)).toBeCloseTo(trade.left.deltaMean, 5);
+
+    const overlay = strengthOverlayForTrade(strengths, trade);
+    const left = overlay.find((row) => row.teamId === "1")!;
+    const right = overlay.find((row) => row.teamId === "2")!;
+    expect(left.involved).toBe(true);
+    expect(right.involved).toBe(true);
+    expect(left.afterMean).toBeCloseTo(trade.left.afterMean, 5);
+    expect(left.deltaError).toBeGreaterThan(0);
+    expect(right.deltaMean).toBeCloseTo(trade.right.deltaMean, 5);
   });
 });

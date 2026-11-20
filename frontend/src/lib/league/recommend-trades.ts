@@ -4,11 +4,17 @@ import { playerDeviation, normalAtLeast, type LeagueProjection, type TeamProject
 import type { SavedLeague } from "./types";
 
 export const POSITIONS: RosPosition[] = ["QB", "RB", "WR", "TE"];
+/** Max players either side may send. */
+export const MAX_PACKAGE_SIZE = 3;
+/** For 3-player packages, only the top-N ROS means on each roster are enumerated (keeps search snappy). */
+export const THREE_PACK_POOL = 10;
 
 export type PositionGap = {
   position: RosPosition;
   teamMean: number;
   leagueMean: number;
+  /** ±1σ on the position starter total. */
+  teamSd: number;
   /** teamMean − leagueMean; negative means a relative weakness. */
   gap: number;
 };
@@ -18,6 +24,30 @@ export type TeamStrength = {
   rosMean: number;
   rosSd: number;
   positions: PositionGap[];
+};
+
+export type GapOverlayRow = {
+  position: RosPosition;
+  leagueMean: number;
+  beforeGap: number;
+  afterGap: number;
+  /** ±1σ on the after gap (after position SD; league mean treated as fixed). */
+  afterError: number;
+  deltaGap: number;
+  /** ±1σ on the position delta with shared starters canceling. */
+  deltaError: number;
+};
+
+export type StrengthOverlayRow = {
+  teamId: string;
+  beforeMean: number;
+  beforeSd: number;
+  afterMean: number | null;
+  afterSd: number | null;
+  deltaMean: number | null;
+  /** ±1σ on after − before when this team is in the selected trade. */
+  deltaError: number | null;
+  involved: boolean;
 };
 
 export type TradeSide = {
@@ -88,6 +118,45 @@ export function positionMeans(team: TeamProjection): Record<RosPosition, number>
   return totals;
 }
 
+export function positionStatsFromLineup(lineup: Lineup): Record<RosPosition, { mean: number; sd: number }> {
+  const means: Record<RosPosition, number> = { QB: 0, RB: 0, WR: 0, TE: 0 };
+  const vars: Record<RosPosition, number> = { QB: 0, RB: 0, WR: 0, TE: 0 };
+  for (const spot of lineup.assignments) {
+    if (!spot.player) continue;
+    const position = spot.player.position;
+    means[position] += spot.player.mean;
+    vars[position] += playerDeviation(spot.player) ** 2;
+  }
+  return {
+    QB: { mean: means.QB, sd: Math.sqrt(vars.QB) },
+    RB: { mean: means.RB, sd: Math.sqrt(vars.RB) },
+    WR: { mean: means.WR, sd: Math.sqrt(vars.WR) },
+    TE: { mean: means.TE, sd: Math.sqrt(vars.TE) },
+  };
+}
+
+function startersAt(lineup: Lineup, position: RosPosition): RosPlayer[] {
+  return lineup.assignments.flatMap((spot) => (spot.player && spot.player.position === position ? [spot.player] : []));
+}
+
+/** SD of after − before at one position when shared starters cancel. */
+export function positionDeltaSd(before: Lineup, after: Lineup, position: RosPosition): number {
+  const beforePlayers = startersAt(before, position);
+  const afterPlayers = startersAt(after, position);
+  const beforeIds = new Set(beforePlayers.map((player) => player.playerId));
+  const afterIds = new Set(afterPlayers.map((player) => player.playerId));
+  const byId = new Map<string, RosPlayer>();
+  for (const player of [...beforePlayers, ...afterPlayers]) byId.set(player.playerId, player);
+  let variance = 0;
+  for (const id of beforeIds) {
+    if (!afterIds.has(id)) variance += playerDeviation(byId.get(id)!) ** 2;
+  }
+  for (const id of afterIds) {
+    if (!beforeIds.has(id)) variance += playerDeviation(byId.get(id)!) ** 2;
+  }
+  return Math.sqrt(variance);
+}
+
 export function analyzeTeamStrengths(league: SavedLeague, projection: LeagueProjection): TeamStrength[] {
   const usable = projection.teams.filter((team) => team.rosMean !== null && team.lineupError === null);
   if (!usable.length) return [];
@@ -99,17 +168,75 @@ export function analyzeTeamStrengths(league: SavedLeague, projection: LeagueProj
   for (const position of POSITIONS) leagueAvg[position] /= usable.length;
 
   return usable.map((team) => {
-    const means = positionMeans(team);
+    const stats = positionStatsFromLineup({
+      total: team.rosMedianSum ?? 0,
+      assignments: team.lineup.map((spot) => ({ slot: spot.slot, player: spot.player })),
+    });
     return {
       teamId: team.teamId,
       rosMean: team.rosMean ?? 0,
       rosSd: team.rosSd ?? 0,
       positions: POSITIONS.map((position) => ({
         position,
-        teamMean: means[position],
+        teamMean: stats[position].mean,
+        teamSd: stats[position].sd,
         leagueMean: leagueAvg[position],
-        gap: means[position] - leagueAvg[position],
+        gap: stats[position].mean - leagueAvg[position],
       })),
+    };
+  });
+}
+
+/** Before/after position gaps for a team in a selected trade (league means held fixed). */
+export function gapOverlayForSide(strength: TeamStrength, side: TradeSide): GapOverlayRow[] {
+  const before = positionStatsFromLineup(side.beforeLineup);
+  const after = positionStatsFromLineup(side.afterLineup);
+  const leagueByPos = new Map(strength.positions.map((row) => [row.position, row.leagueMean]));
+  return POSITIONS.map((position) => {
+    const leagueMean = leagueByPos.get(position) ?? 0;
+    const beforeGap = before[position].mean - leagueMean;
+    const afterGap = after[position].mean - leagueMean;
+    return {
+      position,
+      leagueMean,
+      beforeGap,
+      afterGap,
+      afterError: after[position].sd,
+      deltaGap: afterGap - beforeGap,
+      deltaError: positionDeltaSd(side.beforeLineup, side.afterLineup, position),
+    };
+  });
+}
+
+/** League ROS means with after totals + delta uncertainty for teams in the selected trade. */
+export function strengthOverlayForTrade(strengths: TeamStrength[], trade: TradeRecommendation): StrengthOverlayRow[] {
+  const byId = new Map([
+    [trade.left.teamId, trade.left],
+    [trade.right.teamId, trade.right],
+  ]);
+  return strengths.map((row) => {
+    const side = byId.get(row.teamId);
+    if (!side) {
+      return {
+        teamId: row.teamId,
+        beforeMean: row.rosMean,
+        beforeSd: row.rosSd,
+        afterMean: null,
+        afterSd: null,
+        deltaMean: null,
+        deltaError: null,
+        involved: false,
+      };
+    }
+    return {
+      teamId: row.teamId,
+      beforeMean: side.beforeMean,
+      beforeSd: side.beforeSd,
+      afterMean: side.afterMean,
+      afterSd: side.afterSd,
+      deltaMean: side.deltaMean,
+      deltaError: diffSd(side.beforeLineup, side.afterLineup),
+      involved: true,
     };
   });
 }
@@ -181,6 +308,21 @@ function combinations<T>(items: T[], size: number): T[][] {
   return out;
 }
 
+function poolForSize(players: RosPlayer[], size: number): RosPlayer[] {
+  if (size < 3 || players.length <= THREE_PACK_POOL) return players;
+  return [...players]
+    .sort((a, b) => b.mean - a.mean || a.playerId.localeCompare(b.playerId))
+    .slice(0, THREE_PACK_POOL);
+}
+
+function packageCombos(players: RosPlayer[], size: number): RosPlayer[][] {
+  return combinations(poolForSize(players, size), size);
+}
+
+export function clampPackageSize(value: number): number {
+  return Math.min(MAX_PACKAGE_SIZE, Math.max(1, Math.round(value)));
+}
+
 /** Soft floor on the other team's ROS mean change: ~−2 at fairness 0, ~−120 at fairness 1. */
 export function otherDeltaFloor(fairness: number): number {
   const t = Math.min(1, Math.max(0, fairness));
@@ -248,7 +390,7 @@ export function recommendTrades(
   if (!beforeLeft || !beforeRight) return [];
 
   const fairness = options.fairness ?? 0;
-  const maxEach = Math.min(3, Math.max(1, options.maxEachSide ?? 2));
+  const maxEach = clampPackageSize(options.maxEachSide ?? 2);
   const limit = Math.min(40, Math.max(1, options.limit ?? 8));
   const forced = options.forcedGiveIds ? new Set(options.forcedGiveIds) : null;
 
@@ -258,14 +400,14 @@ export function recommendTrades(
     if (chosen.length !== forced.size || chosen.length === 0 || chosen.length > maxEach) return [];
     leftCombos.push(chosen);
   } else {
-    for (let size = 1; size <= maxEach; size += 1) leftCombos.push(...combinations(leftPool, size));
+    for (let size = 1; size <= maxEach; size += 1) leftCombos.push(...packageCombos(leftPool, size));
   }
 
   const results: TradeRecommendation[] = [];
   for (const giveLeft of leftCombos) {
     for (let size = 1; size <= maxEach; size += 1) {
       // Allow uneven packages, but skip empty-for-empty and pure dump unless forced give.
-      for (const giveRight of combinations(rightPool, size)) {
+      for (const giveRight of packageCombos(rightPool, size)) {
         if (!giveLeft.length && !giveRight.length) continue;
         const { nextLeft, nextRight } = applySwap(leftPool, rightPool, giveLeft, giveRight);
         const afterLeft = lineupValue(nextLeft, league.rosterSettings);

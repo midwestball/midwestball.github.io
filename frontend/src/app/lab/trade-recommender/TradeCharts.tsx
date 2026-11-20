@@ -7,6 +7,7 @@ import {
   Cell,
   ComposedChart,
   Area,
+  ErrorBar,
   Line,
   ReferenceLine,
   ResponsiveContainer,
@@ -18,21 +19,61 @@ import {
   ZAxis,
 } from "recharts";
 import { fittedCurve, formatPct, formatPoints } from "@/lib/league/project";
-import type { PositionGap, TradeRecommendation, TeamStrength } from "@/lib/league/recommend-trades";
+import type {
+  GapOverlayRow,
+  PositionGap,
+  StrengthOverlayRow,
+  TradeRecommendation,
+  TeamStrength,
+} from "@/lib/league/recommend-trades";
 
 const WEAK = "#b56b78";
 const STRONG = "#7d9a6a";
 const YOU = "#6f8fbf";
 const THEM = "#c48b5a";
+const BEFORE = "#8a7aab";
 const GRID = "var(--border)";
 
-export function WeaknessChart({ gaps, teamName }: { gaps: PositionGap[]; teamName: string }) {
-  const data = gaps.map((gap) => ({
-    position: gap.position,
-    gap: Math.round(gap.gap * 10) / 10,
-    team: Math.round(gap.teamMean * 10) / 10,
-    league: Math.round(gap.leagueMean * 10) / 10,
-  }));
+export function WeaknessChart({
+  gaps,
+  teamName,
+  overlay,
+}: {
+  gaps: PositionGap[];
+  teamName: string;
+  overlay?: GapOverlayRow[] | null;
+}) {
+  type GapRow = {
+    position: PositionGap["position"];
+    before: number;
+    after: number;
+    afterError: number;
+    delta: number;
+    deltaError: number;
+    gap: number;
+  };
+  const data: GapRow[] = overlay?.length
+    ? overlay.map((row) => ({
+        position: row.position,
+        before: Math.round(row.beforeGap * 10) / 10,
+        after: Math.round(row.afterGap * 10) / 10,
+        afterError: Math.round(row.afterError * 10) / 10,
+        delta: Math.round(row.deltaGap * 10) / 10,
+        deltaError: Math.round(row.deltaError * 10) / 10,
+        gap: Math.round(row.afterGap * 10) / 10,
+      }))
+    : gaps.map((gap) => ({
+        position: gap.position,
+        before: Math.round(gap.gap * 10) / 10,
+        after: Math.round(gap.gap * 10) / 10,
+        afterError: 0,
+        delta: 0,
+        deltaError: 0,
+        gap: Math.round(gap.gap * 10) / 10,
+      }));
+
+  const showingTrade = !!overlay?.length;
+
   return (
     <section className="space-y-2" aria-labelledby="weakness-chart">
       <div>
@@ -40,7 +81,9 @@ export function WeaknessChart({ gaps, teamName }: { gaps: PositionGap[]; teamNam
           Position gaps vs league
         </h3>
         <p className="text-xs text-muted-foreground">
-          Starter ROS means by position for {teamName}, minus the league average. Negative bars are relative weak spots (FLEX counted by the player&apos;s real position).
+          {showingTrade
+            ? `Before vs after the selected trade for ${teamName}. Whiskers on “after” are ±1σ from the ROS starter normals at that position (league average held fixed).`
+            : `Starter ROS means by position for ${teamName}, minus the league average. Negative bars are relative weak spots (FLEX counted by the player’s real position).`}
         </p>
       </div>
       <div className="h-56 w-full border border-border bg-card p-2">
@@ -50,15 +93,28 @@ export function WeaknessChart({ gaps, teamName }: { gaps: PositionGap[]; teamNam
             <XAxis dataKey="position" tick={{ fontSize: 12 }} />
             <YAxis tick={{ fontSize: 11 }} width={40} />
             <Tooltip
-              formatter={(value, name) => [`${Number(value).toFixed(1)} pts`, name === "gap" ? "vs league" : String(name)]}
+              formatter={(value, name) => {
+                const label =
+                  name === "before" ? "before vs league" : name === "after" ? "after vs league (±1σ)" : name === "gap" ? "vs league" : String(name);
+                return [`${Number(value).toFixed(1)} pts`, label];
+              }}
               labelFormatter={(label) => String(label)}
             />
             <ReferenceLine y={0} stroke="var(--foreground)" strokeOpacity={0.35} />
-            <Bar dataKey="gap" name="gap" radius={0}>
-              {data.map((row) => (
-                <Cell key={row.position} fill={row.gap < 0 ? WEAK : STRONG} />
-              ))}
-            </Bar>
+            {showingTrade ? (
+              <>
+                <Bar dataKey="before" name="before" fill={BEFORE} fillOpacity={0.55} radius={0} />
+                <Bar dataKey="after" name="after" fill={YOU} radius={0}>
+                  <ErrorBar dataKey="afterError" width={4} strokeWidth={1.5} stroke="var(--foreground)" direction="y" />
+                </Bar>
+              </>
+            ) : (
+              <Bar dataKey="gap" name="gap" radius={0}>
+                {data.map((row) => (
+                  <Cell key={row.position} fill={row.gap < 0 ? WEAK : STRONG} />
+                ))}
+              </Bar>
+            )}
           </BarChart>
         </ResponsiveContainer>
       </div>
@@ -66,22 +122,51 @@ export function WeaknessChart({ gaps, teamName }: { gaps: PositionGap[]; teamNam
   );
 }
 
-export function LeagueStrengthBars({ strengths, teamNames, focusId }: { strengths: TeamStrength[]; teamNames: Map<string, string>; focusId: string }) {
+export function LeagueStrengthBars({
+  strengths,
+  teamNames,
+  focusId,
+  overlay,
+}: {
+  strengths: TeamStrength[];
+  teamNames: Map<string, string>;
+  focusId: string;
+  overlay?: StrengthOverlayRow[] | null;
+}) {
+  const overlayById = new Map(overlay?.map((row) => [row.teamId, row]) ?? []);
   const data = [...strengths]
-    .sort((a, b) => b.rosMean - a.rosMean)
-    .map((row) => ({
-      id: row.teamId,
-      name: teamNames.get(row.teamId) ?? row.teamId,
-      mean: Math.round(row.rosMean * 10) / 10,
-      focus: row.teamId === focusId,
-    }));
+    .map((row) => {
+      const over = overlayById.get(row.teamId);
+      const before = over?.beforeMean ?? row.rosMean;
+      const after = over?.involved ? over.afterMean : null;
+      const sortKey = after ?? before;
+      return {
+        id: row.teamId,
+        name: teamNames.get(row.teamId) ?? row.teamId,
+        before: Math.round(before * 10) / 10,
+        after: after === null || after === undefined ? null : Math.round(after * 10) / 10,
+        afterError: over?.involved && over.afterSd !== null ? Math.round(over.afterSd * 10) / 10 : 0,
+        delta: over?.deltaMean === null || over?.deltaMean === undefined ? null : Math.round(over.deltaMean * 10) / 10,
+        focus: row.teamId === focusId,
+        involved: !!over?.involved,
+        sortKey,
+      };
+    })
+    .sort((a, b) => b.sortKey - a.sortKey);
+
+  const showingTrade = !!overlay?.some((row) => row.involved);
+
   return (
     <section className="space-y-2" aria-labelledby="league-strength">
       <div>
         <h3 id="league-strength" className="text-sm font-semibold">
           League ROS lineup means
         </h3>
-        <p className="text-xs text-muted-foreground">Optimized starter totals from the same rest-of-season curves the league lab uses.</p>
+        <p className="text-xs text-muted-foreground">
+          {showingTrade
+            ? "Muted bars are current ROS means. Solid bars are the selected trade’s projected after for the two clubs involved; whiskers are ±1σ on the after total."
+            : "Optimized starter totals from the same rest-of-season curves the league lab uses."}
+        </p>
       </div>
       <div className="h-56 w-full border border-border bg-card p-2">
         <ResponsiveContainer width="100%" height="100%">
@@ -89,12 +174,31 @@ export function LeagueStrengthBars({ strengths, teamNames, focusId }: { strength
             <CartesianGrid stroke={GRID} strokeDasharray="3 3" />
             <XAxis type="number" tick={{ fontSize: 11 }} />
             <YAxis type="category" dataKey="name" width={96} tick={{ fontSize: 11 }} />
-            <Tooltip formatter={(value) => [`${Number(value).toFixed(1)}`, "ROS mean"]} />
-            <Bar dataKey="mean" name="ROS mean" radius={0}>
-              {data.map((row) => (
-                <Cell key={row.id} fill={row.focus ? YOU : "#8a7aab"} fillOpacity={row.focus ? 1 : 0.55} />
-              ))}
-            </Bar>
+            <Tooltip
+              formatter={(value, name, item) => {
+                const row = item?.payload as { delta?: number | null; involved?: boolean } | undefined;
+                if (name === "after") {
+                  const delta = row?.delta;
+                  const suffix = delta === null || delta === undefined ? "" : ` · Δ ${delta > 0 ? "+" : ""}${delta.toFixed(1)}`;
+                  return [`${Number(value).toFixed(1)}${suffix}`, "after (±1σ)"];
+                }
+                return [`${Number(value).toFixed(1)}`, showingTrade ? "before" : "ROS mean"];
+              }}
+            />
+            {showingTrade ? (
+              <>
+                <Bar dataKey="before" name="before" fill={BEFORE} fillOpacity={0.45} radius={0} />
+                <Bar dataKey="after" name="after" fill={YOU} radius={0}>
+                  <ErrorBar dataKey="afterError" width={4} strokeWidth={1.5} stroke="var(--foreground)" direction="x" />
+                </Bar>
+              </>
+            ) : (
+              <Bar dataKey="before" name="ROS mean" radius={0}>
+                {data.map((row) => (
+                  <Cell key={row.id} fill={row.focus ? YOU : BEFORE} fillOpacity={row.focus ? 1 : 0.55} />
+                ))}
+              </Bar>
+            )}
           </BarChart>
         </ResponsiveContainer>
       </div>

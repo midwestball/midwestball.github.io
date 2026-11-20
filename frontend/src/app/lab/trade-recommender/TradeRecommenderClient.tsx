@@ -9,9 +9,14 @@ import { formatPct, formatPoints, projectLeague } from "@/lib/league/project";
 import {
   analyzeTeamStrengths,
   canRecommend,
+  clampPackageSize,
+  gapOverlayForSide,
+  MAX_PACKAGE_SIZE,
   otherDeltaFloor,
   recommendForTeam,
   recommendTrades,
+  strengthOverlayForTrade,
+  THREE_PACK_POOL,
   tradeablePlayers,
   type TradeRecommendation,
 } from "@/lib/league/recommend-trades";
@@ -31,6 +36,7 @@ export function TradeRecommenderClient() {
   const [error, setError] = useState("");
   const [mode, setMode] = useState<Mode>("suggest");
   const [fairness, setFairness] = useState(0);
+  const [maxEachSide, setMaxEachSide] = useState(2);
   const [yourTeamId, setYourTeamId] = useState("");
   const [partnerId, setPartnerId] = useState("");
   const [teamA, setTeamA] = useState("");
@@ -46,6 +52,7 @@ export function TradeRecommenderClient() {
   const resolvedA = teamA || resolvedYourId;
   const resolvedB = teamB || league?.teams.find((team) => team.id !== resolvedA)?.id || "";
 
+  const packageSize = clampPackageSize(maxEachSide);
   const strengths = useMemo(() => (league && projection && canRecommend(snapshot, projection) ? analyzeTeamStrengths(league, projection) : []), [league, projection, snapshot]);
   const yourStrength = strengths.find((row) => row.teamId === (mode === "two-team" ? resolvedA : resolvedYourId));
 
@@ -57,7 +64,7 @@ export function TradeRecommenderClient() {
 
   const recommendations = useMemo(() => {
     if (!league || !projection || !canRecommend(snapshot, projection)) return [] as TradeRecommendation[];
-    const base = { fairness, limit: 10, maxEachSide: 2 as const };
+    const base = { fairness, limit: 10, maxEachSide: packageSize };
     if (mode === "two-team") {
       if (!resolvedA || !resolvedB) return [];
       return recommendTrades(league, projection, resolvedA, resolvedB, base);
@@ -68,7 +75,7 @@ export function TradeRecommenderClient() {
     }
     if (!resolvedYourId) return [];
     return recommendForTeam(league, projection, resolvedYourId, { ...base, partnerId: partnerId || null, limit: 12 });
-  }, [league, projection, snapshot, mode, fairness, resolvedA, resolvedB, resolvedYourId, resolvedPartner, partnerId, giveAwayIds]);
+  }, [league, projection, snapshot, mode, fairness, packageSize, resolvedA, resolvedB, resolvedYourId, resolvedPartner, partnerId, giveAwayIds]);
 
   const selected = recommendations.find((trade) => trade.id === selectedTradeId) ?? recommendations[0] ?? null;
 
@@ -76,8 +83,19 @@ export function TradeRecommenderClient() {
   const leftName = teamNames.get(leftFocusId) ?? "Your team";
   const rightName = selected ? (teamNames.get(selected.right.teamId) ?? "Partner") : teamNames.get(mode === "two-team" ? resolvedB : resolvedPartner) ?? "Partner";
 
+  const focusSide = selected && selected.left.teamId === leftFocusId ? selected.left : selected?.right.teamId === leftFocusId ? selected.right : selected?.left;
+  const gapOverlay = useMemo(() => {
+    if (!yourStrength || !selected || !focusSide || focusSide.teamId !== yourStrength.teamId) return null;
+    return gapOverlayForSide(yourStrength, focusSide);
+  }, [yourStrength, selected, focusSide]);
+  const strengthOverlay = useMemo(() => (selected && strengths.length ? strengthOverlayForTrade(strengths, selected) : null), [selected, strengths]);
+
   function toggleGive(id: string) {
-    setGiveAwayIds((ids) => (ids.includes(id) ? ids.filter((item) => item !== id) : ids.length >= 2 ? [...ids.slice(1), id] : [...ids, id]));
+    setGiveAwayIds((ids) => {
+      if (ids.includes(id)) return ids.filter((item) => item !== id);
+      if (ids.length >= packageSize) return [...ids.slice(ids.length - packageSize + 1), id];
+      return [...ids, id];
+    });
     setSelectedTradeId(null);
   }
 
@@ -268,34 +286,60 @@ export function TradeRecommenderClient() {
                   )}
                 </div>
 
-                <label className="block space-y-2 text-xs font-semibold">
-                  <span className="flex flex-wrap items-baseline justify-between gap-2">
-                    <span>Fairness {fairness.toFixed(2)}</span>
-                    <span className="font-normal text-muted-foreground">
-                      0 = even · other Δ floor {otherDeltaFloor(fairness).toFixed(0)} pts · 1 = max unfair favoring {leftName}
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <label className="block space-y-2 text-xs font-semibold">
+                    <span className="flex flex-wrap items-baseline justify-between gap-2">
+                      <span>Fairness {fairness.toFixed(2)}</span>
+                      <span className="font-normal text-muted-foreground">
+                        0 = even · other Δ floor {otherDeltaFloor(fairness).toFixed(0)} pts · 1 = max unfair favoring {leftName}
+                      </span>
                     </span>
-                  </span>
-                  <input
-                    type="range"
-                    min={0}
-                    max={1}
-                    step={0.05}
-                    value={fairness}
-                    aria-valuemin={0}
-                    aria-valuemax={1}
-                    aria-valuenow={fairness}
-                    aria-label="Fairness toward your team"
-                    onChange={(event) => {
-                      setFairness(Number(event.target.value));
-                      setSelectedTradeId(null);
-                    }}
-                    className="w-full"
-                  />
-                </label>
+                    <input
+                      type="range"
+                      min={0}
+                      max={1}
+                      step={0.05}
+                      value={fairness}
+                      aria-valuemin={0}
+                      aria-valuemax={1}
+                      aria-valuenow={fairness}
+                      aria-label="Fairness toward your team"
+                      onChange={(event) => {
+                        setFairness(Number(event.target.value));
+                        setSelectedTradeId(null);
+                      }}
+                      className="w-full"
+                    />
+                  </label>
+                  <fieldset className="space-y-2">
+                    <legend className="text-xs font-semibold">Max players each side</legend>
+                    <div className="flex flex-wrap gap-1" role="group" aria-label="Max players each side">
+                      {[1, 2, 3].map((size) => (
+                        <button
+                          key={size}
+                          type="button"
+                          aria-pressed={packageSize === size}
+                          onClick={() => {
+                            setMaxEachSide(size);
+                            setGiveAwayIds((ids) => ids.slice(0, size));
+                            setSelectedTradeId(null);
+                          }}
+                          className={`border px-3 py-2 text-sm font-semibold ${packageSize === size ? "border-ring bg-primary text-primary-foreground" : "border-border bg-card text-text-secondary"}`}
+                        >
+                          {size}
+                        </button>
+                      ))}
+                    </div>
+                    <p className="text-xs font-normal text-muted-foreground">
+                      Searches 1–{packageSize} for-{packageSize === 1 ? "1" : `1…${packageSize}`} packages
+                      {packageSize === MAX_PACKAGE_SIZE ? ` (3-packs use the top ${THREE_PACK_POOL} ROS means per roster)` : ""}.
+                    </p>
+                  </fieldset>
+                </div>
 
                 {mode === "give-away" && (
                   <div className="space-y-2">
-                    <p className="text-xs font-semibold">Players to trade away (up to 2)</p>
+                    <p className="text-xs font-semibold">Players to trade away (up to {packageSize})</p>
                     <ul className="grid gap-1 sm:grid-cols-2">
                       {givePool.map((player) => {
                         const on = giveAwayIds.includes(player.playerId);
@@ -316,15 +360,28 @@ export function TradeRecommenderClient() {
                         );
                       })}
                     </ul>
-                    {!giveAwayIds.length && <p className="text-sm text-muted-foreground">Select one or two players you are willing to send.</p>}
+                    {!giveAwayIds.length && (
+                      <p className="text-sm text-muted-foreground">
+                        Select up to {packageSize} player{packageSize === 1 ? "" : "s"} you are willing to send.
+                      </p>
+                    )}
                   </div>
                 )}
               </section>
 
               {yourStrength && (
                 <div className="grid gap-4 lg:grid-cols-2">
-                  <WeaknessChart gaps={yourStrength.positions} teamName={teamNames.get(yourStrength.teamId) ?? "Team"} />
-                  <LeagueStrengthBars strengths={strengths} teamNames={teamNames} focusId={yourStrength.teamId} />
+                  <WeaknessChart
+                    gaps={yourStrength.positions}
+                    teamName={teamNames.get(yourStrength.teamId) ?? "Team"}
+                    overlay={gapOverlay}
+                  />
+                  <LeagueStrengthBars
+                    strengths={strengths}
+                    teamNames={teamNames}
+                    focusId={yourStrength.teamId}
+                    overlay={strengthOverlay}
+                  />
                 </div>
               )}
 
@@ -412,11 +469,14 @@ export function TradeRecommenderClient() {
             Fairness 0 keeps the other team near even (about −2 ROS mean points of hurt allowed, with a soft package-gap budget). Fairness 1 widens that floor toward roughly −120 points and weights your gain more heavily.
           </li>
           <li>
-            Packages are 1–2 players each side. This does not search three-team trades, faab, or draft picks.{" "}
+            Package size is user-controlled (1–{MAX_PACKAGE_SIZE} per side). Three-player packages only enumerate the top {THREE_PACK_POOL} ROS means on each roster so the search stays responsive. This does not search three-team trades, faab, or draft picks.{" "}
             <Link href="/trades" className="underline">
               Manual trade analysis
             </Link>{" "}
             is still available for custom packages.
+          </li>
+          <li>
+            Selecting a recommendation overlays before/after position gaps and league ROS means with ±1σ error bars from the same fitted normals used for P(help)/P(hurt).
           </li>
         </ul>
       </section>
