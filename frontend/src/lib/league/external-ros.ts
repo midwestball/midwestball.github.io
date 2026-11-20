@@ -6,8 +6,8 @@ export type ExternalRosPlayer = {
   name: string;
   position: string;
   team: string;
-  sleeperId?: string;
-  espnId?: string;
+  sleeperId?: string | null;
+  espnId?: string | null;
   sleeper: number | null;
   espn: number | null;
 };
