@@ -7,6 +7,7 @@ class-only), and writes `data/highlights/plays/{season}/w{week}.json`.
 
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -569,24 +570,91 @@ def _board_from_peers(
 
 
 def _shape_payload(dens: dict[str, Any]) -> dict[str, Any]:
+    """Compact play peer shapes for Storage.
+
+    Play expand charts only render ``bins`` (see PlayHighlightList). Exact
+    ``valueCounts`` dominate EPA file size and are omitted here; Stage G YTD
+    league files still publish counts for player-page KDE reconstruction.
+    """
     out: dict[str, Any] = {
         "kind": dens["kind"],
         "xMin": dens["x_min"],
         "xMax": dens["x_max"],
         "yMax": dens["y_max"],
-        "curve": dens.get("curve") or [],
     }
     if dens.get("representation") == "histogram":
         out.update(
             {
                 "representation": "histogram",
                 "bins": dens["bins"],
-                "valueCounts": dens["value_counts"],
             }
         )
+    else:
+        # Legacy continuous shapes (if any) keep a curve; prefer bins when present.
+        curve = dens.get("curve") or []
+        if curve:
+            out["curve"] = curve
     if dens.get("n_sample") is not None:
         out["nSample"] = int(dens["n_sample"])
     return out
+
+
+def compact_play_league_shapes_payload(payload: dict[str, Any]) -> dict[str, Any]:
+    """Strip unused bulk fields from an already-published play league shapes JSON."""
+    stats_in = payload.get("stats")
+    if not isinstance(stats_in, dict):
+        return payload
+    stats: dict[str, Any] = {}
+    for key, shape in stats_in.items():
+        if not isinstance(shape, dict):
+            continue
+        compact = {
+            k: shape[k]
+            for k in ("kind", "xMin", "xMax", "yMax", "representation", "bins", "nSample")
+            if k in shape
+        }
+        # Drop empty curves; keep a non-empty curve only when bins are absent.
+        curve = shape.get("curve")
+        if isinstance(curve, list) and curve and not compact.get("bins"):
+            compact["curve"] = curve
+        stats[key] = compact
+    out = dict(payload)
+    out["stats"] = stats
+    return out
+
+
+def compact_local_play_league_shapes(*, root: Path | None = None) -> dict[str, int]:
+    """Rewrite local ``dists/league_plays/**/*.json`` without valueCounts bloat."""
+    from ballnet.paths import LEAGUE_PLAYS_DIR
+
+    base = root or LEAGUE_PLAYS_DIR
+    if not base.is_dir():
+        raise FileNotFoundError(f"missing play league shapes dir {base}")
+    rewritten = 0
+    bytes_before = 0
+    bytes_after = 0
+    for path in sorted(base.rglob("*.json")):
+        raw = path.read_bytes()
+        bytes_before += len(raw)
+        payload = json.loads(raw)
+        if not isinstance(payload, dict):
+            continue
+        compact = compact_play_league_shapes_payload(payload)
+        data = (json.dumps(compact, separators=(",", ":"), ensure_ascii=False) + "\n").encode(
+            "utf-8"
+        )
+        if data == raw:
+            bytes_after += len(raw)
+            continue
+        path.write_bytes(data)
+        rewritten += 1
+        bytes_after += len(data)
+    return {
+        "files": rewritten,
+        "bytesBefore": bytes_before,
+        "bytesAfter": bytes_after,
+        "bytesFreed": max(0, bytes_before - bytes_after),
+    }
 
 
 def _peer_keys_on_board(payload: dict[str, Any]) -> set[str]:

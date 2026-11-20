@@ -8,6 +8,7 @@
 - Before publishing boards, pair same `(game_id, play_id)` pass + reception into one `completion` card (`passer → receiver`, rarer peer perspective primary, other as `secondaryPeerKey`). Board sections follow `BOARD_CLASSES` (completion + rush/defense/special teams).
 - Persist offense-centric `epa` on the play panel. Publish **raw** and **EPA** boards: `w{week}.json` / `w{week}.epa.json` (Storage under `highlights/plays/`). EPA mode ranks actor-oriented EPA (`−epa` for defense / punt returns). Include game clock plus situation (`down`, `distance`, `yardline` / `yardline100`) and pass detail (`airYards`, `yardsAfterCatch`) when present.
 - Publish peer histograms for board `peerKey`s to `dists/league_plays/{season}/w{week}.json` and `w{week}.epa.json`. Upload raw + EPA board/dist together; do not embed `curve`/`bins` on board rows.
+- Play league shapes publish **bins + domain + nSample only**. Omit `valueCounts` (and empty curves) — the play expand UI charts bins, and exact counts explode EPA Storage size.
 - Tolerate missing historical play panels for years in `PLAY_HIGHLIGHTS_START_YEAR..S-1`; record them as `missingPeerSeasons`. Require the current season panel.
 
 ## Ask First

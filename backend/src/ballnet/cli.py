@@ -32,8 +32,15 @@ from ballnet.highlights import (
 from ballnet.play_panel import build_play_panel
 from ballnet.play_highlights import (
     PLAY_HIGHLIGHTS_START_YEAR,
+    compact_local_play_league_shapes,
     publish_play_highlights,
     weeks_to_publish_plays,
+)
+from ballnet.storage_prune import (
+    prune_legacy_root,
+    prune_old_projections,
+    prune_projections_staging,
+    prune_stale_season_weeks,
 )
 from ballnet.storage_upload import (
     active_dataset_prefix,
@@ -404,6 +411,63 @@ def main(argv: list[str] | None = None) -> None:
     )
     p_up.add_argument("--bucket", default="knowball-public")
     p_up.add_argument("--workers", type=int, default=8)
+
+    p_compact = sub.add_parser(
+        "compact-play-dists",
+        help="Strip unused valueCounts from local dists/league_plays JSON (Storage quota)",
+    )
+    p_compact.add_argument(
+        "--upload",
+        action="store_true",
+        help="After rewriting local files, upload every season's play dists + boards",
+    )
+    p_compact.add_argument("--bucket", default="knowball-public")
+    p_compact.add_argument("--workers", type=int, default=4)
+
+    p_prune = sub.add_parser(
+        "prune-storage",
+        help="Delete orphaned / stale Supabase Storage objects (default: dry-run)",
+    )
+    p_prune.add_argument(
+        "--execute",
+        action="store_true",
+        help="Actually delete (omit for dry-run inventory)",
+    )
+    p_prune.add_argument(
+        "--legacy-root",
+        action="store_true",
+        help="Delete pre-migration pages/league/leaderboards/highlights/dists at bucket root",
+    )
+    p_prune.add_argument(
+        "--projections-staging",
+        action="store_true",
+        help="Delete entire projections-staging/ tree",
+    )
+    p_prune.add_argument(
+        "--old-projections",
+        action="store_true",
+        help="Delete older production projection weeks (keeps newest --keep-projection-weeks)",
+    )
+    p_prune.add_argument(
+        "--keep-projection-weeks",
+        type=int,
+        default=2,
+        help="With --old-projections, how many newest weeks to keep (default 2)",
+    )
+    p_prune.add_argument(
+        "--stale-season-weeks",
+        type=int,
+        default=None,
+        metavar="YEAR",
+        help="Delete non-current pages/league/leaderboards weeks for YEAR under active dataset",
+    )
+    p_prune.add_argument(
+        "--keep-week",
+        type=int,
+        default=None,
+        help="With --stale-season-weeks, week to keep (default: index/current or seasons)",
+    )
+    p_prune.add_argument("--bucket", default="knowball-public")
 
     args = parser.parse_args(argv)
 
@@ -1224,6 +1288,124 @@ def main(argv: list[str] | None = None) -> None:
         print(json.dumps({"uploads": reports}, indent=2))
         failed = sum(x["failed"] for x in reports)
         if failed:
+            sys.exit(1)
+        return
+
+    if args.cmd == "compact-play-dists":
+        print("=== compact local dists/league_plays ===", flush=True)
+        summary = compact_local_play_league_shapes()
+        print(json.dumps(summary, indent=2), flush=True)
+        if not args.upload:
+            return
+        from ballnet.paths import LEAGUE_PLAYS_DIR
+
+        seasons = sorted(
+            int(p.name)
+            for p in LEAGUE_PLAYS_DIR.iterdir()
+            if p.is_dir() and p.name.isdigit()
+        )
+        if not seasons:
+            raise SystemExit("no local league_plays seasons to upload")
+        client = supabase_client()
+        prefix = active_dataset_prefix(client, args.bucket)
+        upload_options = {
+            "bucket": args.bucket,
+            "workers": args.workers,
+            "client": client,
+            "prefix": prefix,
+        }
+        print(f"=== upload compacted play dists dataset: {prefix or '(legacy root)'} ===", flush=True)
+        reports: list[dict] = []
+        for season in seasons:
+            print(f"=== upload all play highlights {season} ===", flush=True)
+            r = upload_all_play_highlights_for_season(season, **upload_options)
+            reports.append(
+                {
+                    "what": f"highlights/plays+dists/league_plays/{season}",
+                    "uploaded": r.uploaded,
+                    "failed": r.failed,
+                    "bytes": r.bytes,
+                    "seconds": round(r.seconds, 3),
+                    "errors": r.errors,
+                }
+            )
+            print(
+                f"  uploaded={r.uploaded} failed={r.failed} "
+                f"bytes={r.bytes} seconds={r.seconds:.1f}",
+                flush=True,
+            )
+        print(json.dumps({"compact": summary, "uploads": reports}, indent=2))
+        if any(x["failed"] for x in reports):
+            sys.exit(1)
+        return
+
+    if args.cmd == "prune-storage":
+        dry_run = not args.execute
+        selected = [
+            args.legacy_root,
+            args.projections_staging,
+            args.old_projections,
+            args.stale_season_weeks is not None,
+        ]
+        if not any(selected):
+            raise SystemExit(
+                "Select at least one of --legacy-root / --projections-staging / "
+                "--old-projections / --stale-season-weeks YEAR"
+            )
+        client = supabase_client()
+        mode = "DRY-RUN" if dry_run else "EXECUTE"
+        print(f"=== prune-storage ({mode}) ===", flush=True)
+        reports: list[dict] = []
+
+        def record(label: str, result) -> None:
+            reports.append(
+                {
+                    "what": label,
+                    "deleted": result.deleted,
+                    "failed": result.failed,
+                    "bytes": result.bytes,
+                    "errors": result.errors,
+                    "skipped": result.skipped,
+                    "dryRun": dry_run,
+                }
+            )
+            mb = result.bytes / (1024 * 1024)
+            print(
+                f"  {label}: objects={result.deleted} ~{mb:.1f} MiB "
+                f"failed={result.failed} skipped={result.skipped}",
+                flush=True,
+            )
+
+        if args.legacy_root:
+            record("legacy-root", prune_legacy_root(bucket=args.bucket, dry_run=dry_run, client=client))
+        if args.projections_staging:
+            record(
+                "projections-staging",
+                prune_projections_staging(bucket=args.bucket, dry_run=dry_run, client=client),
+            )
+        if args.old_projections:
+            record(
+                "old-projections",
+                prune_old_projections(
+                    bucket=args.bucket,
+                    keep_weeks=args.keep_projection_weeks,
+                    dry_run=dry_run,
+                    client=client,
+                ),
+            )
+        if args.stale_season_weeks is not None:
+            record(
+                f"stale-season-weeks/{args.stale_season_weeks}",
+                prune_stale_season_weeks(
+                    season=args.stale_season_weeks,
+                    bucket=args.bucket,
+                    dry_run=dry_run,
+                    client=client,
+                    keep_week=args.keep_week,
+                ),
+            )
+        print(json.dumps({"prunes": reports}, indent=2))
+        if any(x["failed"] for x in reports):
             sys.exit(1)
         return
 

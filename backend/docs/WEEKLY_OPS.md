@@ -150,11 +150,27 @@ uv run ballnet publish-range --start 2016 --end $Y --skip-pipeline --no-current
 # then upload each season slice + index
 ```
 
+## Storage quota hygiene (Phase 1)
+
+Play expand charts only need histogram **bins**. After changing generators, reclaim free-tier Storage with:
+
+```bash
+# Rewrite local dists/league_plays (drops unused valueCounts) and upsert to Storage
+uv run ballnet compact-play-dists --upload
+
+# Inventory then delete orphans / stale weeks (omit --execute for dry-run)
+uv run ballnet prune-storage --legacy-root --projections-staging --old-projections --stale-season-weeks YEAR
+uv run ballnet prune-storage --legacy-root --projections-staging --old-projections --stale-season-weeks YEAR --execute
+```
+
+`--stale-season-weeks` only removes prior **pages/league/leaderboards** weeks for the live season (highlight / play / league_weekly history stays). Prefer keeping 2 projection weeks; wipe `projections-staging/` after a successful promote.
+
 ## What *not* to re-run every week
 
 - Full `publish-range --start 2016 --end …` — historical season-end slices are static unless you intentionally rebuild
 - `publish-league-range` alone — prefer full `publish-all` so pages + percentiles stay aligned with league curves
 - `--also-current` Storage upload — doubles quota; the frontend uses `index/current.json`
+- Re-uploading every prior in-season `pages/{YEAR}/w*` after advancing `index/current.json` — prune stale weeks instead
 
 ## Failure modes to watch
 

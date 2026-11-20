@@ -304,6 +304,8 @@ def test_play_league_shapes_include_board_peer_keys():
     assert hist["representation"] == "histogram"
     assert hist["bins"]
     assert hist["nSample"] == 20
+    assert "valueCounts" not in hist
+    assert "curve" not in hist
 
 
 def test_epa_mode_flips_defense_and_punt_return():
