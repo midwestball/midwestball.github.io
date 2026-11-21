@@ -31,11 +31,17 @@ import {
 import { leagueSettingsLabel } from "@/lib/league/store";
 import { useLeagueLabStore } from "@/lib/league/use-league-store";
 import type { RosPlayer } from "@/lib/ros";
-import { LeagueStrengthBars, TradeImpactCurves, TradeScatter, WeaknessChart } from "./TradeCharts";
+import { LeagueStrengthBars, TradeImpactCurves, WeaknessChart } from "./TradeCharts";
 
 type Mode = "suggest" | "two-team" | "give-away";
 
 const signed = (n: number) => `${n > 0 ? "+" : ""}${n.toFixed(1)}`;
+const toggleBtn = (on: boolean) =>
+  `border px-3 py-2 text-sm font-semibold transition-colors ${on ? "border-ring bg-primary text-primary-foreground" : "border-border bg-card text-text-secondary hover:border-ring/50"}`;
+
+function scrollToId(id: string) {
+  document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" });
+}
 
 export function TradeRecommenderClient() {
   const { snapshot, error: rosError, retry } = useRos();
@@ -160,19 +166,22 @@ export function TradeRecommenderClient() {
     setSelectedTradeId(null);
   }
 
+  const selectedRank = selected ? recommendations.findIndex((trade) => trade.id === selected.id) + 1 : 0;
+  const needsPlayerLocks = mode === "give-away" && !giveAwayIds.length && !receiveIds.length;
+
   return (
-    <main className="mx-auto flex w-full max-w-5xl flex-1 flex-col gap-5 px-4 py-8">
-      <header className="space-y-2">
+    <main className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-6 px-4 py-8 sm:px-6">
+      <header className="space-y-3 border-b border-border pb-5">
         <p className="text-[11px] font-semibold tracking-[0.14em] text-muted-foreground uppercase">Lab · not in nav</p>
-        <h1 className="text-2xl font-semibold tracking-tight">Trade recommender</h1>
-        <p className="max-w-3xl text-sm text-muted-foreground">
+        <h1 className="text-3xl font-semibold tracking-tight">Trade recommender</h1>
+        <p className="max-w-3xl text-sm leading-relaxed text-muted-foreground">
           Experimental: import a league (same browser store as the{" "}
           <Link href="/lab/league" className="underline">
             league lab
           </Link>
           ), spot positional weaknesses, and search ROS-based trade packages that help your side while staying within a fairness budget you control.
         </p>
-        <p className="border border-warning-border bg-warning-surface p-2 text-sm text-warning-foreground">
+        <p className="border border-warning-border bg-warning-surface p-3 text-sm text-warning-foreground">
           <strong>Experimental:</strong> recommendations are frontend-only heuristics on fitted normals. They are not validated win probabilities, and current injuries are not modeled.
         </p>
       </header>
@@ -192,21 +201,35 @@ export function TradeRecommenderClient() {
         <LeagueConnectForms existingLeague={null} onSave={save} onError={setError} working={working} setWorking={setWorking} />
       ) : (
         <>
-          <section className="space-y-3 border border-border bg-card p-3" aria-label="Linked league">
-            <div className="flex flex-wrap items-end justify-between gap-3">
-              <div>
-                <h2 className="text-lg font-semibold">{league.name}</h2>
+          <section className="space-y-3 border border-border bg-card p-4" aria-label="Linked league">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div className="min-w-0 space-y-1">
+                <p className="text-[11px] font-semibold tracking-[0.12em] text-muted-foreground uppercase">Linked league</p>
+                <h2 className="truncate text-lg font-semibold">{league.name}</h2>
                 <p className="text-sm text-muted-foreground">
                   {league.provider === "sleeper" ? "Sleeper" : "ESPN"} · {league.season} · {leagueSettingsLabel(league.rosterSettings)}
-                  {snapshot ? ` · ROS through week ${snapshot.cutoffWeek}` : ""}
+                  {snapshot ? ` · MB ROS through week ${snapshot.cutoffWeek}` : ""}
                   {` · Ext weeks ${externalRos.horizonStartWeek}–${externalRos.horizonEndWeek}`}
                 </p>
               </div>
+              {projection && projection.mode !== "blocked" && (
+                <nav className="flex flex-wrap gap-2 text-xs font-semibold" aria-label="Page sections">
+                  <a href="#trade-setup" className="border border-border bg-background px-2.5 py-1.5 hover:border-ring">
+                    Setup
+                  </a>
+                  <a href="#trade-analysis" className="border border-border bg-background px-2.5 py-1.5 hover:border-ring">
+                    Charts
+                  </a>
+                  <a href="#trade-packages" className="border border-border bg-background px-2.5 py-1.5 hover:border-ring">
+                    Packages
+                  </a>
+                </nav>
+              )}
             </div>
             {store.leagues.length > 1 && (
               <label className="block text-xs font-semibold">
                 Saved league
-                <select value={league.id} onChange={(event) => activate(event.target.value)} className={`${control} mt-1 block`}>
+                <select value={league.id} onChange={(event) => activate(event.target.value)} className={`${control} mt-1 block max-w-md`}>
                   {store.leagues.map((item) => (
                     <option key={item.id} value={item.id}>
                       {item.name} · {item.season}
@@ -240,7 +263,45 @@ export function TradeRecommenderClient() {
 
           {projection && projection.mode !== "blocked" && (
             <>
-              <section className="space-y-3 border border-border bg-card p-3" aria-label="Recommendation controls">
+              {selected && (
+                <div className="sticky top-0 z-20 -mx-4 border-y border-border bg-card/95 px-4 py-2.5 backdrop-blur sm:-mx-6 sm:px-6">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="text-[11px] font-semibold tracking-[0.12em] text-muted-foreground uppercase">Selected · #{selectedRank}</p>
+                      <p className="truncate text-sm font-semibold">
+                        {leftName} ↔ {rightName}
+                        {!selected.fairnessPass ? <span className="ml-2 text-xs font-normal text-warning-foreground">outside fairness</span> : null}
+                      </p>
+                      <div className="mt-0.5 flex flex-wrap gap-3 text-xs tabular-nums">
+                        <span className={selected.left.deltaMean >= 0 ? "text-success" : "text-destructive"}>
+                          You {signed(selected.left.deltaMean)} · P(help) {formatPct(selected.left.pHelp)}
+                        </span>
+                        <span className={selected.right.deltaMean >= 0 ? "text-success" : "text-destructive"}>
+                          Them {signed(selected.right.deltaMean)} · P(hurt) {formatPct(selected.right.pHurt)}
+                        </span>
+                      </div>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      <button type="button" className={toggleBtn(false)} onClick={() => scrollToId("trade-analysis")}>
+                        Jump to charts
+                      </button>
+                      <button type="button" className={toggleBtn(false)} onClick={() => scrollToId("trade-packages")}>
+                        Jump to packages
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              <section id="trade-setup" className="scroll-mt-24 space-y-4 border border-border bg-card p-4" aria-label="Recommendation controls">
+                <div className="space-y-1 border-b border-border pb-3">
+                  <p className="text-[11px] font-semibold tracking-[0.12em] text-muted-foreground uppercase">Step 1 · Setup</p>
+                  <h2 className="text-lg font-semibold">How should we search?</h2>
+                  <p className="text-xs text-muted-foreground">
+                    Pick a mode, teams, ranking source, and fairness. Player lines always show MB · Sleeper · ESPN · mean; ranking uses {rankingLabel}.
+                  </p>
+                </div>
+
                 <div role="group" aria-label="Recommendation mode" className="flex flex-wrap gap-1">
                   {(
                     [
@@ -257,7 +318,7 @@ export function TradeRecommenderClient() {
                         setMode(key);
                         setSelectedTradeId(null);
                       }}
-                      className={`border px-3 py-2 text-sm font-semibold ${mode === key ? "border-ring bg-primary text-primary-foreground" : "border-border bg-card text-text-secondary"}`}
+                      className={toggleBtn(mode === key)}
                     >
                       {label}
                     </button>
@@ -353,13 +414,33 @@ export function TradeRecommenderClient() {
                 </div>
 
                 {mode === "give-away" && (
-                  <section className="space-y-3 border border-ring/40 bg-muted/40 p-3" aria-label="Players to give and want">
-                    <div>
-                      <h3 className="text-sm font-semibold">Choose players on both sides</h3>
-                      <p className="text-xs text-muted-foreground">
-                        Tap names to lock them. You can lock only givers, only targets from {partnerLabel}, or both. Unlocked slots are filled by the recommender (up to {packageSize} each side).
-                      </p>
+                  <section className="space-y-3 border border-border bg-muted/25 p-3" aria-label="Players to give and want">
+                    <div className="flex flex-wrap items-start justify-between gap-2">
+                      <div>
+                        <h3 className="text-sm font-semibold">Choose players on both sides</h3>
+                        <p className="text-xs text-muted-foreground">
+                          Lock givers, targets from {partnerLabel}, or both. Empty sides are filled up to {packageSize} each.
+                        </p>
+                      </div>
+                      {(giveAwayIds.length > 0 || receiveIds.length > 0) && (
+                        <button
+                          type="button"
+                          className="border border-border bg-background px-2.5 py-1 text-xs font-semibold hover:border-ring"
+                          onClick={() => {
+                            setGiveAwayIds([]);
+                            setReceiveIds([]);
+                            setSelectedTradeId(null);
+                          }}
+                        >
+                          Clear locks
+                        </button>
+                      )}
                     </div>
+                    {needsPlayerLocks && (
+                      <p className="border border-warning-border bg-warning-surface px-2.5 py-2 text-xs text-warning-foreground">
+                        Lock at least one player to send or receive to generate packages.
+                      </p>
+                    )}
                     <div className="grid gap-3 lg:grid-cols-2">
                       <PlayerPickList
                         title="Players I give"
@@ -370,6 +451,7 @@ export function TradeRecommenderClient() {
                         players={givePool}
                         selectedIds={giveAwayIds}
                         onToggle={toggleGive}
+                        onClear={giveAwayIds.length ? () => { setGiveAwayIds([]); setSelectedTradeId(null); } : undefined}
                         sourceLine={sourceLine}
                       />
                       <PlayerPickList
@@ -381,13 +463,14 @@ export function TradeRecommenderClient() {
                         players={receivePool}
                         selectedIds={receiveIds}
                         onToggle={toggleReceive}
+                        onClear={receiveIds.length ? () => { setReceiveIds([]); setSelectedTradeId(null); } : undefined}
                         sourceLine={sourceLine}
                       />
                     </div>
                   </section>
                 )}
 
-                <div className="grid gap-3 lg:grid-cols-3">
+                <div className="grid gap-4 lg:grid-cols-3">
                   <fieldset className="space-y-2">
                     <legend className="text-xs font-semibold">Rank trades using</legend>
                     <div className="flex flex-wrap gap-1" role="group" aria-label="Projection source for ranking">
@@ -396,26 +479,25 @@ export function TradeRecommenderClient() {
                           key={source.id}
                           type="button"
                           aria-pressed={rankingSource === source.id}
+                          title={source.label}
                           onClick={() => {
                             setRankingSource(source.id);
                             setSelectedTradeId(null);
                           }}
-                          className={`border px-3 py-2 text-sm font-semibold ${rankingSource === source.id ? "border-ring bg-primary text-primary-foreground" : "border-border bg-card text-text-secondary"}`}
+                          className={toggleBtn(rankingSource === source.id)}
                         >
                           {source.short}
                         </button>
                       ))}
                     </div>
                     <p className="text-xs font-normal text-muted-foreground">
-                      Lineups, fairness, charts, and package ranking use {rankingLabel}. Missing Sleeper/ESPN values fall back to MB. Player lines still show all sources.
+                      Search uses {rankingLabel}. Missing Sleeper/ESPN fall back to MB.
                     </p>
                   </fieldset>
                   <label className="block space-y-2 text-xs font-semibold">
                     <span className="flex flex-wrap items-baseline justify-between gap-2">
-                      <span>Fairness {fairness.toFixed(2)}</span>
-                      <span className="font-normal text-muted-foreground">
-                        0 = even · other Δ floor {otherDeltaFloor(fairness).toFixed(0)} pts · 1 = max unfair favoring {leftName}
-                      </span>
+                      <span>Fairness · {fairness.toFixed(2)}</span>
+                      <span className="font-normal text-muted-foreground">other Δ floor {otherDeltaFloor(fairness).toFixed(0)}</span>
                     </span>
                     <input
                       type="range"
@@ -433,6 +515,10 @@ export function TradeRecommenderClient() {
                       }}
                       className="w-full"
                     />
+                    <span className="flex justify-between font-normal text-muted-foreground">
+                      <span>Even</span>
+                      <span>Favor {leftName}</span>
+                    </span>
                   </label>
                   <fieldset className="space-y-2">
                     <legend className="text-xs font-semibold">Max players each side</legend>
@@ -448,38 +534,99 @@ export function TradeRecommenderClient() {
                             setReceiveIds((ids) => ids.slice(0, size));
                             setSelectedTradeId(null);
                           }}
-                          className={`border px-3 py-2 text-sm font-semibold ${packageSize === size ? "border-ring bg-primary text-primary-foreground" : "border-border bg-card text-text-secondary"}`}
+                          className={toggleBtn(packageSize === size)}
                         >
                           {size}
                         </button>
                       ))}
                     </div>
                     <p className="text-xs font-normal text-muted-foreground">
-                      Searches 1–{packageSize} for-{packageSize === 1 ? "1" : `1…${packageSize}`} packages
-                      {packageSize === MAX_PACKAGE_SIZE ? ` (3-packs use the top ${THREE_PACK_POOL} ROS means per roster)` : ""}.
+                      Searches 1–{packageSize} for-{packageSize === 1 ? "1" : `1…${packageSize}`}
+                      {packageSize === MAX_PACKAGE_SIZE ? ` · 3-packs use top ${THREE_PACK_POOL} ROS` : ""}.
                     </p>
                   </fieldset>
                 </div>
               </section>
 
-              <section className="space-y-3" aria-live="polite" aria-label="Recommended trades">
-                <div className="flex flex-wrap items-end justify-between gap-2">
-                  <div>
+              <section id="trade-analysis" className="scroll-mt-24 space-y-4" aria-label="Trade analysis charts">
+                <div className="space-y-1 border-b border-border pb-3">
+                  <p className="text-[11px] font-semibold tracking-[0.12em] text-muted-foreground uppercase">Step 2 · Analysis</p>
+                  <h2 className="text-lg font-semibold">Weaknesses and trade impact</h2>
+                  <p className="text-xs text-muted-foreground">
+                    Position gaps and league strength use {rankingLabel}. When a package is selected, charts overlay the projected after state.
+                  </p>
+                </div>
+
+                {!selected && (
+                  <p className="border border-border bg-card px-3 py-2 text-sm text-muted-foreground">
+                    {needsPlayerLocks
+                      ? "Lock players in Setup to generate packages, then pick one below to overlay trade impact."
+                      : "No package selected yet — baseline charts still show your current roster profile."}
+                  </p>
+                )}
+
+                {yourStrength && (
+                  <div className="grid gap-5 lg:grid-cols-2">
+                    <WeaknessChart
+                      key={`gap-${chartKey}`}
+                      gaps={yourStrength.positions}
+                      teamName={teamNames.get(yourStrength.teamId) ?? "Team"}
+                      overlay={gapOverlay}
+                      selectedTradeId={selected?.id ?? null}
+                    />
+                    <LeagueStrengthBars
+                      key={`league-${chartKey}`}
+                      strengths={strengths}
+                      teamNames={teamNames}
+                      focusId={yourStrength.teamId}
+                      overlay={strengthOverlay}
+                      selectedTradeId={selected?.id ?? null}
+                    />
+                  </div>
+                )}
+
+                {selected && (
+                  <>
+                    <TradeImpactCurves key={`curves-${selected.id}`} trade={selected} leftName={leftName} rightName={rightName} />
+                    <section className="grid gap-4 sm:grid-cols-2" aria-label="Selected trade lineup change">
+                      <LineupDelta
+                        season={league.season}
+                        title={`${leftName} lineup`}
+                        before={selected.left.beforeLineup}
+                        after={selected.left.afterLineup}
+                        delta={selected.left.deltaMean}
+                        sourceLine={sourceLine}
+                      />
+                      <LineupDelta
+                        season={league.season}
+                        title={`${rightName} lineup`}
+                        before={selected.right.beforeLineup}
+                        after={selected.right.afterLineup}
+                        delta={selected.right.deltaMean}
+                        sourceLine={sourceLine}
+                      />
+                    </section>
+                  </>
+                )}
+              </section>
+
+              <section id="trade-packages" className="scroll-mt-24 space-y-3" aria-live="polite" aria-label="Recommended trades">
+                <div className="flex flex-wrap items-end justify-between gap-2 border-b border-border pb-3">
+                  <div className="space-y-1">
+                    <p className="text-[11px] font-semibold tracking-[0.12em] text-muted-foreground uppercase">Step 3 · Packages</p>
                     <h2 className="text-lg font-semibold">Recommended packages</h2>
                     <p className="text-xs text-muted-foreground">
-                      Ranked with {rankingLabel} by expected help to {leftName} under the fairness slider. Select a row to update the charts below.
+                      Ranked with {rankingLabel} for {leftName}. Selecting a row updates the charts above.
                     </p>
                   </div>
-                  <p className="text-xs text-muted-foreground">{recommendations.length} shown</p>
+                  <p className="text-xs font-semibold tabular-nums text-muted-foreground">{recommendations.length} shown</p>
                 </div>
 
                 {!recommendations.length ? (
-                  <p className="border border-border bg-card p-3 text-sm text-muted-foreground">
-                    No packages cleared the fairness filters
-                    {mode === "give-away" && !giveAwayIds.length && !receiveIds.length
-                      ? " — pick players to send and/or receive first"
-                      : ""}
-                    . Try raising fairness, changing the partner, or adjusting locked players.
+                  <p className="border border-dashed border-border bg-card p-4 text-sm text-muted-foreground">
+                    {needsPlayerLocks
+                      ? "Lock at least one player to send or receive, then packages will appear here."
+                      : "No packages cleared the fairness filters. Try raising fairness, changing the partner, or adjusting locks."}
                   </p>
                 ) : (
                   <ul className="space-y-2">
@@ -490,21 +637,32 @@ export function TradeRecommenderClient() {
                         <li key={trade.id}>
                           <button
                             type="button"
-                            onClick={() => setSelectedTradeId(trade.id)}
-                            className={`w-full border p-3 text-left ${active ? "border-ring bg-muted" : "border-border bg-card"}`}
+                            onClick={() => {
+                              setSelectedTradeId(trade.id);
+                              scrollToId("trade-analysis");
+                            }}
+                            className={`w-full border p-4 text-left transition-colors ${active ? "border-ring bg-muted shadow-[inset_3px_0_0_0_var(--ring)]" : "border-border bg-card hover:border-ring/60"}`}
                           >
                             <div className="flex flex-wrap items-start justify-between gap-2">
-                              <p className="text-sm font-semibold">
-                                #{index + 1} · vs {partner}
-                                {!trade.fairnessPass ? <span className="ml-2 text-xs font-normal text-warning-foreground">locked · outside fairness</span> : null}
-                              </p>
+                              <div className="flex flex-wrap items-center gap-2">
+                                <span className={`inline-flex min-w-8 items-center justify-center border px-2 py-0.5 text-xs font-semibold tabular-nums ${active ? "border-ring bg-primary text-primary-foreground" : "border-border bg-background"}`}>
+                                  #{index + 1}
+                                </span>
+                                <p className="text-sm font-semibold">
+                                  vs {partner}
+                                  {!trade.fairnessPass ? <span className="ml-2 text-xs font-normal text-warning-foreground">locked · outside fairness</span> : null}
+                                </p>
+                              </div>
                               <p className="text-xs text-muted-foreground">score {trade.score.toFixed(1)}</p>
                             </div>
-                            <div className="mt-2 grid gap-2 sm:grid-cols-2">
+                            <div className="mt-3 grid gap-3 sm:grid-cols-[1fr_auto_1fr] sm:items-start">
                               <PackageLine season={league.season} label={`${leftName} sends`} players={trade.left.give} sourceLine={sourceLine} />
+                              <p className="hidden pt-5 text-center text-xs font-semibold text-muted-foreground sm:block" aria-hidden>
+                                ↔
+                              </p>
                               <PackageLine season={league.season} label={`${partner} sends`} players={trade.right.give} sourceLine={sourceLine} />
                             </div>
-                            <div className="mt-2 flex flex-wrap gap-3 text-xs tabular-nums">
+                            <div className="mt-3 flex flex-wrap gap-3 border-t border-border pt-2 text-xs tabular-nums">
                               <span className={trade.left.deltaMean >= 0 ? "text-success" : "text-destructive"}>
                                 {leftName} {signed(trade.left.deltaMean)} · P(help) {formatPct(trade.left.pHelp)}
                               </span>
@@ -519,77 +677,41 @@ export function TradeRecommenderClient() {
                   </ul>
                 )}
               </section>
-
-              {yourStrength && (
-                <div className="grid gap-4 lg:grid-cols-2">
-                  <WeaknessChart
-                    key={`gap-${chartKey}`}
-                    gaps={yourStrength.positions}
-                    teamName={teamNames.get(yourStrength.teamId) ?? "Team"}
-                    overlay={gapOverlay}
-                    selectedTradeId={selected?.id ?? null}
-                  />
-                  <LeagueStrengthBars
-                    key={`league-${chartKey}`}
-                    strengths={strengths}
-                    teamNames={teamNames}
-                    focusId={yourStrength.teamId}
-                    overlay={strengthOverlay}
-                    selectedTradeId={selected?.id ?? null}
-                  />
-                </div>
-              )}
-
-              <TradeScatter trades={recommendations} leftName={leftName} rightLabel={mode === "suggest" && !partnerId ? "partner" : rightName} />
-
-              {selected && (
-                <>
-                  <TradeImpactCurves key={`curves-${selected.id}`} trade={selected} leftName={leftName} rightName={rightName} />
-                  <section className="grid gap-3 sm:grid-cols-2" aria-label="Selected trade lineup change">
-                    <LineupDelta season={league.season} title={`${leftName} lineup`} before={selected.left.beforeLineup} after={selected.left.afterLineup} delta={selected.left.deltaMean} sourceLine={sourceLine} />
-                    <LineupDelta season={league.season} title={`${rightName} lineup`} before={selected.right.beforeLineup} after={selected.right.afterLineup} delta={selected.right.deltaMean} sourceLine={sourceLine} />
-                  </section>
-                </>
-              )}
             </>
           )}
         </>
       )}
 
-      <section className="space-y-2 border border-border bg-card p-3" aria-labelledby="trade-rec-caveats">
-        <h2 id="trade-rec-caveats" className="text-sm font-semibold">
+      <details className="border border-border bg-card p-4">
+        <summary id="trade-rec-caveats" className="cursor-pointer text-sm font-semibold">
           How recommendations work
-        </h2>
-        <ul className="list-disc space-y-1 pl-5 text-sm text-muted-foreground">
+        </summary>
+        <ul className="mt-3 list-disc space-y-1.5 pl-5 text-sm text-muted-foreground">
           <li>Each roster maps to rest-of-season players the same way as the league lab. Kickers, defenses, IR, and taxi spots are out of the pool.</li>
           <li>
             Player lines show midwestball ROS mean with a ±1σ band, plus hardcoded Sleeper and ESPN full-PPR sums for weeks {externalRos.horizonStartWeek}–
-            {externalRos.horizonEndWeek} (captured {externalRos.capturedAt.slice(0, 10)}), and the mean of whichever of those sources are present (μ3 when all three
-            exist). The &quot;Rank trades using&quot; control remaps lineup totals, fairness, charts, and package ranking onto MB, Sleeper, ESPN, or the mean of available
-            sources (missing externals fall back to MB). Uncertainty bands stay MB-shaped and are shifted with the chosen point estimate.
+            {externalRos.horizonEndWeek} (captured {externalRos.capturedAt.slice(0, 10)}), and the mean of whichever sources are present. Rank trades using remaps
+            search onto MB, Sleeper, ESPN, or that mean (missing externals fall back to MB).
           </li>
           <li>Team strength is the optimized starter lineup mean; uncertainty is a normal fit from each starter&apos;s mean and 5th–95th gap.</li>
           <li>
             P(help) / P(hurt) use the change in lineup totals with shared starters canceling, so only players who enter or leave the starting lineup contribute variance.
           </li>
           <li>
-            Fairness 0 keeps the other team near even (about −2 ROS mean points of hurt allowed, with a soft package-gap budget). Fairness 1 widens that floor toward roughly −120 points and weights your gain more heavily.
+            Fairness 0 keeps the other team near even (about −2 ROS mean points of hurt allowed). Fairness 1 widens that floor toward roughly −120 points and weights your gain more heavily.
           </li>
           <li>
-            In Players I give mode you can lock outgoing players, incoming targets, or both. Partial locks are filled up to the max package size; a fully locked package is always evaluated even if it sits outside the fairness slider.
+            In Players I give mode you can lock outgoing players, incoming targets, or both. A fully locked package is always evaluated even outside the fairness slider.
           </li>
           <li>
-            Package size is user-controlled (1–{MAX_PACKAGE_SIZE} per side). Three-player packages only enumerate the top {THREE_PACK_POOL} ROS means on each roster so the search stays responsive. This does not search three-team trades, faab, or draft picks.{" "}
+            Three-player packages only enumerate the top {THREE_PACK_POOL} ROS means per roster. No three-team trades, FAAB, or draft picks.{" "}
             <Link href="/trades" className="underline">
               Manual trade analysis
             </Link>{" "}
-            is still available for custom packages.
-          </li>
-          <li>
-            Selecting a recommendation overlays before/after position gaps and league ROS means with ±1σ error bars from the same fitted normals used for P(help)/P(hurt).
+            is still available.
           </li>
         </ul>
-      </section>
+      </details>
     </main>
   );
 }
@@ -603,6 +725,7 @@ function PlayerPickList({
   players,
   selectedIds,
   onToggle,
+  onClear,
   sourceLine,
 }: {
   title: string;
@@ -613,19 +736,27 @@ function PlayerPickList({
   players: RosPlayer[];
   selectedIds: string[];
   onToggle: (id: string) => void;
+  onClear?: () => void;
   sourceLine: (player: RosPlayer) => string;
 }) {
   return (
-    <div className="space-y-2 border border-border bg-card p-3">
-      <div>
-        <p className="text-sm font-semibold">{title}</p>
-        <p className="text-xs text-muted-foreground">{subtitle}</p>
-        <p className="mt-1 text-xs text-muted-foreground">{hint}</p>
+    <div className="flex h-full flex-col space-y-2 border border-border bg-background p-3">
+      <div className="flex items-start justify-between gap-2">
+        <div>
+          <p className="text-sm font-semibold">{title}</p>
+          <p className="text-xs text-muted-foreground">{subtitle}</p>
+          <p className="mt-1 text-xs text-muted-foreground">{hint}</p>
+        </div>
+        {onClear && (
+          <button type="button" onClick={onClear} className="shrink-0 border border-border px-2 py-1 text-[11px] font-semibold hover:border-ring">
+            Clear
+          </button>
+        )}
       </div>
       {!players.length ? (
         <p className="text-sm text-warning-foreground">{emptyListMessage}</p>
       ) : (
-        <ul className="grid max-h-72 gap-1 overflow-y-auto pr-1">
+        <ul className="grid max-h-72 flex-1 gap-1 overflow-y-auto overscroll-contain pr-1">
           {players.map((player) => {
             const on = selectedIds.includes(player.playerId);
             return (
@@ -634,13 +765,16 @@ function PlayerPickList({
                   type="button"
                   aria-pressed={on}
                   onClick={() => onToggle(player.playerId)}
-                  className={`w-full border px-2 py-1.5 text-left text-sm ${on ? "border-ring bg-primary text-primary-foreground font-semibold" : "border-border bg-card"}`}
+                  className={`w-full border px-2.5 py-2 text-left text-sm transition-colors ${on ? "border-ring bg-primary text-primary-foreground font-semibold" : "border-border bg-card hover:border-ring/50"}`}
                 >
-                  <span className="block">
-                    {player.name}{" "}
-                    <span className={`text-xs font-normal ${on ? "text-primary-foreground/80" : "text-muted-foreground"}`}>
-                      {player.position}
+                  <span className="flex items-baseline justify-between gap-2">
+                    <span className="min-w-0 truncate">
+                      {player.name}{" "}
+                      <span className={`text-xs font-normal ${on ? "text-primary-foreground/80" : "text-muted-foreground"}`}>
+                        {player.position}
+                      </span>
                     </span>
+                    {on && <span className="shrink-0 text-[10px] font-semibold uppercase tracking-wide opacity-80">Locked</span>}
                   </span>
                   <span className={`mt-0.5 block text-[11px] font-normal tabular-nums leading-snug ${on ? "text-primary-foreground/80" : "text-muted-foreground"}`}>
                     {sourceLine(player)}
@@ -653,7 +787,7 @@ function PlayerPickList({
       )}
       {!!players.length && !selectedIds.length && <p className="text-xs text-muted-foreground">{emptySelectionHint}</p>}
       {selectedIds.length > 0 && (
-        <p className="text-xs font-semibold text-foreground">
+        <p className="border-t border-border pt-2 text-xs font-semibold text-foreground">
           Locked: {selectedIds.map((id) => players.find((player) => player.playerId === id)?.name ?? id).join(", ")}
         </p>
       )}
@@ -708,15 +842,20 @@ function LineupDelta({
   delta: number;
   sourceLine: (player: RosPlayer) => string;
 }) {
+  const beforeIds = new Set(before.assignments.map((spot) => spot.player?.playerId).filter(Boolean) as string[]);
+  const afterIds = new Set(after.assignments.map((spot) => spot.player?.playerId).filter(Boolean) as string[]);
   return (
-    <div className="border border-border bg-card p-3">
+    <div className="border border-border bg-card p-4">
       <p className="text-sm font-semibold">
         {title}{" "}
         <span className={`tabular-nums ${delta >= 0 ? "text-success" : "text-destructive"}`}>{signed(delta)}</span>
       </p>
-      <div className="mt-2 grid gap-2 sm:grid-cols-2">
-        <MiniLineup season={season} caption="Before" lineup={before} sourceLine={sourceLine} />
-        <MiniLineup season={season} caption="After" lineup={after} sourceLine={sourceLine} />
+      <p className="mt-1 text-[11px] text-muted-foreground">
+        <span className="text-destructive">Leaving</span> starters · <span className="text-success">Entering</span> starters
+      </p>
+      <div className="mt-3 grid gap-3 sm:grid-cols-2">
+        <MiniLineup season={season} caption="Before" lineup={before} sourceLine={sourceLine} mark={(id) => (afterIds.has(id) ? null : "out")} />
+        <MiniLineup season={season} caption="After" lineup={after} sourceLine={sourceLine} mark={(id) => (beforeIds.has(id) ? null : "in")} />
       </div>
     </div>
   );
@@ -727,11 +866,13 @@ function MiniLineup({
   caption,
   lineup,
   sourceLine,
+  mark,
 }: {
   season: number;
   caption: string;
   lineup: TradeRecommendation["left"]["beforeLineup"];
   sourceLine: (player: RosPlayer) => string;
+  mark?: (playerId: string) => "in" | "out" | null;
 }) {
   return (
     <table className="w-full text-left text-xs">
@@ -739,25 +880,33 @@ function MiniLineup({
         {caption} · {lineup.total.toFixed(1)}
       </caption>
       <tbody>
-        {lineup.assignments.map((spot, index) => (
-          <tr key={`${spot.slot}-${index}`}>
-            <th scope="row" className="border-t border-border py-1 pr-1 font-normal text-muted-foreground">
-              {spot.slot}
-            </th>
-            <td className="border-t border-border py-1">
-              {spot.player ? (
-                <PlayerComparisonLink playerId={spot.player.playerId} season={season}>
-                  {spot.player.name}
-                </PlayerComparisonLink>
-              ) : (
-                "Empty"
-              )}
-            </td>
-            <td className="border-t border-border py-1 text-[11px] tabular-nums leading-snug">
-              {spot.player ? sourceLine(spot.player) : "0.0"}
-            </td>
-          </tr>
-        ))}
+        {lineup.assignments.map((spot, index) => {
+          const flag = spot.player && mark ? mark(spot.player.playerId) : null;
+          const rowTone = flag === "in" ? "bg-success/10" : flag === "out" ? "bg-destructive/10" : "";
+          return (
+            <tr key={`${spot.slot}-${index}`} className={rowTone}>
+              <th scope="row" className="border-t border-border py-1.5 pr-1 font-normal text-muted-foreground">
+                {spot.slot}
+              </th>
+              <td className="border-t border-border py-1.5">
+                {spot.player ? (
+                  <span className="inline-flex flex-wrap items-baseline gap-1">
+                    <PlayerComparisonLink playerId={spot.player.playerId} season={season}>
+                      {spot.player.name}
+                    </PlayerComparisonLink>
+                    {flag === "in" && <span className="text-[10px] font-semibold uppercase tracking-wide text-success">in</span>}
+                    {flag === "out" && <span className="text-[10px] font-semibold uppercase tracking-wide text-destructive">out</span>}
+                  </span>
+                ) : (
+                  "Empty"
+                )}
+              </td>
+              <td className="border-t border-border py-1.5 text-[11px] tabular-nums leading-snug">
+                {spot.player ? sourceLine(spot.player) : "0.0"}
+              </td>
+            </tr>
+          );
+        })}
       </tbody>
     </table>
   );
